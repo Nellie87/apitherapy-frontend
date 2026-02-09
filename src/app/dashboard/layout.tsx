@@ -1,52 +1,65 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 
+const nav = [
+  { href: "/dashboard", label: "Dashboard" },
+  { href: "/dashboard/inventory", label: "Our Stock" },
+  { href: "/dashboard/products", label: "Products we have" },
+  { href: "/dashboard/sales", label: "Sales" },
+  { href: "/dashboard/reports", label: "Reports" },
+];
+
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   return (
-    <div className="min-h-screen bg-zinc-100/70">
-      <div className="mx-auto flex max-w-[1280px] gap-6 p-6">
+    <div className="min-h-screen bg-zinc-50">
+      <div className="mx-auto flex max-w-[1400px] gap-6 p-6">
         {/* Sidebar */}
-        <aside className="hidden lg:block w-[260px]">
-          <div className="rounded-3xl border border-zinc-200/70 bg-white p-4 shadow-sm">
+        <aside className="w-[280px] shrink-0">
+          <div className="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
+            {/* Brand */}
             <div className="flex items-center gap-3">
-              <div className="grid h-10 w-10 place-items-center rounded-2xl bg-amber-500 text-white">
-                🍯
+              <div className="grid h-11 w-11 place-items-center rounded-2xl bg-amber-500 text-white">
+                🐝
               </div>
               <div>
-                <div className="text-sm font-black text-zinc-900">BeeShop</div>
-                <div className="text-[11px] text-zinc-500">Dashboard</div>
+                <div className="text-sm font-black text-zinc-900">Pollinators</div>
+                <div className="text-xs text-zinc-500">Beekeepers Apitherapy</div>
               </div>
             </div>
 
-            <nav className="mt-6 space-y-1">
-              <SideLink href="/dashboard/products" label="Products" />
-              <SideLink href="/dashboard/inventory" label="Inventory" />
-              <SideLink href="/dashboard/sales" label="Sales" />
-              <SideLink href="/dashboard/expenses" label="Expenses" />
-              <SideLink href="/dashboard/reports" label="Reports" />
-            </nav>
+            <div className="mt-6 space-y-1">
+              {nav.map((n) => (
+                <Link
+                  key={n.href}
+                  href={n.href}
+                  className="flex items-center justify-between rounded-2xl px-3 py-2.5 text-sm font-semibold text-zinc-700 hover:bg-zinc-50"
+                >
+                  <span>{n.label}</span>
+                  <span className="text-zinc-300">›</span>
+                </Link>
+              ))}
+            </div>
+
+            <div className="mt-10 border-t pt-4">
+              <Link
+                href="/dashboard/settings"
+                className="block rounded-2xl px-3 py-2.5 text-sm font-semibold text-zinc-700 hover:bg-zinc-50"
+              >
+                Settings
+              </Link>
+              <Link
+                href="/login"
+                className="block rounded-2xl px-3 py-2.5 text-sm font-semibold text-zinc-700 hover:bg-zinc-50"
+              >
+                Logout
+              </Link>
+            </div>
           </div>
         </aside>
 
-        {/* Main */}
-        <main className="flex-1">
-          <div className="rounded-3xl border border-zinc-200/70 bg-white p-5 shadow-sm">
-            {children}
-          </div>
-        </main>
+        {/* Page */}
+        <main className="flex-1">{children}</main>
       </div>
     </div>
-  );
-}
-
-function SideLink({ href, label }: { href: string; label: string }) {
-  return (
-    <Link
-      href={href}
-      className="flex items-center justify-between rounded-2xl px-3 py-2.5 text-sm font-semibold text-zinc-700 hover:bg-zinc-50"
-    >
-      <span>{label}</span>
-      <span className="text-zinc-400">›</span>
-    </Link>
   );
 }
