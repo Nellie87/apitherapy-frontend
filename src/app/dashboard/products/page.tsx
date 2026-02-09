@@ -386,7 +386,7 @@ export default function ProductsPage() {
       <div className="grid grid-cols-3 gap-4">
         <KpiCard icon={<IconBox />} label="Total Products" value={String(total)} sub="in catalog" accent="bg-amber-50" />
         <KpiCard icon={<IconTrendUp />} label="Active (For Sale)" value={String(active)} sub="currently listed" accent="bg-emerald-50" />
-        <KpiCard icon={<IconDollar />} label="Catalog Value" value={`$${catalogValue.toFixed(2)}`} sub="sum of sell prices" accent="bg-sky-50" />
+        <KpiCard icon={<IconDollar />} label="Catalog Value" value={`Ksh ${catalogValue.toFixed(2)}`} sub="sum of sell prices" accent="bg-sky-50" />
       </div>
 
       {/* Create Form */}
@@ -424,11 +424,11 @@ export default function ProductsPage() {
 
           <div className="mt-3 grid grid-cols-2 gap-3">
             <div>
-              <label className="mb-1 block text-xs font-semibold text-zinc-500">Cost Price ($)</label>
+a              <label className="mb-1 block text-xs font-semibold text-zinc-500">Cost Price (Kshs)</label>
               <input className={inputCls} type="number" min="0" step="0.01" value={costPrice} onChange={(e) => setCostPrice(e.target.value)} />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-semibold text-zinc-500">Sell Price ($)</label>
+              <label className="mb-1 block text-xs font-semibold text-zinc-500">Sell Price (Kshs)</label>
               <input className={inputCls} type="number" min="0" step="0.01" value={sellPrice} onChange={(e) => setSellPrice(e.target.value)} />
             </div>
           </div>
@@ -507,8 +507,8 @@ export default function ProductsPage() {
         >
           <span>Name</span>
           <span>Barcode</span>
-          <span>Cost</span>
-          <span>Sell</span>
+          <span>Cost <p>(Kshs)</p> </span>
+          <span>Sell <p>(Kshs)</p>  </span>
           <span>UoM</span>
           <span>Size</span>
           <span>Status</span>
@@ -536,8 +536,8 @@ export default function ProductsPage() {
               </div>
 
               <span className="font-mono text-xs text-zinc-500">{p.barcode ?? "—"}</span>
-              <span className="font-semibold">${fmt(p.cost_price)}</span>
-              <span className="font-semibold">${fmt(p.unit_price)}</span>
+              <span className="font-semibold">{fmt(p.cost_price)}</span>
+              <span className="font-semibold">{fmt(p.unit_price)}</span>
 
               {/* IMPORTANT: uses joined aliases from listProducts() */}
               <span className="text-zinc-500">{p.unit_measure?.name ?? "—"}</span>

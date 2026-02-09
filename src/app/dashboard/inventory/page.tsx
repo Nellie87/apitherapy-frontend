@@ -72,7 +72,7 @@ function StatusBadge({ qty, reorder }: { qty: number; reorder: number }) {
 }
 
 function fmtMoney(v: number) {
-  return `$${Number(v || 0).toFixed(2)}`;
+  return `Ksh ${Number(v || 0).toFixed(2)}`;
 }
 
 function Modal({
@@ -435,7 +435,7 @@ export default function InventoryPage() {
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <StatCard title="Total Items" value={`${kpis.totalItems}`} sub="products tracked" rightIcon="📦" accent="success" />
         <StatCard title="Low Stock Items" value={`${kpis.lowStock}`} sub="below reorder level" rightIcon="⚠️" accent="warning" />
-        <StatCard title="Total Value" value={`$${kpis.totalValue.toFixed(0)}`} sub="qty × sell price" rightIcon="💰" accent="success" />
+        <StatCard title="Total Value" value={`Ksh ${kpis.totalValue.toFixed(0)}`} sub="qty × sell price" rightIcon="💰" accent="success" />
       </div>
 
       {/* Table */}
