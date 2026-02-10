@@ -16,6 +16,8 @@ type ProductLite = {
   unit_price?: number | null;
 };
 
+
+
 function StatCard({
   title,
   value,
@@ -145,6 +147,8 @@ export default function InventoryPage() {
   const [adjustMode, setAdjustMode] = useState<"add" | "remove" | "set">("add");
   const [adjustValue, setAdjustValue] = useState("0");
   const [adjustNote, setAdjustNote] = useState("");
+  const [restockQty, setRestockQty] = useState<Record<string, string>>({});
+
 
   async function refresh(o: string) {
     const data = await listInventory(o);
@@ -165,6 +169,7 @@ export default function InventoryPage() {
     );
   }
 
+  
   useEffect(() => {
     (async () => {
       try {
@@ -193,22 +198,28 @@ export default function InventoryPage() {
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
     return rows.filter((r) => {
-      const name = (r.products?.name ?? "").toLowerCase();
-      const cat = (r.products?.category ?? "").toLowerCase();
+      const name = (r.products?.[0]?.name ?? "").toLowerCase();
+      const cat  = (r.products?.[0]?.category ?? "").toLowerCase();
+
       return !term || name.includes(term) || cat.includes(term);
     });
   }, [rows, q]);
 
-  const kpis = useMemo(() => {
-    const totalItems = rows.length;
-    const lowStock = rows.filter((r) => Number(r.qty_on_hand ?? 0) <= Number(r.reorder_level ?? 0)).length;
-    const totalValue = rows.reduce((sum, r) => {
-      const price = Number(r.products?.unit_price ?? 0);
-      return sum + price * Number(r.qty_on_hand ?? 0);
-    }, 0);
+const kpis = useMemo(() => {
+  const totalItems = rows.length;
 
-    return { totalItems, lowStock, totalValue };
-  }, [rows]);
+  const lowStock = rows.filter(
+    (r) => Number(r.qty_on_hand ?? 0) <= Number(r.reorder_level ?? 0)
+  ).length;
+
+  const totalValue = rows.reduce((sum, r) => {
+    const price = Number(r.products?.[0]?.unit_price ?? 0);
+    const qty = Number(r.qty_on_hand ?? 0);
+    return sum + price * qty;
+  }, 0);
+
+  return { totalItems, lowStock, totalValue };
+}, [rows]);
 
   async function handleAddStock() {
     if (!orgId) return;
@@ -288,37 +299,53 @@ export default function InventoryPage() {
     }
   }
 
-  async function handleQuickRestock(row: InventoryRow, amount = 10) {
-    if (!orgId) return;
-    setSavingId(row.product_id);
-    setErr("");
-    try {
-      const before = Number(row.qty_on_hand ?? 0);
-      const after = before + amount;
-
-      await updateInventory(orgId, row.product_id, {
-        qty_on_hand: after,
-        reorder_level: row.reorder_level,
-      });
-
-      await logMovement({
-        org_id: orgId,
-        product_id: row.product_id,
-        type: "restock",
-        qty_delta: amount,
-        qty_before: before,
-        qty_after: after,
-        note: `Quick restock +${amount}`,
-      });
-
-      await refresh(orgId);
-    } catch (e: any) {
-      setErr(e.message ?? String(e));
-    } finally {
-      setSavingId(null);
-    }
+async function handleQuickRestock(row: InventoryRow, amount: number) {
+  if (!orgId) return;
+  if (!amount || amount <= 0) {
+    setErr("Enter a valid restock quantity.");
+    return;
   }
 
+  setSavingId(row.product_id);
+  setErr("");
+
+  try {
+    const before = Number(row.qty_on_hand ?? 0);
+    const after = before + amount;
+
+    await updateInventory(orgId, row.product_id, {
+      qty_on_hand: after,
+      reorder_level: row.reorder_level,
+    });
+
+    await logMovement({
+      org_id: orgId,
+      product_id: row.product_id,
+      type: "restock",
+      qty_delta: amount,
+      qty_before: before,
+      qty_after: after,
+      note: `Manual restock +${amount}`,
+    });
+
+    // clear input after success
+    setRestockQty((prev) => ({
+      ...prev,
+      [row.product_id]: "",
+    }));
+
+    await refresh(orgId);
+  } catch (e: any) {
+    setErr(e.message ?? String(e));
+  } finally {
+    setSavingId(null);
+  }
+}
+
+
+
+
+  
   async function handleSaveReorder(row: InventoryRow, newLevel: number) {
     if (!orgId) return;
     setSavingId(row.product_id);
@@ -453,10 +480,13 @@ export default function InventoryPage() {
 
         <div className="divide-y divide-zinc-200">
           {filtered.map((r) => {
-            const name = r.products?.name ?? "Unknown Product";
-            const sku = r.products?.sku ?? "—";
-            const category = r.products?.category ?? "—";
-            const price = Number(r.products?.unit_price ?? 0);
+              const p = r.products?.[0];
+
+              const name = p?.name ?? "Unknown Product";
+              const sku = p?.sku ?? "—";
+              const category = p?.category ?? "—";
+              const price = Number(p?.unit_price ?? 0);
+
             const qty = Number(r.qty_on_hand ?? 0);
             const reorder = Number(r.reorder_level ?? 0);
 
@@ -515,23 +545,38 @@ export default function InventoryPage() {
                   </div>
 
                   {/* Actions */}
-                  <div className="flex items-center gap-2">
-                    <button
-                      disabled={savingId === r.product_id}
-                      className="rounded-2xl bg-amber-500 px-4 py-2 text-xs font-black text-white hover:bg-amber-600 disabled:opacity-50"
-                      onClick={() => handleQuickRestock(r, 10)}
-                    >
-                      +10 Restock
-                    </button>
+                 <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={1}
+                    placeholder="+Qty"
+                    value={restockQty[r.product_id] ?? ""}
+                    onChange={(e) =>
+                      setRestockQty((prev) => ({
+                        ...prev,
+                        [r.product_id]: e.target.value,
+                      }))
+                    }
+                    className={`${S.inputSoft} w-20 text-center`}
+                  />
 
-                    <button
-                      className={S.btnIcon}
-                      title="Adjust stock"
-                      onClick={() => openAdjust(r)}
-                    >
-                      ✏️
-                    </button>
-                  </div>
+                  <button
+                    disabled={
+                      savingId === r.product_id ||
+                      !Number(restockQty[r.product_id])
+                    }
+                    className="rounded-2xl bg-amber-500 px-4 py-2 text-xs font-black text-white hover:bg-amber-600 disabled:opacity-50"
+                    onClick={() =>
+                      handleQuickRestock(
+                        r,
+                        Number(restockQty[r.product_id])
+                      )
+                    }
+                  >
+                    Restock
+                  </button>
+                </div>
+
                 </div>
               </div>
             );
@@ -620,8 +665,8 @@ export default function InventoryPage() {
       {/* ADJUST MODAL */}
       <Modal
         open={adjustOpen}
-        title={`Adjust Stock${adjustRow?.products?.name ? ` — ${adjustRow.products.name}` : ""}`}
-        onClose={() => setAdjustOpen(false)}
+        title={`Adjust Stock${adjustRow?.products?.[0]?.name ? ` — ${adjustRow.products[0].name}` : ""}`}
+          onClose={() => setAdjustOpen(false)}
         footer={
           <>
             <button className={S.btnGhost} onClick={() => setAdjustOpen(false)}>
