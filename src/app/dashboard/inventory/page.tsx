@@ -198,8 +198,8 @@ export default function InventoryPage() {
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
     return rows.filter((r) => {
-      const name = (r.products?.[0]?.name ?? "").toLowerCase();
-      const cat  = (r.products?.[0]?.category ?? "").toLowerCase();
+const name = (r.products?.name ?? "").toLowerCase();
+const cat  = (r.products?.category ?? "").toLowerCase();
 
       return !term || name.includes(term) || cat.includes(term);
     });
@@ -213,7 +213,8 @@ const kpis = useMemo(() => {
   ).length;
 
   const totalValue = rows.reduce((sum, r) => {
-    const price = Number(r.products?.[0]?.unit_price ?? 0);
+const price = Number(r.products?.unit_price ?? 0);
+
     const qty = Number(r.qty_on_hand ?? 0);
     return sum + price * qty;
   }, 0);
@@ -480,7 +481,7 @@ async function handleQuickRestock(row: InventoryRow, amount: number) {
 
         <div className="divide-y divide-zinc-200">
           {filtered.map((r) => {
-              const p = r.products?.[0];
+const p = r.products;
 
               const name = p?.name ?? "Unknown Product";
               const sku = p?.sku ?? "—";
@@ -665,7 +666,7 @@ async function handleQuickRestock(row: InventoryRow, amount: number) {
       {/* ADJUST MODAL */}
       <Modal
         open={adjustOpen}
-        title={`Adjust Stock${adjustRow?.products?.[0]?.name ? ` — ${adjustRow.products[0].name}` : ""}`}
+        title={`Adjust Stock${adjustRow?.products?.name ? ` — ${adjustRow.products?.name}` : ""}`}
           onClose={() => setAdjustOpen(false)}
         footer={
           <>

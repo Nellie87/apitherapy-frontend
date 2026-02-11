@@ -9,31 +9,32 @@ export async function listProducts(orgId: string) {
     .select(`
       id,
       org_id,
-      name,
-      barcode,
-      supplier,
+      name, 
+      barcode, 
+      supplier, 
       notes,
-      cost_price,
-      unit_price,
-      sell_status,
+      cost_price, 
+      unit_price, 
+      sell_status, 
       created_at,
-
-      unit_measure:unit_measures (
-        id,
-        name
-      ),
-
-      unit_size:unit_sizes (
-        id,
-        label,
-        kind
-      )
+      unit_measure:unit_measures ( id, name ),
+      unit_size:unit_sizes ( id, label, kind )
     `)
     .eq("org_id", orgId)
     .order("created_at", { ascending: false });
 
   if (error) throw new Error(error.message);
-  return data ?? [];
+
+  // Supabase returns FK joins as arrays — flatten to single object | null
+  return (data ?? []).map((row) => ({
+    ...row,
+    unit_measure: Array.isArray(row.unit_measure)
+      ? (row.unit_measure[0] ?? null)
+      : row.unit_measure,
+    unit_size: Array.isArray(row.unit_size)
+      ? (row.unit_size[0] ?? null)
+      : row.unit_size,
+  }));
 }
 
 /* ─────────────────────────────────────────────

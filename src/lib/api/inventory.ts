@@ -15,36 +15,33 @@ export type InventoryRow = {
   reorder_level: number;
   updated_at: string;
 
-  // Supabase join often returns an array
-  products?: InventoryProduct[]; // <-- FIX
+  // After normalization, this is a single object (not an array)
+  products?: InventoryProduct | null;
 };
 
 export async function listInventory(orgId: string): Promise<InventoryRow[]> {
   const { data, error } = await supabase
     .from("inventory")
-    .select(
-      `
+    .select(`
       product_id,
       org_id,
       qty_on_hand,
       reorder_level,
       updated_at,
-      products:products (
-        id,
-        name,
-        unit_price,
-        sku,
-        category
-      )
-    `
-    )
+      products:products ( id, name, unit_price, sku, category )
+    `)
     .eq("org_id", orgId)
     .order("updated_at", { ascending: false });
 
   if (error) throw new Error(error.message);
 
-  // typed return (no unsafe cast)
-  return (data ?? []) as InventoryRow[];
+  // Flatten the array join → single object | null
+  return (data ?? []).map((row) => ({
+    ...row,
+    products: Array.isArray(row.products)
+      ? (row.products[0] ?? null)
+      : row.products,
+  })) as InventoryRow[];
 }
 
 export async function updateInventory(
