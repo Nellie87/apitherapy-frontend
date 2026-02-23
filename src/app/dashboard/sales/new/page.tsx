@@ -19,6 +19,12 @@ function fmtMoney(v: number) {
   return `Ksh ${Number(v || 0).toFixed(2)}`;
 }
 
+function hasProduct(
+  r: SellableRow
+): r is SellableRow & { products: NonNullable<SellableRow["products"]> } {
+  return r.products != null;
+}
+
 export default function NewSalePage() {
   const [orgId, setOrgId] = useState<string | null>(null);
   const [rows, setRows] = useState<SellableRow[]>([]);
@@ -59,34 +65,31 @@ export default function NewSalePage() {
       .slice(0, 24);
   }, [rows, q]);
 
-  function addToCart(r: SellableRow) {
-    if (!r.products) return;
+function addToCart(r: SellableRow & { products: NonNullable<SellableRow["products"]> }) {
+  setCart((prev) => {
+    const existing = prev.find((x) => x.product_id === r.product_id);
+    const available = Number(r.qty_on_hand ?? 0);
 
-    setCart((prev) => {
-      const existing = prev.find((x) => x.product_id === r.product_id);
-      const available = Number(r.qty_on_hand ?? 0);
+    if (existing) {
+      const nextQty = Math.min(existing.qty + 1, available);
+      return prev.map((x) =>
+        x.product_id === r.product_id ? { ...x, qty: nextQty, available } : x
+      );
+    }
 
-      if (existing) {
-        // increase by 1 but respect strict limit
-        const nextQty = Math.min(existing.qty + 1, available);
-        return prev.map((x) =>
-          x.product_id === r.product_id ? { ...x, qty: nextQty, available } : x
-        );
-      }
-
-      return [
-        ...prev,
-        {
-          product_id: r.product_id,
-          name: r.products.name,
-          available,
-          base_price: Number(r.products.unit_price ?? 0),
-          qty: available > 0 ? 1 : 0,
-          unit_price_override: null,
-        },
-      ];
-    });
-  }
+    return [
+      ...prev,
+      {
+        product_id: r.product_id,
+        name: r.products.name,
+        available,
+        base_price: Number(r.products.unit_price ?? 0),
+        qty: available > 0 ? 1 : 0,
+        unit_price_override: null,
+      },
+    ];
+  });
+}
 
   function updateQty(product_id: string, qty: number) {
     setCart((prev) =>
@@ -249,33 +252,38 @@ export default function NewSalePage() {
           </div>
 
           <div className="mt-4 divide-y divide-zinc-200 rounded-2xl border border-zinc-200 overflow-hidden">
-            {productList.map((r) => {
-              const p = r.products!;
-              const available = Number(r.qty_on_hand ?? 0);
+            {productList.filter(hasProduct).map((r) => {
+  const p = r.products; // ✅ now guaranteed not null
+  const available = Number(r.qty_on_hand ?? 0);
 
-              return (
-                <button
-                  key={r.product_id}
-                  className="w-full text-left px-4 py-3 hover:bg-zinc-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                  onClick={() => addToCart(r)}
-                  disabled={available <= 0}
-                  title={available <= 0 ? "Out of stock" : "Add to cart"}
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="font-black text-zinc-900 truncate">{p.name}</div>
-                      <div className="text-xs text-zinc-500">
-                        {p.sku ? `SKU: ${p.sku} · ` : ""}{p.barcode ? `Barcode: ${p.barcode}` : "—"}
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="font-black text-zinc-900">{fmtMoney(Number(p.unit_price ?? 0))}</div>
-                      <div className="text-xs text-zinc-500">Avail: {available}</div>
-                    </div>
-                  </div>
-                </button>
-              );
-            })}
+  return (
+    <button
+      key={r.product_id}
+      className="w-full text-left px-4 py-3 hover:bg-zinc-50 disabled:opacity-50 disabled:cursor-not-allowed"
+      onClick={() => addToCart(r)}
+      disabled={available <= 0}
+      title={available <= 0 ? "Out of stock" : "Add to cart"}
+    >
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <div className="font-black text-zinc-900 truncate">{p.name}</div>
+          <div className="text-xs text-zinc-500">
+            {p.sku ? `SKU: ${p.sku} · ` : ""}
+            {p.barcode ? `Barcode: ${p.barcode}` : "—"}
+          </div>
+        </div>
+        <div className="text-right">
+          <div className="font-black text-zinc-900">
+            {fmtMoney(Number(p.unit_price ?? 0))}
+          </div>
+          <div className="text-xs text-zinc-500">
+            Avail: {available}
+          </div>
+        </div>
+      </div>
+    </button>
+  );
+})}
 
             {productList.length === 0 ? (
               <div className="px-4 py-8 text-sm text-zinc-500">
