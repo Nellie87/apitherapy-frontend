@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { bootstrapOrg } from "@/lib/org/bootstrapOrg";
 import { listSales, type SaleRow } from "@/lib/api/sales";
 import * as S from "./page.styles";
+import Link from "next/link";
 
 function fmtMoney(v: number) {
   return `Ksh ${Number(v || 0).toFixed(2)}`;
@@ -111,25 +112,28 @@ export default function SalesPage() {
         </div>
 
         <div className="divide-y divide-zinc-200">
-          {filtered.map((s) => (
-            <div
-              key={s.id}
-              className="grid items-center px-6 py-4 text-sm text-zinc-800 hover:bg-zinc-50"
-              style={{ gridTemplateColumns: "1.2fr 1.4fr 1fr 1fr" }}
-            >
-              <div className="font-black">{s.sale_no}</div>
-              <div className="text-zinc-600">{s.customer_name ?? "—"}</div>
-              <div className="text-zinc-500">
-                {new Date(s.created_at).toLocaleString()}
-              </div>
-              <div className="text-right font-black">{fmtMoney(Number(s.total ?? 0))}</div>
-            </div>
-          ))}
+  {filtered.map((s) => (
+    <Link
+      key={s.id}
+      href={`/dashboard/sales/${s.id}`} // ✅ UUID
+      className="grid items-center px-6 py-4 text-sm text-zinc-800 hover:bg-zinc-50"
+      style={{ gridTemplateColumns: "1.2fr 1.4fr 1fr 1fr" }}
+    >
+      <div className="font-black">{s.sale_no}</div>
+      <div className="text-zinc-600">{s.customer_name ?? "—"}</div>
+      <div className="text-zinc-500">{new Date(s.created_at).toLocaleString()}</div>
+      <div className="text-right font-black">
+        {fmtMoney(Number(s.total ?? 0))}
+      </div>
+    </Link>
+  ))}
 
-          {filtered.length === 0 ? (
-            <div className="px-6 py-10 text-sm text-zinc-500">No sales yet. Create one.</div>
-          ) : null}
-        </div>
+  {filtered.length === 0 ? (
+    <div className="px-6 py-10 text-sm text-zinc-500">
+      No sales yet. Create one.
+    </div>
+  ) : null}
+</div>
       </div>
     </div>
   );

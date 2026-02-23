@@ -23,19 +23,13 @@ export type SaleItemRow = {
   sale_id: string;
   product_id: string;
   qty: number;
-
-  // IMPORTANT: these columns must exist in DB (and are NOT generated)
   unit_price: number;
   unit_price_base: number;
   discount_per_unit: number;
-
-  // GENERATED column in DB (don’t insert/update it)
   line_total: number;
-
   created_at: string;
 
-  // PostgREST should return an object here (not array)
-  products?: SaleItemProduct | null;
+  products?: { id: string; name: string } | null;
 };
 
 export type CreateSaleItemInput = {
