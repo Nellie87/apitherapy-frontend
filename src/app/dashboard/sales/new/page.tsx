@@ -26,13 +26,13 @@ function hasProduct(
 }
 
 export default function NewSalePage() {
-  const [orgId, setOrgId] = useState<string | null>(null);
-  const [rows, setRows] = useState<SellableRow[]>([]);
-  const [cart, setCart] = useState<CartLine[]>([]);
-  const [q, setQ] = useState("");
+  const [orgId,    setOrgId]    = useState<string | null>(null);
+  const [rows,     setRows]     = useState<SellableRow[]>([]);
+  const [cart,     setCart]     = useState<CartLine[]>([]);
+  const [q,        setQ]        = useState("");
   const [customer, setCustomer] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [err, setErr] = useState("");
+  const [saving,   setSaving]   = useState(false);
+  const [err,      setErr]      = useState("");
 
   async function refresh(o: string) {
     const data = await listSellable(o);
@@ -57,8 +57,8 @@ export default function NewSalePage() {
       .filter((r) => r.products)
       .filter((r) => {
         if (!t) return true;
-        const name = (r.products?.name ?? "").toLowerCase();
-        const sku = (r.products?.sku ?? "").toLowerCase();
+        const name    = (r.products?.name    ?? "").toLowerCase();
+        const sku     = (r.products?.sku     ?? "").toLowerCase();
         const barcode = (r.products?.barcode ?? "").toLowerCase();
         return name.includes(t) || sku.includes(t) || barcode.includes(t);
       })
@@ -67,16 +67,15 @@ export default function NewSalePage() {
 
   function addToCart(r: SellableRow & { products: NonNullable<SellableRow["products"]> }) {
     setCart((prev) => {
-      const existing = prev.find((x) => x.product_id === r.product_id);
+      const existing  = prev.find((x) => x.product_id === r.product_id);
       const available = Number(r.qty_on_hand ?? 0);
-
       if (existing) {
-        const nextQty = Math.min(existing.qty + 1, available);
         return prev.map((x) =>
-          x.product_id === r.product_id ? { ...x, qty: nextQty, available } : x
+          x.product_id === r.product_id
+            ? { ...x, qty: Math.min(x.qty + 1, available), available }
+            : x
         );
       }
-
       return [
         ...prev,
         {
@@ -93,21 +92,21 @@ export default function NewSalePage() {
 
   function updateQty(product_id: string, qty: number) {
     setCart((prev) =>
-      prev.map((x) => {
-        if (x.product_id !== product_id) return x;
-        const safe = Math.max(0, Math.min(qty, x.available));
-        return { ...x, qty: safe };
-      })
+      prev.map((x) =>
+        x.product_id !== product_id
+          ? x
+          : { ...x, qty: Math.max(0, Math.min(qty, x.available)) }
+      )
     );
   }
 
   function updateOverride(product_id: string, price: number | null) {
     setCart((prev) =>
-      prev.map((x) => {
-        if (x.product_id !== product_id) return x;
-        if (price === null) return { ...x, unit_price_override: null };
-        return { ...x, unit_price_override: Math.max(0, price) };
-      })
+      prev.map((x) =>
+        x.product_id !== product_id
+          ? x
+          : { ...x, unit_price_override: price === null ? null : Math.max(0, price) }
+      )
     );
   }
 
@@ -120,34 +119,28 @@ export default function NewSalePage() {
     setCart((prev) =>
       prev.map((x) => {
         const available = map.get(x.product_id) ?? x.available;
-        const qty = Math.min(x.qty, available);
-        return { ...x, available, qty };
+        return { ...x, available, qty: Math.min(x.qty, available) };
       })
     );
   }, [rows]);
 
   const totals = useMemo(() => {
-    let subtotal = 0;
-    let total = 0;
-    let discountTotal = 0;
-
+    let subtotal = 0, total = 0, discountTotal = 0;
     for (const line of cart) {
-      const base = Number(line.base_price ?? 0);
+      const base  = Number(line.base_price ?? 0);
       const final = line.unit_price_override == null ? base : Number(line.unit_price_override);
-      const qty = Number(line.qty ?? 0);
-
-      subtotal += base * qty;
-      total += final * qty;
+      const qty   = Number(line.qty ?? 0);
+      subtotal      += base  * qty;
+      total         += final * qty;
       discountTotal += Math.max(0, (base - final) * qty);
     }
-
     return { subtotal, discountTotal, total };
   }, [cart]);
 
   async function completeSale() {
     if (!orgId) return;
-
     setErr("");
+
     const items = cart
       .filter((l) => l.qty > 0)
       .map((l) => ({
@@ -156,11 +149,7 @@ export default function NewSalePage() {
         unit_price_override: l.unit_price_override ?? null,
       }));
 
-    if (items.length === 0) {
-      setErr("Cart is empty.");
-      return;
-    }
-
+    if (items.length === 0) { setErr("Cart is empty."); return; }
     for (const line of cart) {
       if (line.qty > line.available) {
         setErr(`Insufficient stock for ${line.name}. Available: ${line.available}`);
@@ -174,11 +163,9 @@ export default function NewSalePage() {
         customer_name: customer.trim() || undefined,
         items,
       });
-
       await refresh(orgId);
       setCart([]);
       setCustomer("");
-
       window.location.href = `/dashboard/sales?created=${encodeURIComponent(res.sale_no)}`;
     } catch (e: any) {
       setErr(e.message ?? String(e));
@@ -189,307 +176,412 @@ export default function NewSalePage() {
 
   if (!orgId && !err) {
     return (
-      <div className="flex h-64 items-center justify-center">
-        <div className="text-sm text-zinc-400">Loading…</div>
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "1rem", padding: "6rem 0", fontFamily: "'DM Sans', sans-serif" }}>
+        <span style={{ fontSize: "2.5rem", animation: "floatBee 3s ease-in-out infinite" }}>🐝</span>
+        <p style={{ fontSize: "0.82rem", color: "#999977", letterSpacing: "0.06em" }}>Preparing your hive…</p>
       </div>
     );
   }
 
-  const cartItemCount = cart.filter((x) => x.qty > 0).length;
+  const cartItemCount  = cart.filter((x) => x.qty > 0).length;
+  const hasCustomer    = customer.trim().length > 0;
 
   return (
-    <div className="space-y-5">
-      {/* Header */}
-      <div className={`${S.card} px-6 py-5`}>
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <h1 className="text-2xl font-black tracking-tight text-zinc-900">New Sale</h1>
-            <p className="mt-0.5 text-sm text-zinc-500">
-              Select products · adjust quantity · complete transaction
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <a className={S.btnGhost} href="/dashboard/sales">
-              ← Back
-            </a>
-            <button
-              className={S.btnPrimary}
-              onClick={completeSale}
-              disabled={saving || cartItemCount === 0}
-            >
-              {saving ? "Processing…" : `Complete Sale${cartItemCount > 0 ? ` (${cartItemCount})` : ""}`}
-            </button>
-          </div>
-        </div>
+    <>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;1,400&family=DM+Sans:wght@300;400;500&display=swap');
 
-        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <div className="sm:col-span-2">
-            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-zinc-500">
-              Search Products
-            </label>
+        .new-sale-page * { font-family: 'DM Sans', sans-serif; }
+
+        /* ── customer banner ── */
+        .customer-banner {
+          display: flex; align-items: center; gap: 1.1rem;
+          padding: 1rem 1.5rem;
+          border-radius: 2px;
+          border: 1.5px solid;
+          transition: background 0.35s, border-color 0.35s;
+          cursor: text;
+        }
+        .customer-banner.empty {
+          background: #FFFBEA;
+          border-color: rgba(245,197,24,0.45);
+        }
+        .customer-banner.filled {
+          background: #1a1a0a;
+          border-color: #1a1a0a;
+        }
+        .customer-avatar {
+          width: 44px; height: 44px; flex-shrink: 0;
+          border-radius: 2px;
+          display: grid; place-items: center;
+          font-size: 1.2rem;
+          transition: background 0.35s, border-color 0.35s;
+          border: 2px solid;
+        }
+        .customer-banner.empty .customer-avatar  { background: rgba(245,197,24,0.18); border-color: rgba(245,197,24,0.35); }
+        .customer-banner.filled .customer-avatar { background: #F5C518; border-color: #F5C518; box-shadow: 2px 2px 0 rgba(255,255,255,0.12); }
+        .customer-label {
+          font-size: 0.6rem; font-weight: 500; letter-spacing: 0.22em;
+          text-transform: uppercase; margin-bottom: 0.25rem;
+          transition: color 0.35s;
+        }
+        .customer-banner.empty  .customer-label { color: #999977; }
+        .customer-banner.filled .customer-label { color: rgba(245,197,24,0.55); }
+        .customer-input {
+          width: 100%; background: transparent; border: none; outline: none;
+          font-family: 'Playfair Display', serif;
+          font-size: 1.2rem; font-weight: 700;
+          transition: color 0.35s, caret-color 0.35s;
+        }
+        .customer-banner.empty  .customer-input { color: #92700a; caret-color: #92700a; }
+        .customer-banner.filled .customer-input { color: #F5C518; caret-color: #F5C518; }
+        .customer-input::placeholder { color: #c9a84c; opacity: 1; }
+        .customer-banner.filled .customer-input::placeholder { color: rgba(245,197,24,0.3); }
+        .customer-chip {
+          flex-shrink: 0; font-size: 0.66rem; font-weight: 500;
+          letter-spacing: 0.1em; text-transform: uppercase;
+          padding: 0.28rem 0.85rem; border-radius: 50px;
+          transition: background 0.35s, color 0.35s;
+        }
+        .customer-banner.empty  .customer-chip { background: rgba(26,26,10,0.07); color: #bbb; }
+        .customer-banner.filled .customer-chip { background: rgba(245,197,24,0.14); color: #F5C518; }
+
+        /* ── product rows ── */
+        .prod-row { width: 100%; text-align: left; border: none; background: none; cursor: pointer; transition: background 0.15s; }
+        .prod-row:hover:not(:disabled) { background: #FFFBEA; }
+        .prod-row.in-cart { background: #FFF9DC; }
+        .prod-row.in-cart:hover { background: #FFF3B0; }
+        .prod-row:disabled { opacity: 0.38; cursor: not-allowed; }
+
+        /* ── cart rows ── */
+        .cart-row { transition: background 0.15s; }
+        .cart-row:hover { background: #FFFBEA; }
+        .cart-row.over-qty { background: #fff5f5; }
+
+        /* ── remove btn ── */
+        .remove-btn { display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 2px; border: none; background: none; color: #ccc; cursor: pointer; transition: all 0.15s; font-size: 0.75rem; }
+        .remove-btn:hover { background: #fff0f0; color: #e05050; }
+
+        /* ── customer echo in cart footer ── */
+        .sale-for-chip {
+          display: flex; align-items: center; gap: 0.5rem;
+          padding: 0.45rem 0.75rem; margin-bottom: 0.85rem;
+          background: rgba(26,26,10,0.05); border-radius: 2px;
+          border: 1px solid rgba(26,26,10,0.08);
+        }
+
+        @keyframes floatBee {
+          0%, 100% { transform: translateY(0) rotate(-4deg); }
+          50%       { transform: translateY(-10px) rotate(4deg); }
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .spinner { animation: spin 0.7s linear infinite; }
+
+        input[type=number]::-webkit-inner-spin-button,
+        input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+        input[type=number] { -moz-appearance: textfield; }
+      `}</style>
+
+      <div className="new-sale-page space-y-4">
+
+        {/* ══ CUSTOMER BANNER — full width, first thing you see ══ */}
+        <div
+          className={`customer-banner ${hasCustomer ? "filled" : "empty"}`}
+          onClick={() => (document.getElementById("customer-input") as HTMLInputElement)?.focus()}
+        >
+          <div className="customer-avatar">👤</div>
+
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div className="customer-label">Selling to</div>
             <input
-              className={S.input}
-              placeholder="Name, SKU, or barcode…"
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              autoComplete="off"
-            />
-          </div>
-          <div>
-            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-zinc-500">
-              Customer (optional)
-            </label>
-            <input
-              className={S.input}
-              placeholder="Customer name"
+              id="customer-input"
+              className="customer-input"
+              placeholder="Customer name…"
               value={customer}
               onChange={(e) => setCustomer(e.target.value)}
             />
           </div>
-        </div>
-      </div>
 
-      {/* Error */}
-      {err && (
-        <div className="flex items-start gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3">
-          <span className="mt-0.5 text-rose-500">⚠</span>
-          <p className="text-sm font-medium text-rose-700">{err}</p>
+          <div className="customer-chip">
+            {hasCustomer ? "✓ Set" : "Optional"}
+          </div>
         </div>
-      )}
 
-      {/* Main grid */}
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-        {/* LEFT: product picker */}
-        <div className={`${S.card} flex flex-col`}>
-          <div className="flex items-center justify-between border-b border-zinc-100 px-5 py-4">
-            <h2 className="text-sm font-bold text-zinc-900">Products</h2>
-            <span className="rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-semibold text-zinc-500">
-              {productList.length} shown
-            </span>
+        {/* ══ HEADER — title + search + actions ══ */}
+        <div className={`${S.card} px-6 py-5`}>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h1 style={{ fontFamily: "'Playfair Display', serif", fontSize: "1.5rem", fontWeight: 700, color: "#1a1a0a", lineHeight: 1.2 }}>
+                New <em style={{ fontStyle: "italic", color: "#3a7d44" }}>sale</em>
+              </h1>
+              <p style={{ fontSize: "0.78rem", color: "#999977", marginTop: "0.25rem" }}>
+                Select products · set quantities · complete transaction
+              </p>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "wrap" }}>
+              <a className={S.btnGhost} href="/dashboard/sales">← Back</a>
+              <button
+                className={S.btnPrimary}
+                onClick={completeSale}
+                disabled={saving || cartItemCount === 0}
+              >
+                {saving ? (
+                  <>
+                    <svg className="spinner" width="13" height="13" viewBox="0 0 24 24" fill="none">
+                      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" opacity="0.25" />
+                      <path fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                    </svg>
+                    Processing…
+                  </>
+                ) : <>Complete{cartItemCount > 0 ? ` (${cartItemCount})` : ""} →</>}
+              </button>
+            </div>
           </div>
 
-          <div className="flex-1 overflow-auto">
-            {productList.filter(hasProduct).length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-16 text-center">
-                <div className="text-2xl">🔍</div>
-                <p className="mt-2 text-sm font-medium text-zinc-400">No products match your search</p>
-              </div>
-            ) : (
-              <div className="divide-y divide-zinc-100">
-                {productList.filter(hasProduct).map((r) => {
-                  const p = r.products;
-                  const available = Number(r.qty_on_hand ?? 0);
-                  const outOfStock = available <= 0;
-                  const inCart = cart.some((x) => x.product_id === r.product_id);
+          {/* Search — full width, customer is already above */}
+          <div style={{ marginTop: "1rem" }}>
+            <label style={{ display: "block", fontSize: "0.62rem", fontWeight: 500, letterSpacing: "0.2em", color: "#999977", textTransform: "uppercase", marginBottom: "0.4rem" }}>
+              Search Products
+            </label>
+            <div style={{ position: "relative" }}>
+              <span style={{ position: "absolute", left: "0.85rem", top: "50%", transform: "translateY(-50%)", opacity: 0.35, fontSize: "0.85rem", pointerEvents: "none" }}>🔍</span>
+              <input
+                className={S.input}
+                style={{ paddingLeft: "2.2rem" }}
+                placeholder="Name, SKU, or barcode…"
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                autoComplete="off"
+              />
+            </div>
+          </div>
+        </div>
 
-                  return (
-                    <button
-                      key={r.product_id}
-                      className={[
-                        "group w-full px-5 py-3.5 text-left transition-colors",
-                        outOfStock
-                          ? "cursor-not-allowed opacity-40"
-                          : inCart
-                          ? "bg-amber-50 hover:bg-amber-100"
-                          : "hover:bg-zinc-50",
-                      ].join(" ")}
-                      onClick={() => !outOfStock && addToCart(r)}
-                      disabled={outOfStock}
-                    >
-                      <div className="flex items-center justify-between gap-4">
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2">
-                            <span className="truncate text-sm font-semibold text-zinc-900">
-                              {p.name}
+        {/* ══ ERROR ══ */}
+        {err && (
+          <div style={{ display: "flex", alignItems: "flex-start", gap: "0.75rem", borderRadius: 2, border: "1px solid #fecaca", background: "#fff5f5", padding: "0.85rem 1rem" }}>
+            <span style={{ color: "#e05050", flexShrink: 0 }}>⚠</span>
+            <p style={{ fontSize: "0.85rem", color: "#c0392b" }}>{err}</p>
+          </div>
+        )}
+
+        {/* ══ SPLIT PANEL ══ */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.2rem" }}>
+
+          {/* ── LEFT: PRODUCTS ── */}
+          <div className={`${S.card} overflow-hidden`} style={{ display: "flex", flexDirection: "column", maxHeight: "66vh" }}>
+            <div style={{ padding: "0.9rem 1.25rem", borderBottom: "1.5px solid rgba(245,197,24,0.2)", background: "#FFFEF5", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
+              <div style={{ fontFamily: "'Playfair Display', serif", fontSize: "1rem", fontWeight: 700, color: "#1a1a0a" }}>Products</div>
+              <span className={`${S.badge} bg-[#FFF9DC] text-[#92700a]`} style={{ fontSize: "0.66rem" }}>
+                {productList.length} shown
+              </span>
+            </div>
+
+            <div style={{ overflowY: "auto", flex: 1 }}>
+              {productList.filter(hasProduct).length === 0 ? (
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "4rem 1.5rem", textAlign: "center", gap: "0.6rem" }}>
+                  <span style={{ fontSize: "2rem" }}>🔍</span>
+                  <p style={{ fontSize: "0.82rem", color: "#999977" }}>No products match your search</p>
+                </div>
+              ) : productList.filter(hasProduct).map((r) => {
+                const p          = r.products;
+                const available  = Number(r.qty_on_hand ?? 0);
+                const outOfStock = available <= 0;
+                const inCart     = cart.some((x) => x.product_id === r.product_id);
+
+                return (
+                  <button
+                    key={r.product_id}
+                    className={`prod-row ${inCart ? "in-cart" : ""}`}
+                    style={{ padding: "0.85rem 1.25rem", borderBottom: "1px solid rgba(26,26,10,0.05)" }}
+                    onClick={() => !outOfStock && addToCart(r)}
+                    disabled={outOfStock}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "1rem" }}>
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                          <span style={{ fontSize: "0.88rem", fontWeight: 500, color: "#1a1a0a", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {p.name}
+                          </span>
+                          {inCart && (
+                            <span className={`${S.badge} bg-[#FFF9DC] text-[#92700a]`} style={{ flexShrink: 0, fontSize: "0.62rem" }}>
+                              ✓ In cart
                             </span>
-                            {inCart && (
-                              <span className={`${S.badge} bg-amber-100 text-amber-700 shrink-0`}>
-                                In cart
-                              </span>
-                            )}
-                          </div>
-                          {(p.sku || p.barcode) && (
-                            <p className="mt-0.5 truncate text-xs text-zinc-400">
-                              {[p.sku && `SKU: ${p.sku}`, p.barcode && `Barcode: ${p.barcode}`]
-                                .filter(Boolean)
-                                .join(" · ")}
-                            </p>
                           )}
                         </div>
-                        <div className="shrink-0 text-right">
-                          <div className="text-sm font-bold text-zinc-900">
-                            {fmtMoney(Number(p.unit_price ?? 0))}
-                          </div>
-                          <div
-                            className={`text-xs font-semibold ${
-                              outOfStock ? "text-rose-500" : "text-zinc-400"
-                            }`}
-                          >
-                            {outOfStock ? "Out of stock" : `${available} avail.`}
-                          </div>
+                        {(p.sku || p.barcode) && (
+                          <p style={{ fontSize: "0.72rem", color: "#bbb", marginTop: "0.15rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {[p.sku && `SKU: ${p.sku}`, p.barcode && `# ${p.barcode}`].filter(Boolean).join(" · ")}
+                          </p>
+                        )}
+                      </div>
+                      <div style={{ textAlign: "right", flexShrink: 0 }}>
+                        <div style={{ fontFamily: "'Playfair Display', serif", fontSize: "0.95rem", fontWeight: 700, color: "#1a1a0a" }}>
+                          {fmtMoney(Number(p.unit_price ?? 0))}
+                        </div>
+                        <div style={{ fontSize: "0.7rem", color: outOfStock ? "#e05050" : "#999977", marginTop: "0.1rem" }}>
+                          {outOfStock ? "Out of stock" : `${available} avail.`}
                         </div>
                       </div>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* RIGHT: cart */}
-        <div className={`${S.card} flex flex-col`}>
-          <div className="flex items-center justify-between border-b border-zinc-100 px-5 py-4">
-            <h2 className="text-sm font-bold text-zinc-900">
-              Cart
-              {cart.length > 0 && (
-                <span className="ml-2 text-zinc-400 font-normal">({cart.length} item{cart.length !== 1 ? "s" : ""})</span>
-              )}
-            </h2>
-            <button
-              className={S.btnDanger}
-              onClick={() => setCart([])}
-              disabled={cart.length === 0}
-            >
-              Clear all
-            </button>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
-          <div className="flex-1 overflow-auto">
-            {cart.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-16 text-center">
-                <div className="text-2xl">🛒</div>
-                <p className="mt-2 text-sm font-medium text-zinc-400">Cart is empty</p>
-                <p className="mt-1 text-xs text-zinc-300">Click a product on the left to add it</p>
+          {/* ── RIGHT: CART ── */}
+          <div className={`${S.card} overflow-hidden`} style={{ display: "flex", flexDirection: "column", maxHeight: "66vh" }}>
+            <div style={{ padding: "0.9rem 1.25rem", borderBottom: "1.5px solid rgba(245,197,24,0.2)", background: "#FFFEF5", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
+              <div style={{ fontFamily: "'Playfair Display', serif", fontSize: "1rem", fontWeight: 700, color: "#1a1a0a" }}>
+                Cart
+                {cart.length > 0 && (
+                  <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "0.78rem", fontWeight: 300, color: "#999977", marginLeft: "0.5rem" }}>
+                    {cart.length} item{cart.length !== 1 ? "s" : ""}
+                  </span>
+                )}
               </div>
-            ) : (
-              <>
-                {/* Column headers */}
-                <div className="grid items-center gap-2 border-b border-zinc-100 px-5 py-2" style={{ gridTemplateColumns: "1fr 5rem 5rem auto" }}>
-                  <div className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Item</div>
-                  <div className="text-[10px] font-bold uppercase tracking-widest text-zinc-400 text-center">Qty</div>
-                  <div className="text-[10px] font-bold uppercase tracking-widest text-zinc-400 text-center">Price</div>
-                  <div />
+              <button
+                className={S.btnDanger}
+                onClick={() => setCart([])}
+                disabled={cart.length === 0}
+                style={{ padding: "0.3rem 0.8rem", fontSize: "0.75rem" }}
+              >
+                Clear all
+              </button>
+            </div>
+
+            <div style={{ overflowY: "auto", flex: 1 }}>
+              {cart.length === 0 ? (
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "4rem 1.5rem", textAlign: "center", gap: "0.6rem" }}>
+                  <span style={{ fontSize: "2rem" }}>🛒</span>
+                  <p style={{ fontSize: "0.85rem", color: "#999977" }}>Cart is empty</p>
+                  <p style={{ fontSize: "0.75rem", color: "#bbb" }}>Click a product on the left to add it</p>
                 </div>
+              ) : (
+                <>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 72px 72px 32px", gap: "0.5rem", padding: "0.5rem 1.25rem", background: "#FAFAF5", borderBottom: "1px solid rgba(26,26,10,0.05)", fontSize: "0.62rem", fontWeight: 500, letterSpacing: "0.18em", color: "#bbb", textTransform: "uppercase" }}>
+                    <div>Item</div>
+                    <div style={{ textAlign: "center" }}>Qty</div>
+                    <div style={{ textAlign: "center" }}>Price</div>
+                    <div />
+                  </div>
 
-                <div className="divide-y divide-zinc-100">
                   {cart.map((line) => {
-                    const base = Number(line.base_price ?? 0);
-                    const final =
-                      line.unit_price_override == null ? base : Number(line.unit_price_override);
+                    const base         = Number(line.base_price ?? 0);
+                    const final        = line.unit_price_override == null ? base : Number(line.unit_price_override);
                     const isDiscounted = line.unit_price_override != null && final !== base;
-                    const lineTotal = final * Number(line.qty ?? 0);
-                    const overQty = line.qty > line.available;
+                    const lineTotal    = final * Number(line.qty ?? 0);
+                    const overQty      = line.qty > line.available;
 
                     return (
                       <div
                         key={line.product_id}
-                        className={`grid items-center gap-2 px-5 py-3 ${overQty ? "bg-rose-50" : ""}`}
-                        style={{ gridTemplateColumns: "1fr 5rem 5rem auto" }}
+                        className={`cart-row ${overQty ? "over-qty" : ""}`}
+                        style={{ display: "grid", gridTemplateColumns: "1fr 72px 72px 32px", gap: "0.5rem", alignItems: "start", padding: "0.85rem 1.25rem", borderBottom: "1px solid rgba(26,26,10,0.05)" }}
                       >
-                        {/* Name + meta */}
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold text-zinc-900">{line.name}</p>
-                          <div className="mt-0.5 flex items-center gap-1.5">
-                            <span className="text-xs text-zinc-400">Base {fmtMoney(base)}</span>
-                            {isDiscounted && (
-                              <span className={`${S.badge} bg-amber-50 text-amber-600`}>
-                                Discount applied
-                              </span>
-                            )}
-                          </div>
-                          <p className="mt-1 text-xs font-semibold text-zinc-500">
+                        <div style={{ minWidth: 0 }}>
+                          <p style={{ fontSize: "0.85rem", fontWeight: 500, color: "#1a1a0a", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{line.name}</p>
+                          <p style={{ fontSize: "0.7rem", color: "#999977", marginTop: "0.15rem" }}>Base {fmtMoney(base)}</p>
+                          <p style={{ fontSize: "0.75rem", color: isDiscounted ? "#3a7d44" : "#555540", fontWeight: isDiscounted ? 500 : 300, marginTop: "0.2rem" }}>
                             = {fmtMoney(lineTotal)}
-                            {overQty && (
-                              <span className="ml-2 text-rose-500">· Exceeds stock ({line.available})</span>
-                            )}
+                            {isDiscounted && <span style={{ marginLeft: "0.3rem", fontSize: "0.65rem", color: "#3a7d44" }}>✓ discount</span>}
                           </p>
+                          {overQty && <p style={{ fontSize: "0.68rem", color: "#e05050", marginTop: "0.15rem" }}>⚠ Exceeds stock ({line.available})</p>}
                         </div>
 
-                        {/* Qty */}
                         <div>
                           <input
-                            className={`${S.inputSoft} text-center ${overQty ? "border-rose-300 focus:border-rose-400 focus:ring-rose-100" : ""}`}
-                            type="number"
-                            min={0}
-                            max={line.available}
-                            value={line.qty}
-                            onChange={(e) =>
-                              updateQty(line.product_id, Number(e.target.value || 0))
-                            }
+                            className={S.inputSoft}
+                            style={{ textAlign: "center", padding: "0.4rem 0.3rem", ...(overQty ? { borderColor: "#fca5a5", background: "#fff5f5" } : {}) }}
+                            type="number" min={0} max={line.available} value={line.qty}
+                            onChange={(e) => updateQty(line.product_id, Number(e.target.value || 0))}
                           />
-                          <p className="mt-1 text-center text-[10px] text-zinc-400">{line.available} avail.</p>
+                          <p style={{ fontSize: "0.62rem", color: "#bbb", textAlign: "center", marginTop: "0.2rem" }}>{line.available} max</p>
                         </div>
 
-                        {/* Price override */}
                         <div>
                           <input
-                            className={`${S.inputSoft} text-right ${isDiscounted ? "border-amber-300 bg-amber-50 focus:ring-amber-100" : ""}`}
-                            type="number"
-                            min={0}
-                            step="0.01"
+                            className={S.inputSoft}
+                            style={{ textAlign: "right", padding: "0.4rem 0.5rem", ...(isDiscounted ? { borderColor: "#fcd34d", background: "#FFFBEA" } : {}) }}
+                            type="number" min={0} step="0.01"
                             value={line.unit_price_override == null ? "" : line.unit_price_override}
                             placeholder={`${base}`}
                             onChange={(e) => {
                               const v = e.target.value;
                               updateOverride(line.product_id, v === "" ? null : Number(v));
                             }}
-                            title="Override price (leave blank for default)"
+                            title="Override unit price (leave blank for default)"
                           />
-                          <p className="mt-1 text-center text-[10px] text-zinc-400">override</p>
+                          <p style={{ fontSize: "0.62rem", color: "#bbb", textAlign: "center", marginTop: "0.2rem" }}>override</p>
                         </div>
 
-                        {/* Remove */}
-                        <button
-                          className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-300 hover:bg-rose-50 hover:text-rose-500 transition-colors"
-                          onClick={() => removeLine(line.product_id)}
-                          title="Remove"
-                        >
-                          ✕
-                        </button>
+                        <button className="remove-btn" onClick={() => removeLine(line.product_id)} title="Remove">✕</button>
                       </div>
                     );
                   })}
-                </div>
-              </>
-            )}
-          </div>
+                </>
+              )}
+            </div>
 
-          {/* Totals */}
-          {cart.length > 0 && (
-            <div className="border-t border-zinc-100 bg-zinc-50/70 px-5 py-4">
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-sm text-zinc-500">
-                  <span>Subtotal (base)</span>
-                  <span className="font-semibold text-zinc-700">{fmtMoney(totals.subtotal)}</span>
-                </div>
-                {totals.discountTotal > 0 && (
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-zinc-500">Discounts</span>
-                    <span className="font-semibold text-amber-600">−{fmtMoney(totals.discountTotal)}</span>
+            {/* ── TOTALS FOOTER ── */}
+            {cart.length > 0 && (
+              <div style={{ borderTop: "1.5px solid rgba(245,197,24,0.25)", background: "#FFFBEA", padding: "1rem 1.25rem", flexShrink: 0 }}>
+
+                {/* Customer echo — confirms who the sale belongs to */}
+                {hasCustomer && (
+                  <div className="sale-for-chip">
+                    <span style={{ fontSize: "0.78rem" }}>👤</span>
+                    <span style={{ fontSize: "0.75rem", color: "#999977" }}>Sale for</span>
+                    <span style={{ fontSize: "0.82rem", fontWeight: 500, color: "#1a1a0a" }}>{customer}</span>
                   </div>
                 )}
-                <div className="flex items-center justify-between border-t border-zinc-200 pt-2">
-                  <span className="text-base font-bold text-zinc-900">Total</span>
-                  <span className="text-lg font-black text-zinc-900">{fmtMoney(totals.total)}</span>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.45rem", marginBottom: "0.9rem" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.82rem" }}>
+                    <span style={{ color: "#999977" }}>Subtotal</span>
+                    <span style={{ color: "#555540" }}>{fmtMoney(totals.subtotal)}</span>
+                  </div>
+                  {totals.discountTotal > 0 && (
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.82rem" }}>
+                      <span style={{ color: "#999977" }}>Discounts</span>
+                      <span style={{ color: "#3a7d44", fontWeight: 500 }}>−{fmtMoney(totals.discountTotal)}</span>
+                    </div>
+                  )}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: "0.55rem", borderTop: "1.5px solid #F5C518", marginTop: "0.2rem" }}>
+                    <span style={{ fontSize: "0.9rem", fontWeight: 500, color: "#1a1a0a" }}>Total</span>
+                    <span style={{ fontFamily: "'Playfair Display', serif", fontSize: "1.4rem", fontWeight: 700, color: "#1a1a0a" }}>
+                      {fmtMoney(totals.total)}
+                    </span>
+                  </div>
                 </div>
+
+                <button
+                  className={S.btnPrimary}
+                  style={{ width: "100%", padding: "0.85rem", fontSize: "0.9rem", justifyContent: "center" }}
+                  onClick={completeSale}
+                  disabled={saving || cartItemCount === 0}
+                >
+                  {saving ? (
+                    <>
+                      <svg className="spinner" width="14" height="14" viewBox="0 0 24 24" fill="none">
+                        <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" opacity="0.25" />
+                        <path fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                      </svg>
+                      Processing…
+                    </>
+                  ) : "Complete Sale →"}
+                </button>
+
+                <p style={{ textAlign: "center", fontSize: "0.68rem", color: "#bbb", marginTop: "0.6rem" }}>
+                  Stock is enforced server-side · cannot oversell
+                </p>
               </div>
-
-              <button
-                className={`${S.btnPrimary} mt-4 w-full py-3 text-base`}
-                onClick={completeSale}
-                disabled={saving || cartItemCount === 0}
-              >
-                {saving ? "Processing…" : "Complete Sale →"}
-              </button>
-
-              <p className="mt-2 text-center text-xs text-zinc-400">
-                Stock enforced server-side · cannot oversell
-              </p>
-            </div>
-          )}
+            )}
+          </div>
         </div>
+
       </div>
-    </div>
+    </>
   );
 }

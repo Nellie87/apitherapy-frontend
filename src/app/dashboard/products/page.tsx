@@ -5,15 +5,7 @@ import { bootstrapOrg } from "@/lib/org/bootstrapOrg";
 import { listProducts, createProduct, deleteProduct } from "@/lib/api/products";
 import { listUnitMeasures, listUnitSizes } from "@/lib/api/lookups";
 
-import {
-  inputCls,
-  selectCls,
-  tableGridCols,
-  selectChevronStyle,
-  cardCls,
-  softCardCls,
-  btnPrimary,
-} from "./page.styles";
+import * as S from "./page.styles";
 
 /* ─────────────────────────────────────────────
    Types
@@ -43,114 +35,100 @@ type Product = {
   notes?: string | null;
   cost_price?: number | string | null;
   unit_price?: number | string | null;
-
   unit_measure_id?: string | null;
   unit_size_id?: string | null;
-
-  // IMPORTANT: these are aliases coming from listProducts() join
   unit_measure?: { id?: string; name?: string } | null;
   unit_size?: { id?: string; label?: string; kind?: UnitKind } | null;
-
   sell_status?: "to_be_sold" | "not_to_be_sold" | string;
 };
 
 /* ─────────────────────────────────────────────
-   Helpers
+   Helpers & Icons
 ───────────────────────────────────────────── */
 function fmt(v: number | string | null | undefined) {
-  return Number(v || 0).toFixed(2);
+  return Number(v || 0).toLocaleString("en-KE", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 }
 
-/* ─────────────────────────────────────────────
-   Icons (inline SVGs – no deps)
-───────────────────────────────────────────── */
-const IconSearch = () => (
-  <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-    <circle cx="9" cy="9" r="5.5" />
-    <line x1="13.5" y1="13.5" x2="18" y2="18" />
-  </svg>
-);
-
 const IconPlus = () => (
-  <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+  <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.5">
     <line x1="10" y1="4" x2="10" y2="16" />
     <line x1="4" y1="10" x2="16" y2="10" />
   </svg>
 );
 
+const IconSearch = () => (
+  <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.2">
+    <circle cx="9" cy="9" r="5.5" />
+    <line x1="13.5" y1="13.5" x2="18" y2="18" />
+  </svg>
+);
+
 const IconTrash = () => (
-  <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2">
     <path d="M4 6h12M8 6V4a1 1 0 011-1h2a1 1 0 011 1v2m-6 0v10a1 1 0 001 1h6a1 1 0 001-1V6M9 10v3M11 10v3" />
   </svg>
 );
 
-const IconChevron = ({ open }: { open: boolean }) => (
-  <svg
-    width="16"
-    height="16"
-    viewBox="0 0 20 20"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    style={{ transition: "transform .25s", transform: open ? "rotate(180deg)" : "rotate(0deg)" }}
-  >
-    <polyline points="5,7 10,12 15,7" />
-  </svg>
-);
-
 const IconBox = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
     <path d="M21 8l-9-5-9 5v8l9 5 9-5z" />
     <polyline points="3,8 12,13 21,8" />
     <line x1="12" y1="23" x2="12" y2="13" />
   </svg>
 );
 
-const IconTrendUp = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <polyline points="23,6 13.5,15.5 8.5,10.5 1,18" />
-    <polyline points="17,6 23,6 23,12" />
-  </svg>
-);
-
 const IconDollar = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
     <line x1="12" y1="1" x2="12" y2="23" />
     <path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6" />
   </svg>
 );
 
 /* ─────────────────────────────────────────────
-   Components
+   KPI Card
 ───────────────────────────────────────────── */
 function KpiCard({
   icon,
   label,
   value,
   sub,
-  accent,
+  accent = "neutral",
 }: {
   icon: React.ReactNode;
   label: string;
   value: string;
   sub?: string;
-  accent: string;
+  accent?: "neutral" | "success" | "warning";
 }) {
+  const bg = accent === "success" ? "#F0FAF0" : accent === "warning" ? "#FFF9DC" : "#FFFEF5";
+  const textColor = accent === "success" ? "#3A7D44" : accent === "warning" ? "#926E0A" : "#1a1a0a";
+  const iconBg = accent === "success" ? "#E6F4EA" : accent === "warning" ? "#FFF2CC" : "#F5F5F0";
+
   return (
-    <div className={`flex items-start gap-4 ${softCardCls} px-5 py-4`}>
-      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${accent} text-amber-700`}>
-        {icon}
-      </div>
-      <div className="min-w-0">
-        <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">{label}</p>
-        <p className="mt-0.5 text-xl font-black text-zinc-800">{value}</p>
-        {sub && <p className="mt-0.5 text-xs text-zinc-400">{sub}</p>}
+    <div
+      className="p-6 rounded-2xl shadow-sm hover:shadow-md transition-all duration-200"
+      style={{ background: bg, border: "1px solid rgba(245,197,24,0.18)" }}
+    >
+      <div className="flex items-center gap-5">
+        <div
+          className="grid h-12 w-12 shrink-0 place-items-center rounded-xl text-xl shadow-sm"
+          style={{ background: iconBg, color: textColor }}
+        >
+          {icon}
+        </div>
+        <div>
+          <div className="text-xs font-medium uppercase tracking-wider text-[#999977]">{label}</div>
+          <div className="mt-1 text-2xl sm:text-3xl font-display font-bold text-[#1a1a0a] leading-none">{value}</div>
+          {sub && <div className="mt-1.5 text-sm text-[#777766]">{sub}</div>}
+        </div>
       </div>
     </div>
   );
 }
 
+/* ─────────────────────────────────────────────
+   Collapsible Form Panel
+───────────────────────────────────────────── */
 function FormPanel({
   open,
   onToggle,
@@ -161,35 +139,45 @@ function FormPanel({
   children: React.ReactNode;
 }) {
   return (
-    <div className={cardCls}>
+    <div className="rounded-2xl shadow-sm overflow-hidden" style={{ background: "#FFFEF9", border: "1px solid rgba(245,197,24,0.15)" }}>
       <button
         onClick={onToggle}
-        className="flex w-full items-center justify-between rounded-2xl px-5 py-3.5 text-left hover:bg-zinc-50 transition-colors"
+        className="flex w-full items-center justify-between px-6 py-5 text-left hover:bg-[#FFF9DC]/40 transition-colors"
       >
-        <div className="flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-amber-50 text-amber-500">
+        <div className="flex items-center gap-4">
+          <div className="grid h-10 w-10 place-items-center rounded-xl bg-[#FFF9DC] text-[#926E0A] text-xl">
             <IconPlus />
           </div>
           <div>
-            <div className="text-sm font-black text-zinc-800">Add New Product</div>
-            <div className="mt-0.5 text-xs text-zinc-400">Uses lookup dropdowns for Unit Measure & Unit Size</div>
+            <div className="font-display text-lg font-bold text-[#1a1a0a]">Add New Product</div>
+            <div className="text-sm text-[#777766] mt-0.5">Define product details & pricing</div>
           </div>
         </div>
-        <IconChevron open={open} />
+        <svg
+          width="18"
+          height="18"
+          viewBox="0 0 20 20"
+          fill="none"
+          stroke="#777766"
+          strokeWidth="2"
+          style={{ transform: open ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.3s" }}
+        >
+          <polyline points="5,7 10,12 15,7" />
+        </svg>
       </button>
 
       <div
-        className="overflow-hidden"
-        style={{ maxHeight: open ? "700px" : "0px", transition: "max-height .35s cubic-bezier(.4,0,.2,1)" }}
+        className="overflow-hidden transition-all duration-400"
+        style={{ maxHeight: open ? "1200px" : "0px" }}
       >
-        <div className="border-t border-zinc-100 px-5 pb-5 pt-4">{children}</div>
+        <div className="px-6 pb-6 pt-2 border-t border-[#F5C518]/10">{children}</div>
       </div>
     </div>
   );
 }
 
 /* ─────────────────────────────────────────────
-   Page
+   Main Page
 ───────────────────────────────────────────── */
 export default function ProductsPage() {
   const [orgId, setOrgId] = useState<string | null>(null);
@@ -199,7 +187,7 @@ export default function ProductsPage() {
   const [measures, setMeasures] = useState<MeasureLookup[]>([]);
   const [sizes, setSizes] = useState<SizeLookup[]>([]);
 
-  // form state
+  // Form
   const [name, setName] = useState("");
   const [barcode, setBarcode] = useState("");
   const [supplier, setSupplier] = useState("");
@@ -224,21 +212,16 @@ export default function ProductsPage() {
         const o = await bootstrapOrg();
         setOrgId(o);
 
-        const [uoms, usizes] = await Promise.all([
-          listUnitMeasures(o) as Promise<MeasureLookup[]>,
-          listUnitSizes(o) as Promise<SizeLookup[]>,
-        ]);
+        const [uoms, usizes] = await Promise.all([listUnitMeasures(o), listUnitSizes(o)]);
 
-        setMeasures(uoms);
-        setSizes(usizes);
+        setMeasures(uoms as MeasureLookup[]);
+        setSizes(usizes as SizeLookup[]);
 
-        // default selections
         if (uoms?.[0]?.id) setUnitMeasureId(uoms[0].id);
 
-        // set default size AFTER measure chosen
         const firstMeasure = uoms?.[0];
-        const allowed = (firstMeasure?.allowed_kinds ?? []) as UnitKind[];
-        const firstSizes = usizes.filter((s) => allowed.includes(s.kind));
+        const allowed = firstMeasure?.allowed_kinds ?? [];
+        const firstSizes = usizes.filter((s) => allowed.includes(s.kind as any));
         if (firstSizes?.[0]?.id) setUnitSizeId(firstSizes[0].id);
 
         await refresh(o);
@@ -248,45 +231,47 @@ export default function ProductsPage() {
     })();
   }, []);
 
-  // dependent dropdown: measure -> filter sizes
-  const selectedMeasure = useMemo(() => {
-    return measures.find((m) => m.id === unitMeasureId) ?? null;
-  }, [measures, unitMeasureId]);
+  const selectedMeasure = useMemo(
+    () => measures.find((m) => m.id === unitMeasureId) ?? null,
+    [measures, unitMeasureId]
+  );
 
   const filteredSizes = useMemo(() => {
     if (!selectedMeasure) return sizes;
-    const allowed = (selectedMeasure.allowed_kinds ?? []) as UnitKind[];
+    const allowed = selectedMeasure.allowed_kinds ?? [];
     return sizes.filter((s) => allowed.includes(s.kind));
   }, [sizes, selectedMeasure]);
 
-  // keep selected size valid
   useEffect(() => {
     if (!filteredSizes.length) {
       setUnitSizeId("");
       return;
     }
-    const stillValid = filteredSizes.some((s) => s.id === unitSizeId);
-    if (!stillValid) setUnitSizeId(filteredSizes[0].id);
+    if (!filteredSizes.some((s) => s.id === unitSizeId)) {
+      setUnitSizeId(filteredSizes[0].id);
+    }
   }, [filteredSizes, unitSizeId]);
 
   const filtered = useMemo(() => {
     const t = search.trim().toLowerCase();
     if (!t) return items;
     return items.filter((p) => {
-      const n = (p.name ?? "").toLowerCase();
-      const b = (p.barcode ?? "").toLowerCase();
-      const s = (p.supplier ?? "").toLowerCase();
-      return n.includes(t) || b.includes(t) || s.includes(t);
+      return (
+        (p.name ?? "").toLowerCase().includes(t) ||
+        (p.barcode ?? "").toLowerCase().includes(t) ||
+        (p.supplier ?? "").toLowerCase().includes(t)
+      );
     });
   }, [items, search]);
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
+    if (!orgId) return;
     try {
       setErr("");
       if (!name.trim()) throw new Error("Product name is required");
 
-      await createProduct(orgId!, {
+      await createProduct(orgId, {
         name: name.trim(),
         barcode: barcode.trim() || undefined,
         supplier: supplier.trim() || undefined,
@@ -298,7 +283,6 @@ export default function ProductsPage() {
         sell_status: sellStatus,
       });
 
-      // reset
       setName("");
       setBarcode("");
       setSupplier("");
@@ -308,17 +292,18 @@ export default function ProductsPage() {
       setSellStatus("to_be_sold");
       setFormOpen(false);
 
-      await refresh(orgId!);
+      await refresh(orgId);
     } catch (e: any) {
       setErr(e.message ?? String(e));
     }
   }
 
   async function handleDelete(id: string) {
+    if (!orgId) return;
     setDeleting(id);
     try {
-      await deleteProduct(orgId!, id);
-      await refresh(orgId!);
+      await deleteProduct(orgId, id);
+      await refresh(orgId);
     } catch (e: any) {
       setErr(e.message ?? String(e));
     } finally {
@@ -326,15 +311,15 @@ export default function ProductsPage() {
     }
   }
 
-  if (!orgId) {
+  if (!orgId && !err) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <div className="flex items-center gap-3 text-zinc-400">
+        <div className="flex items-center gap-3 text-[#777766]">
           <svg className="h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <circle cx="12" cy="12" r="10" strokeOpacity="0.25" />
+            <circle cx="12" cy="12" r="10" strokeOpacity="0.2" />
             <path d="M12 2a10 10 0 0110 10" />
           </svg>
-          <span className="text-sm font-semibold">Loading…</span>
+          <span className="text-sm font-medium">Loading product catalog…</span>
         </div>
       </div>
     );
@@ -345,243 +330,391 @@ export default function ProductsPage() {
   const catalogValue = items.reduce((sum, p) => sum + Number(p.unit_price ?? 0), 0);
 
   return (
-    <div className="space-y-5">
-      {/* Error */}
-      {err && (
-        <div className="flex items-center gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
-            <circle cx="10" cy="10" r="9" />
-            <path d="M10 6v4M10 12v.01" stroke="#fff" strokeWidth="2" strokeLinecap="round" fill="none" />
-          </svg>
-          <span>{err}</span>
-          <button onClick={() => setErr("")} className="ml-auto text-red-400 hover:text-red-600 transition-colors">
-            ✕
-          </button>
-        </div>
-      )}
+    <>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;1,400&family=DM+Sans:wght@300;400;500;700&display=swap');
 
-      {/* Header */}
-      <div className="flex items-end justify-between">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-widest text-zinc-400">Inventory</p>
-          <h1 className="mt-0.5 text-2xl font-black text-zinc-800">Product Catalog</h1>
+        .products-page * {
+          font-family: 'DM Sans', system-ui, sans-serif;
+        }
+        .products-page .font-display {
+          font-family: 'Playfair Display', serif;
+        }
+
+        .row-hover:hover {
+          background: #FFFBEA;
+          transition: background 0.16s;
+        }
+
+        .btn-amber {
+          background: #F5C518;
+          color: #1a1a0a;
+        }
+        .btn-amber:hover {
+          background: #E5B50F;
+        }
+      `}</style>
+
+      <div className="products-page space-y-6 px-4 py-6 sm:px-6 lg:px-8 max-w-screen-xl mx-auto">
+
+        {/* Error banner */}
+        {err && (
+          <div className="rounded-xl border border-rose-200 bg-rose-50/80 px-5 py-3 text-sm text-rose-700 flex items-start gap-3">
+            <span className="mt-0.5">⚠️</span>
+            <span className="flex-1">{err}</span>
+            <button onClick={() => setErr("")} className="text-rose-400 hover:text-rose-600">✕</button>
+          </div>
+        )}
+
+        {/* Header with gradient */}
+        <div className="rounded-2xl shadow-sm overflow-hidden" style={{ background: "#FFFEF9", border: "1px solid rgba(245,197,24,0.15)" }}>
+          <div style={{ height: 4, background: "linear-gradient(90deg, #F5C518, #FFE566, #F5C518)" }} />
+          <div className="px-6 py-7">
+            <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <div className="text-xs font-medium uppercase tracking-wider text-[#999977]">Product Management</div>
+                <h1 className="font-display mt-1 text-3xl sm:text-4xl font-bold text-[#1a1a0a]">
+                  Catalog <em style={{ color: "#3a7d44", fontStyle: "italic" }}>Overview</em>
+                </h1>
+                <p className="mt-2 text-sm text-[#777766]">Manage products, pricing, units and availability</p>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <label className="flex items-center gap-2.5 rounded-xl border border-[#E5E5D5] bg-white px-4 py-2.5 shadow-sm focus-within:border-[#F5C518]/60 focus-within:ring-2 focus-within:ring-[#FFF9DC] transition">
+                  <IconSearch />
+                  <input
+                    className="w-56 bg-transparent text-sm outline-none placeholder:text-[#aaa995]"
+                    placeholder="Search name, barcode, supplier…"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                  />
+                </label>
+              </div>
+            </div>
+          </div>
         </div>
 
-        <div className="relative w-72">
-          <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400">
-            <IconSearch />
-          </span>
-          <input
-            type="text"
-            placeholder="Search name / barcode / supplier…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className={inputCls}
-            style={{ paddingLeft: "2.25rem" }}
+        {/* KPIs */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+          <KpiCard
+            icon={<IconBox />}
+            label="Total Products"
+            value={String(total)}
+            sub="in catalog"
+            accent="neutral"
+          />
+          <KpiCard
+            icon={<IconDollar />}
+            label="Active Items"
+            value={String(active)}
+            sub="currently for sale"
+            accent={active === total ? "success" : "warning"}
+          />
+          <KpiCard
+            icon="🍯"
+            label="Catalog Value"
+            value={`Ksh ${fmt(catalogValue)}`}
+            sub="total sell price sum"
+            accent="success"
           />
         </div>
-      </div>
 
-      {/* KPIs */}
-      <div className="grid grid-cols-3 gap-4">
-        <KpiCard icon={<IconBox />} label="Total Products" value={String(total)} sub="in catalog" accent="bg-amber-50" />
-        <KpiCard icon={<IconTrendUp />} label="Active (For Sale)" value={String(active)} sub="currently listed" accent="bg-emerald-50" />
-        <KpiCard icon={<IconDollar />} label="Catalog Value" value={`Ksh ${catalogValue.toFixed(2)}`} sub="sum of sell prices" accent="bg-sky-50" />
-      </div>
+        {/* Add Form */}
+        <FormPanel open={formOpen} onToggle={() => setFormOpen((v) => !v)}>
+          <form onSubmit={handleCreate} className="space-y-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              <div>
+                <label className="block text-xs font-medium uppercase tracking-wider text-[#999977] mb-2">
+                  Product Name *
+                </label>
+                <input
+                  className="w-full rounded-lg border border-[#E5E5D5] px-4 py-2.5 text-sm focus:border-[#F5C518]/60 focus:ring-2 focus:ring-[#FFF9DC] outline-none"
+                  placeholder="e.g. Raw Honey 500g"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium uppercase tracking-wider text-[#999977] mb-2">Barcode</label>
+                <input
+                  className="w-full rounded-lg border border-[#E5E5D5] px-4 py-2.5 text-sm focus:border-[#F5C518]/60 focus:ring-2 focus:ring-[#FFF9DC] outline-none"
+                  placeholder="EAN / UPC (optional)"
+                  value={barcode}
+                  onChange={(e) => setBarcode(e.target.value)}
+                />
+              </div>
+            </div>
 
-      {/* Create Form */}
-      <FormPanel open={formOpen} onToggle={() => setFormOpen((v) => !v)}>
-        <form onSubmit={handleCreate} noValidate>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="mb-1 block text-xs font-semibold text-zinc-500">Product Name *</label>
-              <input className={inputCls} placeholder="e.g. Raw Honey 500g" value={name} onChange={(e) => setName(e.target.value)} />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              <div>
+                <label className="block text-xs font-medium uppercase tracking-wider text-[#999977] mb-2">Supplier</label>
+                <input
+                  className="w-full rounded-lg border border-[#E5E5D5] px-4 py-2.5 text-sm focus:border-[#F5C518]/60 focus:ring-2 focus:ring-[#FFF9DC] outline-none"
+                  placeholder="Supplier name (optional)"
+                  value={supplier}
+                  onChange={(e) => setSupplier(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium uppercase tracking-wider text-[#999977] mb-2">Sell Status</label>
+                <select
+                  className="w-full rounded-lg border border-[#E5E5D5] px-4 py-2.5 text-sm focus:border-[#F5C518]/60 focus:ring-2 focus:ring-[#FFF9DC] outline-none appearance-none bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTIiIGhlaWdodD0iMTIiIHZpZXdCb3g9IjAgMCAxMiAxMiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cGF0aCBkPSJNMi41IDQuNUw2IDhsMy41LTQuNSIgc3Ryb2tlPSIjNzc3NzY2IiBzdHJva2Utd2lkdGg9IjEiLz48L3N2Zz4=')] bg-no-repeat bg-right-3 bg-center"
+                  value={sellStatus}
+                  onChange={(e) => setSellStatus(e.target.value as any)}
+                >
+                  <option value="to_be_sold">To be sold</option>
+                  <option value="not_to_be_sold">Not to be sold</option>
+                </select>
+              </div>
             </div>
-            <div>
-              <label className="mb-1 block text-xs font-semibold text-zinc-500">Barcode</label>
-              <input className={inputCls} placeholder="EAN / UPC" value={barcode} onChange={(e) => setBarcode(e.target.value)} />
-            </div>
-          </div>
 
-          <div className="mt-3 grid grid-cols-2 gap-3">
-            <div>
-              <label className="mb-1 block text-xs font-semibold text-zinc-500">Supplier</label>
-              <input className={inputCls} placeholder="Supplier name" value={supplier} onChange={(e) => setSupplier(e.target.value)} />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              <div>
+                <label className="block text-xs font-medium uppercase tracking-wider text-[#999977] mb-2">Cost Price (Ksh)</label>
+                <input
+                  className="w-full rounded-lg border border-[#E5E5D5] px-4 py-2.5 text-sm focus:border-[#F5C518]/60 focus:ring-2 focus:ring-[#FFF9DC] outline-none"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={costPrice}
+                  onChange={(e) => setCostPrice(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium uppercase tracking-wider text-[#999977] mb-2">Sell Price (Ksh)</label>
+                <input
+                  className="w-full rounded-lg border border-[#E5E5D5] px-4 py-2.5 text-sm focus:border-[#F5C518]/60 focus:ring-2 focus:ring-[#FFF9DC] outline-none"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={sellPrice}
+                  onChange={(e) => setSellPrice(e.target.value)}
+                />
+              </div>
             </div>
-            <div>
-              <label className="mb-1 block text-xs font-semibold text-zinc-500">Sell Status</label>
-              <select
-                className={selectCls}
-                value={sellStatus}
-                onChange={(e) => setSellStatus(e.target.value as any)}
-                style={selectChevronStyle}
-              >
-                <option value="to_be_sold">To be sold</option>
-                <option value="not_to_be_sold">Not to be sold</option>
-              </select>
-            </div>
-          </div>
 
-          <div className="mt-3 grid grid-cols-2 gap-3">
-            <div>
-a              <label className="mb-1 block text-xs font-semibold text-zinc-500">Cost Price (Kshs)</label>
-              <input className={inputCls} type="number" min="0" step="0.01" value={costPrice} onChange={(e) => setCostPrice(e.target.value)} />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-semibold text-zinc-500">Sell Price (Kshs)</label>
-              <input className={inputCls} type="number" min="0" step="0.01" value={sellPrice} onChange={(e) => setSellPrice(e.target.value)} />
-            </div>
-          </div>
-
-          <div className="mt-3 grid grid-cols-2 gap-3">
-            <div>
-              <label className="mb-1 block text-xs font-semibold text-zinc-500">Unit of Measure</label>
-              <select
-                className={selectCls}
-                value={unitMeasureId}
-                onChange={(e) => setUnitMeasureId(e.target.value)}
-                style={selectChevronStyle}
-              >
-                {measures.length === 0 ? (
-                  <option disabled>No unit measures</option>
-                ) : (
-                  measures.map((m) => (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              <div>
+                <label className="block text-xs font-medium uppercase tracking-wider text-[#999977] mb-2">Unit of Measure</label>
+                <select
+                  className="w-full rounded-lg border border-[#E5E5D5] px-4 py-2.5 text-sm focus:border-[#F5C518]/60 focus:ring-2 focus:ring-[#FFF9DC] outline-none appearance-none bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTIiIGhlaWdodD0iMTIiIHZpZXdCb3g9IjAgMCAxMiAxMiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cGF0aCBkPSJNMi41IDQuNUw2IDhsMy41LTQuNSIgc3Ryb2tlPSIjNzc3NzY2IiBzdHJva2Utd2lkdGg9IjEiLz48L3N2Zz4=')] bg-no-repeat bg-right-3 bg-center"
+                  value={unitMeasureId}
+                  onChange={(e) => setUnitMeasureId(e.target.value)}
+                >
+                  {measures.map((m) => (
                     <option key={m.id} value={m.id}>
                       {m.name}
                     </option>
-                  ))
-                )}
-              </select>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium uppercase tracking-wider text-[#999977] mb-2">Unit Size</label>
+                <select
+                  className="w-full rounded-lg border border-[#E5E5D5] px-4 py-2.5 text-sm focus:border-[#F5C518]/60 focus:ring-2 focus:ring-[#FFF9DC] outline-none appearance-none bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTIiIGhlaWdodD0iMTIiIHZpZXdCb3g9IjAgMCAxMiAxMiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cGF0aCBkPSJNMi41IDQuNUw2IDhsMy41LTQuNSIgc3Ryb2tlPSIjNzc3NzY2IiBzdHJva2Utd2lkdGg9IjEiLz48L3N2Zz4=')] bg-no-repeat bg-right-3 bg-center"
+                  value={unitSizeId}
+                  onChange={(e) => setUnitSizeId(e.target.value)}
+                  disabled={!filteredSizes.length}
+                >
+                  {!filteredSizes.length ? (
+                    <option value="">Select measure first</option>
+                  ) : (
+                    filteredSizes.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.label}
+                      </option>
+                    ))
+                  )}
+                </select>
+              </div>
             </div>
 
             <div>
-              <label className="mb-1 block text-xs font-semibold text-zinc-500">Unit Size</label>
-              <select
-                className={selectCls}
-                value={unitSizeId}
-                onChange={(e) => setUnitSizeId(e.target.value)}
-                style={selectChevronStyle}
-                disabled={!filteredSizes.length}
-              >
-                {!filteredSizes.length ? (
-                  <option value="">No sizes for this measure</option>
-                ) : (
-                  filteredSizes.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.label}
-                    </option>
-                  ))
-                )}
-              </select>
-              {selectedMeasure?.name ? (
-                <p className="mt-1 text-[11px] text-zinc-400">
-                  {selectedMeasure.name} allows:{" "}
-                  <span className="font-mono">{(selectedMeasure.allowed_kinds ?? []).join(", ")}</span>
-                </p>
-              ) : null}
+              <label className="block text-xs font-medium uppercase tracking-wider text-[#999977] mb-2">Notes</label>
+              <textarea
+                rows={2}
+                className="w-full rounded-lg border border-[#E5E5D5] px-4 py-2.5 text-sm focus:border-[#F5C518]/60 focus:ring-2 focus:ring-[#FFF9DC] outline-none resize-none"
+                placeholder="Additional information, batch details, etc."
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+              />
             </div>
-          </div>
 
-          <div className="mt-3">
-            <label className="mb-1 block text-xs font-semibold text-zinc-500">Notes</label>
-            <textarea
-              rows={2}
-              className={`${inputCls} resize-none`}
-              placeholder="Any additional info…"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-            />
-          </div>
-
-          <button type="submit" className={btnPrimary}>
-            <IconPlus /> Add Product
-          </button>
-        </form>
-      </FormPanel>
-
-      {/* Table */}
-      <div className={cardCls}>
-        <div
-          className="grid items-center border-b border-zinc-100 px-5 py-3 text-xs font-black uppercase tracking-wider text-zinc-400"
-          style={{ gridTemplateColumns: tableGridCols }}
-        >
-          <span>Name</span>
-          <span>Barcode</span>
-          <span>Cost <p>(Kshs)</p> </span>
-          <span>Sell <p>(Kshs)</p>  </span>
-          <span>UoM</span>
-          <span>Size</span>
-          <span>Status</span>
-          <span />
-        </div>
-
-        {filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center gap-2 py-16 text-zinc-400">
-            <IconBox />
-            <p className="text-sm font-semibold">{items.length === 0 ? "No products yet." : "No results match your search."}</p>
-            <p className="text-xs">{items.length === 0 ? 'Click "Add New Product" above to get started.' : "Try a different search term."}</p>
-          </div>
-        ) : (
-          filtered.map((p) => (
-            <div
-              key={p.id}
-              className="grid items-center border-b border-zinc-50 px-5 py-2.5 text-sm text-zinc-700 last:border-0 hover:bg-amber-50/40 transition-colors"
-              style={{ gridTemplateColumns: tableGridCols }}
-            >
-              <div className="min-w-0 pr-3">
-                <p className="font-black text-zinc-800 truncate">{p.name}</p>
-                {(p.supplier || p.notes) && (
-                  <p className="text-xs text-zinc-400 truncate">{[p.supplier, p.notes].filter(Boolean).join(" · ")}</p>
-                )}
-              </div>
-
-              <span className="font-mono text-xs text-zinc-500">{p.barcode ?? "—"}</span>
-              <span className="font-semibold">{fmt(p.cost_price)}</span>
-              <span className="font-semibold">{fmt(p.unit_price)}</span>
-
-              {/* IMPORTANT: uses joined aliases from listProducts() */}
-              <span className="text-zinc-500">{p.unit_measure?.name ?? "—"}</span>
-              <span className="text-zinc-500">{p.unit_size?.label ?? "—"}</span>
-
-              <span>
-                {p.sell_status === "not_to_be_sold" ? (
-                  <span className="inline-flex items-center gap-1.5 rounded-lg bg-zinc-100 px-2.5 py-0.5 text-xs font-semibold text-zinc-500">
-                    <span className="h-1.5 w-1.5 rounded-full bg-zinc-400" />
-                    Not for sale
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-600">
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-                    For sale
-                  </span>
-                )}
-              </span>
-
+            <div className="flex justify-end pt-2">
               <button
-                onClick={() => handleDelete(p.id)}
-                disabled={deleting === p.id}
-                className="ml-2 flex h-7 w-7 items-center justify-center rounded-lg text-zinc-300 hover:bg-red-50 hover:text-red-500 transition-colors disabled:opacity-40"
-                aria-label="Delete product"
+                type="submit"
+                className="btn-amber px-6 py-2.5 rounded-xl font-medium shadow-sm hover:shadow transition disabled:opacity-50"
+                disabled={!name.trim()}
               >
-                {deleting === p.id ? (
-                  <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                    <circle cx="12" cy="12" r="8" strokeOpacity="0.25" />
-                    <path d="M12 4a8 8 0 018 8" />
-                  </svg>
-                ) : (
-                  <IconTrash />
-                )}
+                Add Product
               </button>
             </div>
-          ))
-        )}
-      </div>
+          </form>
+        </FormPanel>
 
-      {filtered.length > 0 && (
-        <p className="text-center text-xs text-zinc-400">
-          Showing {filtered.length} of {items.length} product{items.length !== 1 ? "s" : ""}
-        </p>
-      )}
-    </div>
+        {/* Product Table */}
+        <div className="rounded-2xl shadow-sm overflow-hidden" style={{ background: "#FFFEF9", border: "1px solid rgba(245,197,24,0.15)" }}>
+          <div style={{ padding: "1.1rem 1.5rem", borderBottom: "1.5px solid rgba(245,197,24,0.15)", background: "#FFFEF5" }}>
+            <div className="font-display text-xl font-bold text-[#1a1a0a]">Product Catalog</div>
+          </div>
+
+          {/* Desktop Table Header */}
+          <div
+            className="hidden lg:grid items-center gap-5 px-6 py-3 text-xs font-medium uppercase tracking-wider text-[#777766]"
+            style={{
+              gridTemplateColumns: "2.5fr 1.2fr 1fr 1fr 1fr 1fr 1.3fr 0.8fr",
+              background: "#FAFAF5",
+              borderBottom: "1px solid rgba(245,197,24,0.1)",
+            }}
+          >
+            <div>Product</div>
+            <div>Barcode</div>
+            <div>Cost (Ksh)</div>
+            <div>Sell (Ksh)</div>
+            <div>Measure</div>
+            <div>Size</div>
+            <div>Status</div>
+            <div></div>
+          </div>
+
+          <div className="divide-y divide-[#F5C518]/10">
+            {filtered.length === 0 ? (
+              <div className="py-16 text-center text-[#777766]">
+                <div className="text-5xl mb-4">🍯</div>
+                <p className="font-medium text-lg">
+                  {items.length === 0 ? "No products in catalog yet" : "No matching products"}
+                </p>
+                <p className="text-sm mt-2">
+                  {items.length === 0 ? "Click the panel above to add your first product" : "Try a different search term"}
+                </p>
+              </div>
+            ) : (
+              filtered.map((p) => {
+                const isDeleting = deleting === p.id;
+                const isForSale = p.sell_status !== "not_to_be_sold";
+
+                return (
+                  <div key={p.id} className="row-hover">
+                    {/* Desktop row */}
+                    <div
+                      className="hidden lg:grid items-center gap-5 px-6 py-4 text-sm"
+                      style={{ gridTemplateColumns: "2.5fr 1.2fr 1fr 1fr 1fr 1fr 1.3fr 0.8fr" }}
+                    >
+                      <div className="min-w-0">
+                        <div className="font-medium text-[#1a1a0a] truncate">{p.name || "Unnamed"}</div>
+                        {(p.supplier || p.notes) && (
+                          <div className="text-xs text-[#777766] mt-0.5 truncate">
+                            {[p.supplier, p.notes].filter(Boolean).join(" · ")}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="font-mono text-xs text-[#777766]">{p.barcode || "—"}</div>
+                      <div className="font-medium text-[#555540]">{fmt(p.cost_price)}</div>
+                      <div className="font-medium text-[#1a1a0a]">{fmt(p.unit_price)}</div>
+                      <div className="text-[#777766]">{p.unit_measure?.name || "—"}</div>
+                      <div className="text-[#777766]">{p.unit_size?.label || "—"}</div>
+
+                      <div>
+                        {isForSale ? (
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-[#E6F4EA] px-3 py-1 text-xs font-medium text-[#3A7D44]">
+                            <span className="h-2 w-2 rounded-full bg-[#4CAF50]" />
+                            For sale
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-[#FFF2CC] px-3 py-1 text-xs font-medium text-[#926E0A]">
+                            <span className="h-2 w-2 rounded-full bg-[#F5C518]" />
+                            Not for sale
+                          </span>
+                        )}
+                      </div>
+
+                      <button
+                        onClick={() => handleDelete(p.id)}
+                        disabled={isDeleting}
+                        className="flex h-8 w-8 items-center justify-center rounded-lg text-[#777766] hover:bg-[#FFF9DC] hover:text-[#926E0A] transition disabled:opacity-40"
+                        aria-label="Delete product"
+                      >
+                        {isDeleting ? (
+                          <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <circle cx="12" cy="12" r="10" strokeOpacity="0.25" />
+                            <path d="M12 4a8 8 0 018 8" />
+                          </svg>
+                        ) : (
+                          <IconTrash />
+                        )}
+                      </button>
+                    </div>
+
+                    {/* Mobile stacked view */}
+                    <div className="lg:hidden px-5 py-5 space-y-4 border-b border-[#F5C518]/10">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="min-w-0 flex-1">
+                          <div className="font-medium text-[#1a1a0a]">{p.name || "Unnamed"}</div>
+                          <div className="text-xs text-[#777766] mt-1">
+                            {p.barcode ? `Barcode: ${p.barcode}` : ""}
+                            {p.barcode && p.supplier ? " · " : ""}
+                            {p.supplier || ""}
+                          </div>
+                        </div>
+                        <div>
+                          {isForSale ? (
+                            <span className="inline-flex items-center gap-1.5 rounded-full bg-[#E6F4EA] px-3 py-1 text-xs font-medium text-[#3A7D44]">
+                              For sale
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1.5 rounded-full bg-[#FFF2CC] px-3 py-1 text-xs font-medium text-[#926E0A]">
+                              Not for sale
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4 bg-[#FAFAF5] rounded-xl p-4 text-sm">
+                        <div>
+                          <div className="text-xs text-[#999977]">Cost</div>
+                          <div className="font-medium">{fmt(p.cost_price)}</div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-[#999977]">Sell</div>
+                          <div className="font-medium text-[#1a1a0a]">{fmt(p.unit_price)}</div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-[#999977]">Measure</div>
+                          <div>{p.unit_measure?.name || "—"}</div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-[#999977]">Size</div>
+                          <div>{p.unit_size?.label || "—"}</div>
+                        </div>
+                      </div>
+
+                      <div className="flex justify-end">
+                        <button
+                          onClick={() => handleDelete(p.id)}
+                          disabled={isDeleting}
+                          className="flex items-center gap-2 px-4 py-2 rounded-lg text-[#777766] hover:bg-[#FFF9DC] hover:text-[#926E0A] transition disabled:opacity-40"
+                        >
+                          {isDeleting ? "Deleting…" : "Delete"}
+                          {!isDeleting && <IconTrash />}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {filtered.length > 0 && (
+            <div className="px-6 py-3 text-xs text-[#999977] border-t border-[#F5C518]/10 text-center">
+              Showing {filtered.length} of {items.length} product{items.length !== 1 ? "s" : ""}
+            </div>
+          )}
+        </div>
+      </div>
+    </>
   );
 }

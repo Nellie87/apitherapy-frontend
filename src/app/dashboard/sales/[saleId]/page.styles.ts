@@ -1,41 +1,31 @@
+// ─── Hexhive Dashboard · Sale Detail Styles ──────────────────────────────────
+
 export const card =
-  "rounded-3xl border border-zinc-200 bg-white shadow-sm";
+  "rounded-sm border border-yellow-100 bg-white shadow-[0_2px_12px_rgba(245,197,24,0.08)]";
 
 export const input =
-  "w-full rounded-2xl border border-zinc-200 bg-white px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-amber-200";
+  "w-full rounded-sm border border-yellow-200 bg-[#FFFEF5] px-4 py-2.5 text-sm font-light outline-none transition focus:border-yellow-400 focus:ring-2 focus:ring-yellow-100 placeholder:text-[#aaa990]";
 
 export const btnPrimary =
-  "inline-flex items-center justify-center rounded-2xl bg-amber-500 px-4 py-2.5 text-sm font-black text-white hover:bg-amber-600 disabled:opacity-50";
+  "inline-flex items-center justify-center gap-2 rounded-sm bg-[#1a1a0a] px-5 py-2.5 text-sm font-medium tracking-wide text-[#F5C518] transition hover:bg-[#2e2e18] hover:-translate-y-px hover:shadow-md disabled:opacity-50 disabled:pointer-events-none";
 
 export const btnGhost =
-  "inline-flex items-center justify-center rounded-2xl border border-zinc-200 bg-white px-4 py-2.5 text-sm font-black text-zinc-800 hover:bg-zinc-50";
+  "inline-flex items-center justify-center gap-2 rounded-sm border border-[#1a1a0a]/15 bg-white px-5 py-2.5 text-sm font-medium text-[#555540] transition hover:bg-[#FFF9DC] hover:border-yellow-300 hover:text-[#1a1a0a]";
 
 export const btnDanger =
-  "inline-flex items-center justify-center rounded-2xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-black text-rose-700 hover:bg-rose-100 disabled:opacity-50";
+  "inline-flex items-center justify-center gap-2 rounded-sm border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-medium text-rose-700 transition hover:bg-rose-100 disabled:opacity-50 disabled:pointer-events-none";
 
 export const badge =
-  "inline-flex items-center rounded-full px-3 py-1 text-xs font-black";
+  "inline-flex items-center rounded-full px-3 py-1 text-xs font-medium tracking-wide";
 
 export const tableHead =
-  "grid text-[11px] font-black uppercase tracking-wide text-zinc-500";
+  "grid text-[10.5px] font-medium uppercase tracking-widest text-[#999977]";
 
 export const alert =
-  "rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm font-semibold text-rose-700";
+  "rounded-sm border border-rose-200 bg-rose-50 p-4 text-sm font-medium text-rose-700";
 
-/**
- * PRINT STYLES
- * - hide controls
- * - remove shadows
- * - A4 margins
- * - make tables crisp
- */
 export const noPrint = "print:hidden";
 
-/**
- * Wrap the printable content.
- * Note: Tailwind doesn't ship with print CSS defaults for page margins,
- * so we inject a global @media print block below.
- */
 export const printWrap = "space-y-4 print:space-y-3";
 
 /* Global print CSS (injected once) */
@@ -47,20 +37,12 @@ if (typeof document !== "undefined") {
     style.innerHTML = `
       @media print {
         @page { size: A4; margin: 14mm; }
-
-        /* Reduce chrome */
         html, body { background: #fff !important; }
         * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-
-        /* Remove heavy UI effects */
         .shadow, .shadow-sm, .shadow-md, .shadow-lg,
         .shadow-xl, .shadow-2xl { box-shadow: none !important; }
-        .rounded-3xl { border-radius: 16px !important; }
-
-        /* Avoid ugly page breaks in the middle of cards */
+        .rounded-sm { border-radius: 2px !important; }
         .printWrap > div { break-inside: avoid; }
-
-        /* Make links look like text */
         a { color: inherit !important; text-decoration: none !important; }
       }
     `;
