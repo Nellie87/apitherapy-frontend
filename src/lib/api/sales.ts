@@ -12,22 +12,31 @@ export type SaleRow = {
   created_at: string;
 };
 
+export type SaleItemProduct = {
+  id: string;
+  name: string;
+};
+
 export type SaleItemRow = {
   id: string;
   org_id: string;
   sale_id: string;
   product_id: string;
   qty: number;
+
+  // IMPORTANT: these columns must exist in DB (and are NOT generated)
   unit_price: number;
   unit_price_base: number;
   discount_per_unit: number;
+
+  // GENERATED column in DB (don’t insert/update it)
   line_total: number;
+
   created_at: string;
 
-  // Supabase often returns array here
-  products?: { id: string; name: string }[] | null;
+  // PostgREST should return an object here (not array)
+  products?: SaleItemProduct | null;
 };
-
 
 export type CreateSaleItemInput = {
   product_id: string;
@@ -43,7 +52,14 @@ export async function listSales(orgId: string) {
     .order("created_at", { ascending: false });
 
   if (error) throw new Error(error.message);
-  return (data ?? []) as SaleRow[];
+
+  // numeric fields may come back as string depending on your generated types
+  return (data ?? []).map((r: any) => ({
+    ...r,
+    subtotal: Number(r.subtotal ?? 0),
+    discount_total: Number(r.discount_total ?? 0),
+    total: Number(r.total ?? 0),
+  })) as SaleRow[];
 }
 
 export async function getSale(orgId: string, saleId: string) {
@@ -55,28 +71,60 @@ export async function getSale(orgId: string, saleId: string) {
     .single();
 
   if (error) throw new Error(error.message);
-  return data as SaleRow;
+
+  const r: any = data;
+  return {
+    ...r,
+    subtotal: Number(r.subtotal ?? 0),
+    discount_total: Number(r.discount_total ?? 0),
+    total: Number(r.total ?? 0),
+  } as SaleRow;
 }
 
 export async function listSaleItems(orgId: string, saleId: string) {
   const { data, error } = await supabase
     .from("sale_items")
-    .select(`
-      id,org_id,sale_id,product_id,qty,unit_price,unit_price_base,discount_per_unit,line_total,created_at,
+    .select(
+      `
+      id,
+      org_id,
+      sale_id,
+      product_id,
+      qty,
+      unit_price,
+      unit_price_base,
+      discount_per_unit,
+      line_total,
+      created_at,
       products:products ( id, name )
-    `)
+    `
+    )
     .eq("org_id", orgId)
     .eq("sale_id", saleId)
     .order("created_at", { ascending: true });
 
   if (error) throw new Error(error.message);
-  return (data ?? []) as SaleItemRow[];
+
+  // Normalize + coerce numerics
+  return (data ?? []).map((r: any) => {
+    const p = Array.isArray(r.products) ? r.products[0] ?? null : r.products ?? null;
+
+    return {
+      ...r,
+      qty: Number(r.qty ?? 0),
+      unit_price: Number(r.unit_price ?? 0),
+      unit_price_base: Number(r.unit_price_base ?? 0),
+      discount_per_unit: Number(r.discount_per_unit ?? 0),
+      line_total: Number(r.line_total ?? 0),
+      products: p ? { id: String(p.id), name: String(p.name) } : null,
+    };
+  }) as SaleItemRow[];
 }
 
-export async function createSaleStrict(orgId: string, args: {
-  customer_name?: string;
-  items: CreateSaleItemInput[];
-}) {
+export async function createSaleStrict(
+  orgId: string,
+  args: { customer_name?: string; items: CreateSaleItemInput[] }
+) {
   const payload = {
     p_org_id: orgId,
     p_customer_name: args.customer_name ?? null,
@@ -86,11 +134,13 @@ export async function createSaleStrict(orgId: string, args: {
   const { data, error } = await supabase.rpc("create_sale_strict", payload);
 
   if (error) throw new Error(error.message);
-  return data as {
-    sale_id: string;
-    sale_no: string;
-    subtotal: number;
-    discount_total: number;
-    total: number;
+
+  const r: any = data;
+  return {
+    sale_id: String(r.sale_id),
+    sale_no: String(r.sale_no),
+    subtotal: Number(r.subtotal ?? 0),
+    discount_total: Number(r.discount_total ?? 0),
+    total: Number(r.total ?? 0),
   };
 }
