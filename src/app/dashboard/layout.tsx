@@ -1,115 +1,312 @@
+'use client';
 // app/(dashboard)/layout.tsx
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 const navItems = [
-  { href: "/dashboard",          label: "Dashboard" },
-  { href: "/dashboard/inventory", label: "Our Stock" },
-  { href: "/dashboard/products",  label: "Products" },
-  { href: "/dashboard/sales",     label: "Sales" },
-  { href: "/dashboard/reports",   label: "Reports" },
+  { href: "/dashboard", label: "Dashboard", icon: "⊞" },
+  { href: "/dashboard/inventory", label: "Our Stock", icon: "◫" },
+  { href: "/dashboard/products", label: "Products", icon: "◈" },
+  { href: "/dashboard/sales", label: "Sales", icon: "◉" },
+  { href: "/dashboard/reports", label: "Reports", icon: "◧" },
 ];
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
+
   return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;1,400&family=DM+Sans:wght@300;400;500;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600;700&display=swap');
 
-        .dashboard-layout * {
+        :root {
+          /* Sidebar: deep charcoal/slate – excellent contrast base */
+          --sidebar-bg:       #1A1A24;
+          --sidebar-border:   rgba(255,255,255,0.07);
+          --sidebar-text:     #C8C8D8;
+          --sidebar-text-dim: #6E6E82;
+          --sidebar-hover-bg: rgba(255, 255, 255, 0.06);
+          --sidebar-active-bg:#2A2A3A;
+          --sidebar-active-text: #FFFFFF;
+
+          /* Accent: amber/gold – only used as highlights, never as bg for text */
+          --accent:           #F5C518;
+          --accent-bright:    #FFD740;
+
+          /* Main content area: clean off-white */
+          --main-bg:          #F4F5F7;
+          --card-bg:          #FFFFFF;
+          --card-border:      #E4E6EB;
+          --card-shadow:      0 1px 3px rgba(0,0,0,0.08), 0 4px 16px rgba(0,0,0,0.05);
+
+          /* Text on light background – high contrast */
+          --text-primary:     #111118;
+          --text-secondary:   #4A4A5A;
+          --text-tertiary:    #8888A0;
+
           font-family: 'DM Sans', system-ui, sans-serif;
         }
-        .dashboard-layout .font-display {
-          font-family: 'Playfair Display', serif;
+
+        .font-display {
+          font-family: 'DM Serif Display', Georgia, serif;
         }
 
+        /* Sidebar nav link */
         .nav-link {
-          transition: all 0.16s ease;
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 10px 14px;
+          border-radius: 10px;
+          font-size: 14px;
+          font-weight: 500;
+          color: var(--sidebar-text);
+          text-decoration: none;
+          transition: background 0.15s ease, color 0.15s ease;
+          position: relative;
         }
         .nav-link:hover {
-          background: #FFF9DC;
-          color: #926E0A;
-          transform: translateX(4px);
+          background: var(--sidebar-hover-bg);
+          color: #FFFFFF;
         }
         .nav-link.active {
-          background: #FFF2CC;
-          color: #926E0A;
-          font-weight: 600;
+          background: var(--sidebar-active-bg);
+          color: var(--sidebar-active-text);
         }
+        .nav-link.active::before {
+          content: '';
+          position: absolute;
+          left: 0;
+          top: 20%;
+          height: 60%;
+          width: 3px;
+          background: var(--accent);
+          border-radius: 0 3px 3px 0;
+        }
+        .nav-icon {
+          font-size: 16px;
+          opacity: 0.9;
+          width: 20px;
+          text-align: center;
+          flex-shrink: 0;
+        }
+
+        /* Top bar inside main */
+        .topbar {
+          height: 56px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 0 28px;
+          background: var(--card-bg);
+          border-bottom: 1px solid var(--card-border);
+        }
+
+        /* Divider in sidebar */
+        .nav-divider {
+          height: 1px;
+          background: var(--sidebar-border);
+          margin: 12px 0;
+        }
+
+        .logout-link {
+          color: #FF6B6B !important;
+        }
+        .logout-link:hover {
+          background: rgba(255, 107, 107, 0.1) !important;
+          color: #FF8A8A !important;
+        }
+
+        /* Scrollbar styling */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
       `}</style>
 
-      <div className="dashboard-layout min-h-screen bg-[#FFFEF5]">
-        <div className="mx-auto flex max-w-[1600px] flex-col lg:flex-row gap-6 p-4 sm:p-6 lg:p-8">
-          {/* Sidebar */}
-          <aside className="lg:w-[300px] lg:shrink-0">
+      <div
+        className="min-h-screen flex"
+        style={{ background: "var(--main-bg)", fontFamily: "'DM Sans', sans-serif" }}
+      >
+        {/* ── Sidebar ── */}
+        <aside
+          className="hidden lg:flex flex-col flex-shrink-0"
+          style={{
+            width: 240,
+            background: "var(--sidebar-bg)",
+            borderRight: "1px solid var(--sidebar-border)",
+            position: "sticky",
+            top: 0,
+            height: "100vh",
+            overflowY: "auto",
+          }}
+        >
+          {/* Brand */}
+          <div style={{ padding: "24px 20px 20px" }}>
+            <div className="flex items-center gap-3">
+              {/* Logo mark with amber accent — no text on yellow */}
+              <div
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: 10,
+                  background: "linear-gradient(135deg, #F5C518 0%, #D4A017 100%)",
+                  display: "grid",
+                  placeItems: "center",
+                  fontSize: 20,
+                  flexShrink: 0,
+                }}
+              >
+                🐝
+              </div>
+              <div>
+                <div
+                  className="font-display"
+                  style={{ color: "#FFFFFF", fontSize: 18, lineHeight: 1.2, letterSpacing: "-0.3px" }}
+                >
+                  Pollinators
+                </div>
+                <div style={{ color: "var(--sidebar-text-dim)", fontSize: 11, marginTop: 2, fontWeight: 500, letterSpacing: "0.5px", textTransform: "uppercase" }}>
+                  Apitherapy
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Section label */}
+          <div style={{ padding: "4px 20px 8px" }}>
+            <span style={{ color: "var(--sidebar-text-dim)", fontSize: 10, fontWeight: 700, letterSpacing: "1.2px", textTransform: "uppercase" }}>
+              Menu
+            </span>
+          </div>
+
+          {/* Nav */}
+          <nav style={{ padding: "0 12px", flex: 1 }}>
+            {navItems.map((item) => {
+              const isActive = pathname === item.href;
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`nav-link ${isActive ? "active" : ""}`}
+                  style={{ marginBottom: 2 }}
+                >
+                  <span className="nav-icon">{item.icon}</span>
+                  <span>{item.label}</span>
+                </Link>
+              );
+            })}
+
+            <div className="nav-divider" style={{ margin: "16px 0" }} />
+
+            <div style={{ padding: "4px 2px 8px" }}>
+              <span style={{ color: "var(--sidebar-text-dim)", fontSize: 10, fontWeight: 700, letterSpacing: "1.2px", textTransform: "uppercase" }}>
+                Account
+              </span>
+            </div>
+
+            <Link href="/dashboard/settings" className="nav-link" style={{ marginBottom: 2 }}>
+              <span className="nav-icon">◎</span>
+              <span>Settings</span>
+            </Link>
+            <Link href="/login" className="nav-link logout-link">
+              <span className="nav-icon">→</span>
+              <span>Log out</span>
+            </Link>
+          </nav>
+
+          {/* Bottom badge */}
+          <div style={{ padding: "16px 20px" }}>
             <div
-              className="rounded-3xl shadow-sm overflow-hidden"
               style={{
-                background: "white",
-                border: "1px solid rgba(245,197,24,0.18)",
+                background: "rgba(245,197,24,0.1)",
+                border: "1px solid rgba(245,197,24,0.2)",
+                borderRadius: 8,
+                padding: "10px 12px",
               }}
             >
-              {/* Brand / Header */}
-              <div className="relative">
-                <div style={{ height: 5, background: "linear-gradient(90deg, #F5C518, #FFE566, #F5C518)" }} />
-                <div className="px-6 pt-7 pb-6">
-                  <div className="flex items-center gap-4">
-                    <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-[#FFF9DC] text-3xl shadow-sm">
-                      🐝
-                    </div>
-                    <div>
-                      <div className="font-display text-2xl font-bold text-[#1a1a0a] leading-none">
-                        Pollinators
-                      </div>
-                      <div className="text-xs text-[#777766] mt-1 tracking-wide">
-                        Beekeepers Apitherapy
-                      </div>
-                    </div>
-                  </div>
-                </div>
+              <div style={{ color: "#F5C518", fontSize: 11, fontWeight: 700, letterSpacing: "0.5px" }}>
+                SEASON 2025
               </div>
-
-              {/* Navigation */}
-              <div className="px-3 pb-6">
-                <div className="space-y-1.5">
-                  {navItems.map((item) => (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      className={`nav-link flex items-center justify-between rounded-2xl px-5 py-3 text-sm font-medium text-[#555540] hover:bg-[#FFF9DC] hover:text-[#926E0A]`}
-                    >
-                      <span>{item.label}</span>
-                      <span className="text-[#F5C518] opacity-60 text-lg">›</span>
-                    </Link>
-                  ))}
-                </div>
-
-                {/* Secondary links */}
-                <div className="mt-8 pt-6 border-t border-[#F5C518]/10 space-y-1.5">
-                  <Link
-                    href="/dashboard/settings"
-                    className="nav-link flex items-center rounded-2xl px-5 py-3 text-sm font-medium text-[#777766] hover:bg-[#FFF9DC] hover:text-[#926E0A]"
-                  >
-                    Settings
-                  </Link>
-                  <Link
-                    href="/login"
-                    className="nav-link flex items-center rounded-2xl px-5 py-3 text-sm font-medium text-[#777766] hover:bg-[#FFF9DC] hover:text-[#926E0A]"
-                  >
-                    Logout
-                  </Link>
-                </div>
+              <div style={{ color: "var(--sidebar-text)", fontSize: 12, marginTop: 3 }}>
+                Harvest active
               </div>
             </div>
-          </aside>
+          </div>
+        </aside>
 
-          {/* Main content area */}
-          <main className="flex-1 min-w-0">
-            <div className="rounded-3xl shadow-sm" style={{ background: "white", border: "1px solid rgba(245,197,24,0.12)" }}>
-              <div className="p-6 lg:p-8">{children}</div>
-            </div>
-          </main>
+        {/* ── Mobile top bar ── */}
+        <div
+          className="lg:hidden fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-4"
+          style={{ height: 56, background: "var(--sidebar-bg)", borderBottom: "1px solid var(--sidebar-border)" }}
+        >
+          <div className="flex items-center gap-2.5">
+            <span style={{ fontSize: 22 }}>🐝</span>
+            <span className="font-display" style={{ color: "#FFF", fontSize: 17 }}>Pollinators</span>
+          </div>
+          <div style={{ display: "flex", gap: 6 }}>
+            {navItems.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                style={{
+                  padding: "5px 10px",
+                  borderRadius: 7,
+                  fontSize: 12,
+                  fontWeight: 500,
+                  color: pathname === item.href ? "#111" : "var(--sidebar-text)",
+                  background: pathname === item.href ? "var(--accent)" : "transparent",
+                  textDecoration: "none",
+                }}
+              >
+                {item.label}
+              </Link>
+            ))}
+          </div>
         </div>
+
+        {/* ── Main ── */}
+        <main
+          className="flex-1 min-w-0"
+          style={{ paddingTop: "0" }}
+        >
+          {/* Top bar */}
+          <div className="topbar">
+            <div style={{ color: "var(--text-secondary)", fontSize: 13, fontWeight: 500 }}>
+              {new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+            </div>
+            <div className="flex items-center gap-3">
+              <div
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: "50%",
+                  background: "#22C55E",
+                  boxShadow: "0 0 0 3px rgba(34,197,94,0.2)",
+                }}
+              />
+              <span style={{ color: "var(--text-secondary)", fontSize: 13, fontWeight: 500 }}>
+                System online
+              </span>
+            </div>
+          </div>
+
+          {/* Page content */}
+          <div className="lg:p-8 p-4 pt-4 lg:mt-0 mt-14">
+            <div
+              style={{
+                background: "var(--card-bg)",
+                borderRadius: 16,
+                border: "1px solid var(--card-border)",
+                boxShadow: "var(--card-shadow)",
+                minHeight: "calc(100vh - 130px)",
+                overflow: "hidden",
+              }}
+            >
+              <div style={{ padding: "28px 32px" }}>{children}</div>
+            </div>
+          </div>
+        </main>
       </div>
     </>
   );
