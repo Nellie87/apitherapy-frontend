@@ -1,26 +1,26 @@
 import { supabase } from "@/lib/supabase/client";
 
 /* ─────────────────────────────────────────────
-   Shared Types (exported)
+   Shared Types
 ───────────────────────────────────────────── */
 export type Granularity = "day" | "month";
 export type DateRange = { from: string; to: string };
 
 /* ─────────────────────────────────────────────
-   Shared Helpers (unique names, no duplicates)
+   Shared Helpers (unique names)
 ───────────────────────────────────────────── */
-function toISOStartDay(dayYYYYMMDD: string) {
+function isoStartDay(dayYYYYMMDD: string) {
   return `${dayYYYYMMDD}T00:00:00.000Z`;
 }
 
 // End-exclusive (next day start). Use with `.lt(...)`.
-function toISOEndExclusiveDay(dayYYYYMMDD: string) {
+function isoEndExclusiveDay(dayYYYYMMDD: string) {
   const d = new Date(`${dayYYYYMMDD}T00:00:00.000Z`);
   d.setUTCDate(d.getUTCDate() + 1);
   return d.toISOString();
 }
 
-function periodKey(d: Date, g: Granularity) {
+function periodKeyUTC(d: Date, g: Granularity) {
   if (g === "month") {
     return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
   }
@@ -29,7 +29,7 @@ function periodKey(d: Date, g: Granularity) {
   ).padStart(2, "0")}`;
 }
 
-function num(v: any) {
+function numSafe(v: any) {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
 }
@@ -63,9 +63,8 @@ export type SalesSummaryResult = {
 };
 
 export async function getSalesSummary(orgId: string, args: { from: string; to: string }) {
-  // from/to are YYYY-MM-DD (inclusive)
-  const fromISO = toISOStartDay(args.from);
-  const toISOExclusive = toISOEndExclusiveDay(args.to);
+  const fromISO = isoStartDay(args.from);
+  const toISOExclusive = isoEndExclusiveDay(args.to);
 
   const { data, error } = await supabase
     .from("sales")
@@ -81,18 +80,20 @@ export async function getSalesSummary(orgId: string, args: { from: string; to: s
 
   for (const r of data ?? []) {
     const day = String((r as any).created_at).slice(0, 10);
-    const prev = map.get(day) ?? {
-      day,
-      sales_count: 0,
-      subtotal: 0,
-      discount_total: 0,
-      total: 0,
-    };
+    const prev =
+      map.get(day) ??
+      ({
+        day,
+        sales_count: 0,
+        subtotal: 0,
+        discount_total: 0,
+        total: 0,
+      } as SalesSummaryRow);
 
     prev.sales_count += 1;
-    prev.subtotal += num((r as any).subtotal);
-    prev.discount_total += num((r as any).discount_total);
-    prev.total += num((r as any).total);
+    prev.subtotal += numSafe((r as any).subtotal);
+    prev.discount_total += numSafe((r as any).discount_total);
+    prev.total += numSafe((r as any).total);
 
     map.set(day, prev);
   }
@@ -166,9 +167,9 @@ export async function getInventoryValuation(orgId: string) {
 
   const rows: InventoryValuationRow[] = (data ?? []).map((r: any) => {
     const p = Array.isArray(r.products) ? r.products[0] : r.products;
-    const unit_price = num(p?.unit_price);
-    const qty = num(r.qty_on_hand);
-    const reorder = num(r.reorder_level);
+    const unit_price = numSafe(p?.unit_price);
+    const qty = numSafe(r.qty_on_hand);
+    const reorder = numSafe(r.reorder_level);
     const status = getStockStatus(qty, reorder);
     const total_value = unit_price * qty;
 
@@ -206,7 +207,7 @@ export async function getInventoryValuation(orgId: string) {
 ───────────────────────────────────────────── */
 export type DiscountReportRow = {
   sale_id: string;
-  sold_at: string; // sales.sold_at (fallback to sales.created_at)
+  sold_at: string;
   sale_no: string;
   customer_name: string | null;
 
@@ -232,8 +233,8 @@ export type DiscountReportResult = {
 };
 
 export async function getDiscountReport(orgId: string, args: { from?: string; to?: string }) {
-  const fromISO = args.from ? toISOStartDay(args.from) : null;
-  const toISOExclusive = args.to ? toISOEndExclusiveDay(args.to) : null;
+  const fromISO = args.from ? isoStartDay(args.from) : null;
+  const toISOExclusive = args.to ? isoEndExclusiveDay(args.to) : null;
 
   let q = supabase
     .from("sale_items")
@@ -277,9 +278,9 @@ export async function getDiscountReport(orgId: string, args: { from?: string; to
     const sale = Array.isArray(r.sales) ? r.sales[0] : r.sales;
     const p = Array.isArray(r.products) ? r.products[0] : r.products;
 
-    const qty = num(r.qty);
-    const base = num(r.unit_price_base ?? r.unit_price);
-    const dpu = num(r.discount_per_unit);
+    const qty = numSafe(r.qty);
+    const base = numSafe(r.unit_price_base ?? r.unit_price);
+    const dpu = numSafe(r.discount_per_unit);
     const final = Math.max(0, base - dpu);
     const saved_total = dpu * qty;
 
@@ -316,10 +317,11 @@ export async function getDiscountReport(orgId: string, args: { from?: string; to
 }
 
 /* ─────────────────────────────────────────────
-   4) Expenses Trend + Categories (THIS is reportExpenses)
+   4) Expenses Trend + Categories (reportExpenses)
+   Backwards compatible: exposes `by_category`
 ───────────────────────────────────────────── */
 export type ExpenseTrendPoint = {
-  period: string; // day or month key
+  period: string;
   total: number;
 };
 
@@ -331,17 +333,16 @@ export type ExpenseCategoryTotal = {
 export type ExpensesReportResult = {
   trend: ExpenseTrendPoint[];
   top_categories: ExpenseCategoryTotal[];
+  by_category: ExpenseCategoryTotal[]; // ✅ alias for older pages
   totals: {
     total_expenses: number;
   };
 };
 
-export async function reportExpenses(orgId: string, args: {
-  from: string; // YYYY-MM-DD
-  to: string;   // YYYY-MM-DD
-  granularity?: Granularity;
-  topN?: number;
-}) {
+async function reportExpensesCore(
+  orgId: string,
+  args: { from: string; to: string; granularity?: Granularity; topN?: number }
+) {
   const g: Granularity = args.granularity ?? "day";
   const topN = args.topN ?? 8;
 
@@ -360,11 +361,11 @@ export async function reportExpenses(orgId: string, args: {
 
   for (const r of data ?? []) {
     const d = new Date(`${String((r as any).expense_date)}T00:00:00.000Z`);
-    const k = periodKey(d, g);
-    trendMap.set(k, (trendMap.get(k) ?? 0) + num((r as any).amount));
+    const k = periodKeyUTC(d, g);
+    trendMap.set(k, (trendMap.get(k) ?? 0) + numSafe((r as any).amount));
 
     const cat = String((r as any).category ?? "Uncategorized");
-    catMap.set(cat, (catMap.get(cat) ?? 0) + num((r as any).amount));
+    catMap.set(cat, (catMap.get(cat) ?? 0) + numSafe((r as any).amount));
   }
 
   const trend: ExpenseTrendPoint[] = Array.from(trendMap.entries())
@@ -381,15 +382,31 @@ export async function reportExpenses(orgId: string, args: {
   return {
     trend,
     top_categories,
+    by_category: top_categories, // ✅ alias
     totals: { total_expenses },
   } as ExpensesReportResult;
 }
 
+// ✅ supports BOTH: reportExpenses(orgId, {from,to,granularity}) and reportExpenses(orgId, range, g)
+export async function reportExpenses(orgId: string, a: any, b?: any, c?: any) {
+  if (typeof a === "object" && a?.from && a?.to && (typeof b === "string" || b === undefined)) {
+    // called as reportExpenses(orgId, range, g)
+    const range = a as DateRange;
+    const g = (b as Granularity) ?? "day";
+    const topN = typeof c === "number" ? c : 8;
+    return reportExpensesCore(orgId, { from: range.from, to: range.to, granularity: g, topN });
+  }
+
+  // called as reportExpenses(orgId, argsObject)
+  return reportExpensesCore(orgId, a);
+}
+
 /* ─────────────────────────────────────────────
-   5) P&L (THIS is reportPnL)
+   5) P&L (reportPnL)
+   Backwards compatible: exposes `summary` with `profit`
 ───────────────────────────────────────────── */
 export type PnLTrendPoint = {
-  period: string; // e.g. 2026-02-01 or 2026-02
+  period: string;
   revenue: number;
   discounts: number;
   cogs: number;
@@ -398,19 +415,26 @@ export type PnLTrendPoint = {
   net_profit: number;
 };
 
+export type PnLSummary = {
+  revenue: number;
+  discounts: number;
+  cogs: number;
+  expenses: number;
+  gross_profit: number;
+  net_profit: number;
+  profit: number; // ✅ alias (net_profit)
+};
+
 export type PnLReportResult = {
   points: PnLTrendPoint[];
   totals: Omit<PnLTrendPoint, "period">;
+  summary: PnLSummary; // ✅ for your UI
 };
 
-export async function getPnLReport(orgId: string, args: {
-  from: string; // YYYY-MM-DD
-  to: string;   // YYYY-MM-DD
-  granularity?: Granularity; // day/month
-}) {
+async function reportPnLCore(orgId: string, args: { from: string; to: string; granularity?: Granularity }) {
   const g: Granularity = args.granularity ?? "day";
-  const fromISO = toISOStartDay(args.from);
-  const toISOExclusive = toISOEndExclusiveDay(args.to);
+  const fromISO = isoStartDay(args.from);
+  const toISOExclusive = isoEndExclusiveDay(args.to);
 
   // 1) Sales
   const { data: sales, error: salesErr } = await supabase
@@ -423,18 +447,20 @@ export async function getPnLReport(orgId: string, args: {
 
   if (salesErr) throw new Error(salesErr.message);
 
-  // 2) Sale items (COGS)
+  // 2) Sale items for COGS
   let itemsQ = supabase
     .from("sale_items")
-    .select(`
+    .select(
+      `
       sale_id,
       qty,
       products:products ( cost_price ),
       sales:sales ( created_at, sold_at )
-    `)
+    `
+    )
     .eq("org_id", orgId);
 
-  // Try filtering by joined sales.created_at too (helps perf). Still keep JS guard below.
+  // join filter (perf); still guard in JS
   itemsQ = itemsQ.gte("sales.created_at", fromISO).lt("sales.created_at", toISOExclusive);
 
   const { data: items, error: itemsErr } = await itemsQ;
@@ -473,10 +499,10 @@ export async function getPnLReport(orgId: string, args: {
   for (const s of sales ?? []) {
     const dtRaw = (s as any).sold_at ?? (s as any).created_at;
     const d = new Date(dtRaw);
-    const k = periodKey(d, g);
+    const k = periodKeyUTC(d, g);
     const row = ensure(k);
-    row.revenue += num((s as any).total);
-    row.discounts += num((s as any).discount_total);
+    row.revenue += numSafe((s as any).total);
+    row.discounts += numSafe((s as any).discount_total);
   }
 
   // Items -> cogs
@@ -490,23 +516,23 @@ export async function getPnLReport(orgId: string, args: {
 
     const d = new Date(dtRaw);
     const t = d.getTime();
-    if (t < fromT || t >= toT) continue; // end-exclusive
+    if (t < fromT || t >= toT) continue;
 
-    const k = periodKey(d, g);
+    const k = periodKeyUTC(d, g);
     const row = ensure(k);
 
     const p = Array.isArray((it as any).products) ? (it as any).products[0] : (it as any).products;
-    const cost = num(p?.cost_price);
-    const qty = num((it as any).qty);
+    const cost = numSafe(p?.cost_price);
+    const qty = numSafe((it as any).qty);
     row.cogs += cost * qty;
   }
 
   // Expenses -> expenses
   for (const e of expenses ?? []) {
-    const d = new Date(`${(e as any).expense_date}T00:00:00.000Z`);
-    const k = periodKey(d, g);
+    const d = new Date(`${String((e as any).expense_date)}T00:00:00.000Z`);
+    const k = periodKeyUTC(d, g);
     const row = ensure(k);
-    row.expenses += num((e as any).amount);
+    row.expenses += numSafe((e as any).amount);
   }
 
   // Compute profits
@@ -530,14 +556,151 @@ export async function getPnLReport(orgId: string, args: {
     { revenue: 0, discounts: 0, cogs: 0, expenses: 0, gross_profit: 0, net_profit: 0 }
   );
 
-  return { points, totals } as PnLReportResult;
+  const summary: PnLSummary = {
+    ...totals,
+    profit: totals.net_profit, // ✅ alias your UI expects
+  };
+
+  return { points, totals, summary } as PnLReportResult;
 }
 
-// alias export (so your pages can import reportPnL)
-export async function reportPnL(orgId: string, args: {
-  from: string;
-  to: string;
-  granularity?: Granularity;
-}) {
-  return getPnLReport(orgId, args);
+// ✅ supports BOTH: reportPnL(orgId, {from,to,granularity}) and reportPnL(orgId, range, g)
+export async function reportPnL(orgId: string, a: any, b?: any) {
+  if (typeof a === "object" && a?.from && a?.to && (typeof b === "string" || b === undefined)) {
+    const range = a as DateRange;
+    const g = (b as Granularity) ?? "day";
+    return reportPnLCore(orgId, { from: range.from, to: range.to, granularity: g });
+  }
+  return reportPnLCore(orgId, a);
+}
+
+/* ─────────────────────────────────────────────
+   6) Balance Sheet (best with your schema)
+   - Inventory at COST (cost_price * qty_on_hand)
+   - Liabilities = 0 (until payables/loans tables exist)
+   - Equity = retained earnings = net profit to date
+───────────────────────────────────────────── */
+export type BalanceSheetResult = {
+  as_of: string;
+  assets: {
+    inventory_at_cost: number;
+    total_assets: number;
+  };
+  liabilities: {
+    total_liabilities: number;
+  };
+  equity: {
+    retained_earnings: number;
+    total_equity: number;
+  };
+  pnl_to_date: {
+    revenue: number;
+    discounts: number;
+    cogs: number;
+    expenses: number;
+    net_profit: number;
+  };
+  check: {
+    assets_minus_liabilities_minus_equity: number;
+  };
+};
+
+export async function getBalanceSheet(orgId: string, args: { as_of: string }) {
+  const asOf = args.as_of;
+  const toISOExclusive = isoEndExclusiveDay(asOf);
+
+  // Inventory at cost (point-in-time)
+  const { data: inv, error: invErr } = await supabase
+    .from("inventory")
+    .select(
+      `
+      qty_on_hand,
+      products:products ( cost_price )
+    `
+    )
+    .eq("org_id", orgId);
+
+  if (invErr) throw new Error(invErr.message);
+
+  let inventoryAtCost = 0;
+  for (const r of inv ?? []) {
+    const p = Array.isArray((r as any).products) ? (r as any).products[0] : (r as any).products;
+    const qty = numSafe((r as any).qty_on_hand);
+    const cost = numSafe(p?.cost_price);
+    inventoryAtCost += cost * qty;
+  }
+
+  // Sales up to as_of
+  const { data: sales, error: salesErr } = await supabase
+    .from("sales")
+    .select("id,total,discount_total,created_at")
+    .eq("org_id", orgId)
+    .lt("created_at", toISOExclusive);
+
+  if (salesErr) throw new Error(salesErr.message);
+
+  const saleIds = (sales ?? []).map((s: any) => String(s.id));
+  let revenue = 0;
+  let discounts = 0;
+
+  for (const s of sales ?? []) {
+    revenue += numSafe((s as any).total);
+    discounts += numSafe((s as any).discount_total);
+  }
+
+  // COGS for those sales
+  let cogs = 0;
+  if (saleIds.length) {
+    const chunkSize = 200;
+    for (let i = 0; i < saleIds.length; i += chunkSize) {
+      const chunk = saleIds.slice(i, i + chunkSize);
+
+      const { data: items, error: itemsErr } = await supabase
+        .from("sale_items")
+        .select(`sale_id, qty, products:products ( cost_price )`)
+        .eq("org_id", orgId)
+        .in("sale_id", chunk);
+
+      if (itemsErr) throw new Error(itemsErr.message);
+
+      for (const it of items ?? []) {
+        const p = Array.isArray((it as any).products) ? (it as any).products[0] : (it as any).products;
+        cogs += numSafe((it as any).qty) * numSafe(p?.cost_price);
+      }
+    }
+  }
+
+  // Expenses up to as_of
+  const { data: ex, error: exErr } = await supabase
+    .from("expenses")
+    .select("amount,expense_date")
+    .eq("org_id", orgId)
+    .lte("expense_date", asOf);
+
+  if (exErr) throw new Error(exErr.message);
+
+  let expenses = 0;
+  for (const e of ex ?? []) expenses += numSafe((e as any).amount);
+
+  const netProfit = revenue - cogs - expenses;
+
+  const assets = { inventory_at_cost: inventoryAtCost, total_assets: inventoryAtCost };
+  const liabilities = { total_liabilities: 0 };
+  const equity = { retained_earnings: netProfit, total_equity: netProfit };
+
+  const checkVal = assets.total_assets - liabilities.total_liabilities - equity.total_equity;
+
+  return {
+    as_of: asOf,
+    assets,
+    liabilities,
+    equity,
+    pnl_to_date: { revenue, discounts, cogs, expenses, net_profit: netProfit },
+    check: { assets_minus_liabilities_minus_equity: checkVal },
+  } as BalanceSheetResult;
+}
+
+// ✅ Alias name if your page imports `reportBalanceSheet`
+export async function reportBalanceSheet(orgId: string, args: { asOf: string }) {
+  return getBalanceSheet(orgId, { as_of: args.asOf });
 }
