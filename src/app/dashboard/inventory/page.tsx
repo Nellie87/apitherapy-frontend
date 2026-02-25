@@ -16,41 +16,113 @@ type ProductLite = {
   unit_price?: number | null;
 };
 
+type StockFilter = "all" | "low" | "out";
+
+/* ─── Helpers ────────────────────────────────────────────────── */
+function getStockStatus(qty: number, reorder: number): "out" | "critical" | "low" | "ok" {
+  if (qty <= 0) return "out";
+  if (qty <= Math.min(3, reorder)) return "critical";
+  if (qty <= reorder) return "low";
+  return "ok";
+}
+
+function fmtMoney(v: number) {
+  return `Ksh ${Number(v || 0).toLocaleString("en-KE", { minimumFractionDigits: 0 })}`;
+}
+
 /* ─── Stat Card ─────────────────────────────────────────────── */
 function StatCard({
   title,
   value,
   sub,
   icon,
-  accent = "neutral",
+  variant = "neutral",
+  active = false,
+  onClick,
 }: {
   title: string;
   value: string;
   sub?: string;
   icon: React.ReactNode;
-  accent?: "neutral" | "warning" | "success";
+  variant?: "neutral" | "warning" | "danger" | "success";
+  active?: boolean;
+  onClick?: () => void;
 }) {
-  const bg = accent === "warning" ? "#FFF9DC" : accent === "success" ? "#F0FAF0" : "#FFFEF5";
-  const textColor = accent === "warning" ? "#926E0A" : accent === "success" ? "#3A7D44" : "#1a1a0a";
-  const iconBg = accent === "warning" ? "#FFF2CC" : accent === "success" ? "#E6F4EA" : "#F5F5F0";
+  const styles = {
+    neutral: {
+      bg: "#FFFFFF",
+      border: active ? "#94a3b8" : "#e2e8f0",
+      iconBg: "#f8fafc",
+      iconColor: "#475569",
+      valueColor: "#0f172a",
+      labelColor: "#64748b",
+    },
+    warning: {
+      bg: active ? "#fffbeb" : "#FFFFFF",
+      border: active ? "#f59e0b" : "#e2e8f0",
+      iconBg: "#fef3c7",
+      iconColor: "#92400e",
+      valueColor: "#92400e",
+      labelColor: "#64748b",
+    },
+    danger: {
+      bg: active ? "#fff1f2" : "#FFFFFF",
+      border: active ? "#f43f5e" : "#e2e8f0",
+      iconBg: "#fee2e2",
+      iconColor: "#991b1b",
+      valueColor: "#991b1b",
+      labelColor: "#64748b",
+    },
+    success: {
+      bg: "#FFFFFF",
+      border: "#e2e8f0",
+      iconBg: "#f0fdf4",
+      iconColor: "#166534",
+      valueColor: "#166534",
+      labelColor: "#64748b",
+    },
+  };
+
+  const s = styles[variant];
 
   return (
     <div
-      className={`${S.card} p-6 shadow-sm hover:shadow-md transition-all duration-200`}
-      style={{ background: bg, borderColor: "rgba(245,197,24,0.18)" }}
+      onClick={onClick}
+      className="rounded-2xl shadow-sm transition-all duration-150"
+      style={{
+        background: s.bg,
+        border: `1.5px solid ${s.border}`,
+        cursor: onClick ? "pointer" : "default",
+        userSelect: "none",
+        transform: active ? "translateY(-1px)" : undefined,
+        boxShadow: active ? "0 4px 12px rgba(0,0,0,0.1)" : undefined,
+      }}
     >
-      <div className="flex items-center gap-5">
+      <div className="flex items-center gap-4 p-5">
         <div
-          className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl text-2xl shadow-sm"
-          style={{ background: iconBg, color: textColor }}
+          className="grid h-12 w-12 shrink-0 place-items-center rounded-xl text-xl"
+          style={{ background: s.iconBg, color: s.iconColor }}
         >
           {icon}
         </div>
-        <div>
-          <div className="text-xs font-medium uppercase tracking-wider text-[#999977]">{title}</div>
-          <div className="mt-1.5 text-3xl font-display font-bold text-[#1a1a0a] leading-none">{value}</div>
-          {sub && <div className="mt-1.5 text-sm text-[#777766]">{sub}</div>}
+        <div className="min-w-0">
+          <div className="text-xs font-semibold uppercase tracking-wider" style={{ color: s.labelColor }}>
+            {title}
+          </div>
+          <div className="mt-1 text-2xl font-bold leading-none" style={{ color: s.valueColor }}>
+            {value}
+          </div>
+          {sub && (
+            <div className="mt-1 text-xs" style={{ color: s.labelColor }}>
+              {sub}
+            </div>
+          )}
         </div>
+        {onClick && (
+          <div className="ml-auto shrink-0 text-slate-400" style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.05em" }}>
+            {active ? "CLEAR ✕" : "FILTER →"}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -58,30 +130,32 @@ function StatCard({
 
 /* ─── Status Badge ───────────────────────────────────────────── */
 function StatusBadge({ qty, reorder }: { qty: number; reorder: number }) {
-  if (qty <= 0)
+  const status = getStockStatus(qty, reorder);
+
+  if (status === "out")
     return (
-      <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-50 px-3 py-1 text-xs font-medium text-rose-700">
-        <span className="h-2 w-2 rounded-full bg-rose-500" />
+      <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-red-100 text-red-700">
+        <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
         Out of stock
       </span>
     );
-  if (qty <= Math.min(3, reorder))
+  if (status === "critical")
     return (
-      <span className="inline-flex items-center gap-1.5 rounded-full bg-[#FFF2CC] px-3 py-1 text-xs font-medium text-[#926E0A]">
-        <span className="h-2 w-2 rounded-full bg-[#F5C518]" />
+      <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-orange-100 text-orange-700">
+        <span className="h-1.5 w-1.5 rounded-full bg-orange-500" />
         Critical
       </span>
     );
-  if (qty <= reorder)
+  if (status === "low")
     return (
-      <span className="inline-flex items-center gap-1.5 rounded-full bg-[#FFF9DC] px-3 py-1 text-xs font-medium text-[#926E0A]">
-        <span className="h-2 w-2 rounded-full bg-[#F5C518]" />
+      <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-amber-100 text-amber-700">
+        <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
         Low stock
       </span>
     );
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full bg-[#E6F4EA] px-3 py-1 text-xs font-medium text-[#3A7D44]">
-      <span className="h-2 w-2 rounded-full bg-[#4CAF50]" />
+    <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-green-100 text-green-700">
+      <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
       In stock
     </span>
   );
@@ -103,26 +177,19 @@ function Modal({
 }) {
   if (!open) return null;
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-[#1a1a0a]/40 backdrop-blur-sm p-4"
-      onClick={onClose}
-    >
-      <div
-        className={`${S.card} w-full max-w-lg overflow-hidden rounded-2xl shadow-2xl`}
-        style={{ background: "#FFFEF9" }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between border-b border-[#F5C518]/20 px-6 py-5">
-          <h2 className="font-display text-xl font-bold text-[#1a1a0a]">{title}</h2>
+    <div className={S.overlay} onClick={onClose}>
+      <div className={S.modal} onClick={(e) => e.stopPropagation()}>
+        <div className={S.modalHead}>
+          <h2 className="text-base font-bold text-slate-900">{title}</h2>
           <button
-            className="rounded-lg p-2 text-[#777766] hover:bg-[#FFF9DC] hover:text-[#926E0A] transition"
+            className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition"
             onClick={onClose}
           >
             ✕
           </button>
         </div>
-        <div className="p-6">{children}</div>
-        {footer && <div className="flex justify-end gap-3 border-t border-[#F5C518]/10 px-6 py-4">{footer}</div>}
+        <div className={S.modalBody}>{children}</div>
+        {footer && <div className={S.modalFoot}>{footer}</div>}
       </div>
     </div>
   );
@@ -145,16 +212,13 @@ async function logMovement(payload: {
   }
 }
 
-function fmtMoney(v: number) {
-  return `Ksh ${Number(v || 0).toLocaleString("en-KE", { minimumFractionDigits: 0 })}`;
-}
-
 /* ─── Page ───────────────────────────────────────────────────── */
 export default function InventoryPage() {
   const [orgId, setOrgId] = useState<string | null>(null);
   const [rows, setRows] = useState<InventoryRow[]>([]);
   const [allProducts, setAllProducts] = useState<ProductLite[]>([]);
   const [q, setQ] = useState("");
+  const [stockFilter, setStockFilter] = useState<StockFilter>("all");
   const [err, setErr] = useState("");
   const [savingId, setSavingId] = useState<string | null>(null);
 
@@ -216,25 +280,47 @@ export default function InventoryPage() {
     if (!addProductId && addCandidates.length) setAddProductId(addCandidates[0].id);
   }, [addCandidates, addProductId]);
 
-  const filtered = useMemo(() => {
-    const term = q.trim().toLowerCase();
-    return rows.filter((r) => {
-      const name = (r.products?.name ?? "").toLowerCase();
-      const cat = (r.products?.category ?? "").toLowerCase();
-      return !term || name.includes(term) || cat.includes(term);
-    });
-  }, [rows, q]);
-
   const kpis = useMemo(() => {
     const totalItems = rows.length;
-    const lowStock = rows.filter((r) => Number(r.qty_on_hand ?? 0) <= Number(r.reorder_level ?? 0)).length;
+    const outOfStock = rows.filter((r) => Number(r.qty_on_hand ?? 0) <= 0).length;
+    const lowStock = rows.filter((r) => {
+      const qty = Number(r.qty_on_hand ?? 0);
+      const reorder = Number(r.reorder_level ?? 0);
+      return qty > 0 && qty <= reorder;
+    }).length;
     const totalValue = rows.reduce((sum, r) => {
       const price = Number(r.products?.unit_price ?? 0);
       const qty = Number(r.qty_on_hand ?? 0);
       return sum + price * qty;
     }, 0);
-    return { totalItems, lowStock, totalValue };
+    return { totalItems, outOfStock, lowStock, totalValue };
   }, [rows]);
+
+  const filtered = useMemo(() => {
+    const term = q.trim().toLowerCase();
+
+    return rows.filter((r) => {
+      // Text search
+      const name = (r.products?.name ?? "").toLowerCase();
+      const cat = (r.products?.category ?? "").toLowerCase();
+      const matchesText = !term || name.includes(term) || cat.includes(term);
+
+      // Status filter
+      const qty = Number(r.qty_on_hand ?? 0);
+      const reorder = Number(r.reorder_level ?? 0);
+      const status = getStockStatus(qty, reorder);
+      const matchesFilter =
+        stockFilter === "all" ||
+        (stockFilter === "out" && status === "out") ||
+        (stockFilter === "low" && (status === "low" || status === "critical"));
+
+      return matchesText && matchesFilter;
+    });
+  }, [rows, q, stockFilter]);
+
+  function toggleFilter(f: StockFilter) {
+    setStockFilter((prev) => (prev === f ? "all" : f));
+  }
 
   async function handleAddStock() {
     if (!orgId || !addProductId) { setErr("Select a product."); return; }
@@ -345,180 +431,289 @@ export default function InventoryPage() {
   if (!orgId && !err) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <div className="flex items-center gap-3 text-[#777766]">
+        <div className="flex items-center gap-3 text-slate-500">
           <svg className="h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <circle cx="12" cy="12" r="10" strokeOpacity="0.2" />
             <path d="M12 2a10 10 0 0110 10" />
           </svg>
-          <span className="text-sm font-medium">Loading hive inventory…</span>
+          <span className="text-sm font-medium">Loading inventory…</span>
         </div>
       </div>
     );
   }
 
   return (
-    <>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;1,400&family=DM+Sans:wght@300;400;500;700&display=swap');
+    <div className="space-y-6">
 
-        .inventory-page * {
-          font-family: 'DM Sans', system-ui, sans-serif;
-        }
-        .inventory-page .font-display {
-          font-family: 'Playfair Display', serif;
-        }
-
-        .item-row {
-          transition: background 0.16s ease;
-        }
-        .item-row:hover {
-          background: #FFFBEA;
-        }
-
-        .btn-amber {
-          background: #F5C518;
-          color: #1a1a0a;
-        }
-        .btn-amber:hover {
-          background: #E5B50F;
-        }
-      `}</style>
-
-      <div className="inventory-page space-y-6 px-4 py-6 sm:px-6 lg:px-8 max-w-screen-xl mx-auto">
-
-        {/* Error */}
-        {err && (
-          <div className="rounded-xl border border-rose-200 bg-rose-50/80 px-5 py-3 text-sm text-rose-700 flex items-start gap-3">
-            <span className="mt-0.5">⚠️</span>
-            <span className="flex-1">{err}</span>
-            <button onClick={() => setErr("")} className="text-rose-400 hover:text-rose-600">✕</button>
-          </div>
-        )}
-
-        {/* Header with gradient */}
-        <div className={`${S.card} overflow-hidden shadow-sm`}>
-          <div style={{ height: 4, background: "linear-gradient(90deg, #F5C518, #FFE566, #F5C518)" }} />
-          <div className="px-6 py-7">
-            <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <div className="text-xs font-medium uppercase tracking-wider text-[#999977]">
-                  Hive Management
-                </div>
-                <h1 className="font-display mt-1 text-3xl sm:text-4xl font-bold text-[#1a1a0a]">
-                  Inventory <em style={{ color: "#3a7d44", fontStyle: "italic" }}>Dashboard</em>
-                </h1>
-                <p className="mt-2 text-sm text-[#777766]">
-                  Monitor stock levels, reorder alerts & total value
-                </p>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-3">
-                <label className="flex items-center gap-2.5 rounded-xl border border-[#E5E5D5] bg-white px-4 py-2.5 shadow-sm focus-within:border-[#F5C518]/60 focus-within:ring-2 focus-within:ring-[#FFF9DC] transition">
-                  <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="#777766" strokeWidth="2.2">
-                    <circle cx="9" cy="9" r="5.5" />
-                    <line x1="13.5" y1="13.5" x2="18" y2="18" />
-                  </svg>
-                  <input
-                    className="w-48 bg-transparent text-sm outline-none placeholder:text-[#aaa995]"
-                    placeholder="Search product or SKU…"
-                    value={q}
-                    onChange={(e) => setQ(e.target.value)}
-                  />
-                </label>
-
-                <button
-                  className="btn-amber px-5 py-2.5 rounded-xl font-medium shadow-sm hover:shadow transition"
-                  onClick={() => setAddOpen(true)}
-                >
-                  + Add Stock
-                </button>
-              </div>
-            </div>
-          </div>
+      {/* Error banner */}
+      {err && (
+        <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-5 py-3 text-sm text-red-700">
+          <span className="mt-0.5 shrink-0">⚠️</span>
+          <span className="flex-1">{err}</span>
+          <button onClick={() => setErr("")} className="shrink-0 text-red-400 hover:text-red-600">✕</button>
         </div>
+      )}
 
-        {/* KPI cards */}
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
-          <StatCard
-            title="Total Products"
-            value={String(kpis.totalItems)}
-            sub="items tracked"
-            icon="📦"
-            accent="neutral"
-          />
-          <StatCard
-            title="Low / Critical"
-            value={String(kpis.lowStock)}
-            sub="require attention"
-            icon="⚠️"
-            accent={kpis.lowStock > 0 ? "warning" : "success"}
-          />
-          <StatCard
-            title="Stock Value"
-            value={fmtMoney(kpis.totalValue)}
-            sub="current worth"
-            icon="🍯"
-            accent="success"
-          />
+      {/* Page header */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Inventory</h1>
+          <p className="mt-1 text-sm text-slate-500">
+            Track stock levels, reorder points, and total value
+          </p>
         </div>
+        {/* <button
+          className={S.btnPrimary}
+          onClick={() => setAddOpen(true)}
+        >
+          + Add Stock
+        </button> */}
+      </div>
 
-        {/* Inventory Table */}
-        <div className={`${S.card} overflow-hidden shadow-sm`}>
-          <div style={{ padding: "1.1rem 1.5rem", borderBottom: "1.5px solid rgba(245,197,24,0.15)", background: "#FFFEF5" }}>
-            <div className="font-display text-xl font-bold text-[#1a1a0a]">Current Stock</div>
-          </div>
+      {/* KPI cards — clicking low/out filters the table */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard
+  title="Total Products"
+  value={String(kpis.totalItems)}
+  sub="items tracked"
+  icon="📦"
+  variant="neutral"
+  active={stockFilter !== "all"}
+  onClick={() => setStockFilter("all")}
+/>
+        <StatCard
+          title="Low Stock"
+          value={String(kpis.lowStock)}
+          sub="below reorder point"
+          icon="📉"
+          variant="warning"
+          active={stockFilter === "low"}
+          onClick={() => toggleFilter("low")}
+        />
+        <StatCard
+          title="Out of Stock"
+          value={String(kpis.outOfStock)}
+          sub="zero quantity"
+          icon="🚫"
+          variant="danger"
+          active={stockFilter === "out"}
+          onClick={() => toggleFilter("out")}
+        />
+        <StatCard
+          title="Total Value"
+          value={fmtMoney(kpis.totalValue)}
+          sub="current stock worth"
+          icon="💰"
+          variant="success"
+        />
+      </div>
 
-          {/* Desktop header */}
-          <div
-            className="hidden lg:grid items-center gap-5 px-6 py-3 text-xs font-medium uppercase tracking-wider text-[#777766]"
-            style={{ gridTemplateColumns: "2.2fr 1fr 1fr 1fr 1.3fr 1.4fr", background: "#FAFAF5", borderBottom: "1px solid rgba(245,197,24,0.1)" }}
+      {/* Active filter pill */}
+      {stockFilter !== "all" && (
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-slate-500">Showing:</span>
+          <span
+            className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold ${
+              stockFilter === "out"
+                ? "bg-red-100 text-red-700"
+                : "bg-amber-100 text-amber-700"
+            }`}
           >
-            <div>Product</div>
-            <div>Category</div>
-            <div>On Hand</div>
-            <div>Reorder At</div>
-            <div>Status</div>
-            <div>Actions</div>
-          </div>
+            {stockFilter === "out" ? "Out of stock items" : "Low stock items"}
+            <button
+              onClick={() => setStockFilter("all")}
+              className="ml-1 opacity-70 hover:opacity-100"
+            >
+              ✕
+            </button>
+          </span>
+          <span className="text-sm text-slate-400">({filtered.length} result{filtered.length !== 1 ? "s" : ""})</span>
+        </div>
+      )}
 
-          <div className="divide-y divide-[#F5C518]/10">
-            {filtered.length === 0 ? (
-              <div className="py-16 text-center text-[#777766]">
-                <div className="text-5xl mb-4">🍯</div>
-                <p className="font-medium">{rows.length === 0 ? "No products in inventory yet" : "No matching products"}</p>
-                <p className="text-sm mt-2">
-                  {rows.length === 0 ? 'Click "Add Stock" to begin' : "Try adjusting your search"}
-                </p>
-              </div>
-            ) : (
-              filtered.map((r) => {
-                const p = r.products;
-                const name = p?.name ?? "Unknown";
-                const sku = p?.sku ?? "—";
-                const category = p?.category ?? "—";
-                const price = Number(p?.unit_price ?? 0);
-                const qty = Number(r.qty_on_hand ?? 0);
-                const reorder = Number(r.reorder_level ?? 0);
-                const isSaving = savingId === r.product_id;
+      {/* Search */}
+      <label className="flex items-center gap-2.5 rounded-xl border border-slate-300 bg-white px-4 py-2.5 shadow-sm focus-within:border-amber-500 focus-within:ring-2 focus-within:ring-amber-100 transition w-full sm:w-80">
+        <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#94a3b8" strokeWidth="2.2">
+          <circle cx="9" cy="9" r="5.5" />
+          <line x1="13.5" y1="13.5" x2="18" y2="18" />
+        </svg>
+        <input
+          className="flex-1 bg-transparent text-sm text-slate-800 outline-none placeholder:text-slate-400"
+          placeholder="Search product or category…"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+        />
+        {q && (
+          <button onClick={() => setQ("")} className="text-slate-400 hover:text-slate-600">✕</button>
+        )}
+      </label>
 
-                return (
-                  <div key={r.product_id} className="item-row">
-                    {/* Desktop */}
-                    <div className="hidden lg:grid items-center gap-5 px-6 py-4" style={{ gridTemplateColumns: "2.2fr 1fr 1fr 1fr 1.3fr 1.4fr" }}>
-                      <div className="flex items-center gap-4">
-                        <div className="grid h-11 w-11 place-items-center rounded-xl bg-[#FFF9DC]/60 text-xl">🍯</div>
-                        <div className="min-w-0">
-                          <div className="font-medium text-[#1a1a0a] truncate">{name}</div>
-                          <div className="text-xs text-[#777766] mt-0.5">SKU {sku} · {fmtMoney(price)}</div>
+      {/* Table */}
+      <div className={`${S.card} overflow-hidden`}>
+
+        {/* Desktop header — must match row grid exactly */}
+        <div
+          className={`hidden lg:grid ${S.tableGrid} items-center gap-4 px-6 py-3`}
+          style={{
+            background: "#f8fafc",
+            borderBottom: "1px solid #e2e8f0",
+          }}
+        >
+          {["Product", "Category", "On Hand", "Reorder At", "Status", "Actions"].map((h) => (
+            <div
+              key={h}
+              className="text-xs font-semibold uppercase tracking-wider text-slate-500"
+            >
+              {h}
+            </div>
+          ))}
+        </div>
+
+        {/* Rows */}
+        <div className="divide-y divide-slate-100">
+          {filtered.length === 0 ? (
+            <div className="py-16 text-center">
+              <div className="text-5xl mb-4">🍯</div>
+              <p className="font-semibold text-slate-700">
+                {rows.length === 0
+                  ? "No products in inventory yet"
+                  : stockFilter !== "all"
+                  ? `No ${stockFilter === "out" ? "out-of-stock" : "low-stock"} items`
+                  : "No matching products"}
+              </p>
+              <p className="text-sm text-slate-400 mt-1">
+                {rows.length === 0
+                  ? 'Click "Add Stock" to begin'
+                  : stockFilter !== "all"
+                  ? "Great! All products are well stocked."
+                  : "Try adjusting your search"}
+              </p>
+              {stockFilter !== "all" && (
+                <button
+                  onClick={() => setStockFilter("all")}
+                  className="mt-4 text-sm text-amber-600 hover:text-amber-700 font-medium"
+                >
+                  Clear filter
+                </button>
+              )}
+            </div>
+          ) : (
+            filtered.map((r) => {
+              const p = r.products;
+              const name = p?.name ?? "Unknown";
+              const sku = p?.sku ?? "—";
+              const category = p?.category ?? "—";
+              const price = Number(p?.unit_price ?? 0);
+              const qty = Number(r.qty_on_hand ?? 0);
+              const reorder = Number(r.reorder_level ?? 0);
+              const isSaving = savingId === r.product_id;
+
+              return (
+                <div
+                  key={r.product_id}
+                  className="transition-colors duration-100 hover:bg-slate-50"
+                >
+                  {/* ── Desktop row — grid must match header ── */}
+                  <div
+                    className={`hidden lg:grid ${S.tableGrid} items-center gap-4 px-6 py-4`}
+                  >
+                    {/* Product */}
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-amber-50 text-lg">
+                        🍯
+                      </div>
+                      <div className="min-w-0">
+                        <div className="font-semibold text-slate-900 truncate">{name}</div>
+                        <div className="text-xs text-slate-400 mt-0.5 truncate">
+                          SKU {sku} · {fmtMoney(price)}
                         </div>
                       </div>
-                      <div>
-                        <span className="rounded-lg bg-[#F5F5F0] px-2.5 py-1 text-xs font-medium text-[#555540]">
-                          {category}
-                        </span>
+                    </div>
+
+                    {/* Category */}
+                    <div>
+                      <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
+                        {category}
+                      </span>
+                    </div>
+
+                    {/* On Hand */}
+                    <div className="text-xl font-bold text-slate-900">{qty}</div>
+
+                    {/* Reorder At */}
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min={0}
+                        defaultValue={reorder}
+                        onBlur={(e) => {
+                          const v = Number(e.target.value);
+                          if (v !== reorder) handleSaveReorder(r, v);
+                        }}
+                        className="w-20 rounded-lg border border-slate-300 px-2 py-1.5 text-center text-sm text-slate-800 focus:border-amber-500 focus:ring-2 focus:ring-amber-100 outline-none"
+                      />
+                      {isSaving && (
+                        <span className="text-xs text-slate-400 animate-pulse">saving…</span>
+                      )}
+                    </div>
+
+                    {/* Status */}
+                    <div>
+                      <StatusBadge qty={qty} reorder={reorder} />
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min={1}
+                        placeholder="Qty"
+                        value={restockQty[r.product_id] ?? ""}
+                        onChange={(e) =>
+                          setRestockQty((prev) => ({ ...prev, [r.product_id]: e.target.value }))
+                        }
+                        className="w-16 rounded-lg border border-slate-300 px-2 py-1.5 text-center text-sm text-slate-800 focus:border-amber-500 focus:ring-2 focus:ring-amber-100 outline-none"
+                      />
+                      <button
+                        disabled={isSaving || !Number(restockQty[r.product_id])}
+                        className="rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-bold text-white hover:bg-amber-600 disabled:opacity-40 transition"
+                        onClick={() =>
+                          handleQuickRestock(r, Number(restockQty[r.product_id] || 0))
+                        }
+                      >
+                        Restock
+                      </button>
+                      <button
+                        className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition"
+                        onClick={() => openAdjust(r)}
+                      >
+                        Adjust
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* ── Mobile card ── */}
+                  <div className="lg:hidden px-5 py-5 space-y-4">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-amber-50 text-xl">
+                          🍯
+                        </div>
+                        <div className="min-w-0">
+                          <div className="font-semibold text-slate-900 truncate">{name}</div>
+                          <div className="text-xs text-slate-400 mt-0.5">SKU {sku}</div>
+                        </div>
                       </div>
-                      <div className="text-lg font-bold text-[#1a1a0a]">{qty}</div>
-                      <div>
+                      <StatusBadge qty={qty} reorder={reorder} />
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-3 rounded-xl bg-slate-50 p-4">
+                      <div className="text-center">
+                        <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">On Hand</div>
+                        <div className="mt-1 text-xl font-bold text-slate-900">{qty}</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Reorder</div>
                         <input
                           type="number"
                           min={0}
@@ -527,260 +722,211 @@ export default function InventoryPage() {
                             const v = Number(e.target.value);
                             if (v !== reorder) handleSaveReorder(r, v);
                           }}
-                          className="w-20 text-center rounded-lg border border-[#E5E5D5] py-1.5 text-sm focus:border-[#F5C518]/60 focus:ring-2 focus:ring-[#FFF9DC] outline-none"
+                          className="mt-1 w-full rounded-lg border border-slate-300 py-1 text-center text-sm text-slate-800 outline-none focus:border-amber-500"
                         />
-                        {isSaving && <span className="ml-2 text-xs text-[#999977] animate-pulse">saving…</span>}
                       </div>
-                      <div>
-                        <StatusBadge qty={qty} reorder={reorder} />
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <input
-                          type="number"
-                          min={1}
-                          placeholder="Qty"
-                          value={restockQty[r.product_id] ?? ""}
-                          onChange={(e) => setRestockQty((p) => ({ ...p, [r.product_id]: e.target.value }))}
-                          className="w-20 text-center rounded-lg border border-[#E5E5D5] py-1.5 text-sm focus:border-[#F5C518]/60 focus:ring-2 focus:ring-[#FFF9DC] outline-none"
-                        />
-                        <button
-                          disabled={isSaving || !Number(restockQty[r.product_id])}
-                          className="btn-amber px-4 py-1.5 rounded-lg text-sm font-medium disabled:opacity-50 transition"
-                          onClick={() => handleQuickRestock(r, Number(restockQty[r.product_id] || 0))}
-                        >
-                          Restock
-                        </button>
-                        <button
-                          className="p-2 text-[#777766] hover:text-[#926E0A] hover:bg-[#FFF9DC] rounded-lg transition"
-                          onClick={() => openAdjust(r)}
-                        >
-                          Adjust
-                        </button>
+                      <div className="text-center">
+                        <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Price</div>
+                        <div className="mt-1 text-sm font-semibold text-slate-700">{fmtMoney(price)}</div>
                       </div>
                     </div>
 
-                    {/* Mobile stacked */}
-                    <div className="lg:hidden px-5 py-5 space-y-4 border-b border-[#F5C518]/10">
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex items-center gap-4 flex-1 min-w-0">
-                          <div className="grid h-12 w-12 place-items-center rounded-xl bg-[#FFF9DC]/60 text-2xl shrink-0">🍯</div>
-                          <div className="min-w-0">
-                            <div className="font-medium text-[#1a1a0a] truncate">{name}</div>
-                            <div className="text-xs text-[#777766] mt-0.5">SKU {sku}</div>
-                          </div>
-                        </div>
-                        <StatusBadge qty={qty} reorder={reorder} />
-                      </div>
-
-                      <div className="grid grid-cols-3 gap-3 bg-[#FAFAF5] rounded-xl p-4">
-                        <div className="text-center">
-                          <div className="text-[10px] uppercase tracking-wide text-[#999977] font-medium">On Hand</div>
-                          <div className="mt-1 text-xl font-bold text-[#1a1a0a]">{qty}</div>
-                        </div>
-                        <div className="text-center">
-                          <div className="text-[10px] uppercase tracking-wide text-[#999977] font-medium">Reorder</div>
-                          <input
-                            type="number"
-                            min={0}
-                            defaultValue={reorder}
-                            onBlur={(e) => {
-                              const v = Number(e.target.value);
-                              if (v !== reorder) handleSaveReorder(r, v);
-                            }}
-                            className="mt-1 w-full text-center rounded-lg border border-[#E5E5D5] py-1 text-sm focus:border-[#F5C518]/60 focus:ring-1 focus:ring-[#FFF9DC] outline-none"
-                          />
-                        </div>
-                        <div className="text-center">
-                          <div className="text-[10px] uppercase tracking-wide text-[#999977] font-medium">Price</div>
-                          <div className="mt-1 text-sm font-medium text-[#555540]">{fmtMoney(price)}</div>
-                        </div>
-                      </div>
-
-                      <div className="flex gap-3">
-                        <input
-                          type="number"
-                          min={1}
-                          placeholder="Qty to add"
-                          value={restockQty[r.product_id] ?? ""}
-                          onChange={(e) => setRestockQty((p) => ({ ...p, [r.product_id]: e.target.value }))}
-                          className="flex-1 text-center rounded-lg border border-[#E5E5D5] py-2.5 text-sm focus:border-[#F5C518]/60 focus:ring-2 focus:ring-[#FFF9DC] outline-none"
-                        />
-                        <button
-                          disabled={isSaving || !Number(restockQty[r.product_id])}
-                          className="btn-amber px-5 rounded-lg font-medium disabled:opacity-50 transition"
-                          onClick={() => handleQuickRestock(r, Number(restockQty[r.product_id] || 0))}
-                        >
-                          Restock
-                        </button>
-                        <button
-                          className="px-4 rounded-lg border border-[#E5E5D5] text-[#777766] hover:bg-[#FFF9DC] transition"
-                          onClick={() => openAdjust(r)}
-                        >
-                          Adjust
-                        </button>
-                      </div>
+                    <div className="flex gap-2">
+                      <input
+                        type="number"
+                        min={1}
+                        placeholder="Qty to add"
+                        value={restockQty[r.product_id] ?? ""}
+                        onChange={(e) =>
+                          setRestockQty((prev) => ({ ...prev, [r.product_id]: e.target.value }))
+                        }
+                        className="flex-1 rounded-lg border border-slate-300 px-3 py-2.5 text-center text-sm text-slate-800 outline-none focus:border-amber-500"
+                      />
+                      <button
+                        disabled={isSaving || !Number(restockQty[r.product_id])}
+                        className="rounded-lg bg-amber-500 px-4 font-bold text-white text-sm hover:bg-amber-600 disabled:opacity-40 transition"
+                        onClick={() =>
+                          handleQuickRestock(r, Number(restockQty[r.product_id] || 0))
+                        }
+                      >
+                        Restock
+                      </button>
+                      <button
+                        className="rounded-lg border border-slate-200 px-3 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition"
+                        onClick={() => openAdjust(r)}
+                      >
+                        Adjust
+                      </button>
                     </div>
                   </div>
-                );
-              })
-            )}
-          </div>
-
-          <div className="px-6 py-3 text-xs text-[#999977] border-t border-[#F5C518]/10">
-            Showing {filtered.length} of {rows.length} product{rows.length !== 1 ? "s" : ""}
-          </div>
+                </div>
+              );
+            })
+          )}
         </div>
 
-        {/* Add Stock Modal */}
-        <Modal
-          open={addOpen}
-          title="Add New Stock Item"
-          onClose={() => setAddOpen(false)}
-          footer={
-            <>
-              <button className="px-5 py-2.5 rounded-lg border border-[#E5E5D5] text-[#777766] hover:bg-[#F5F5F0] transition" onClick={() => setAddOpen(false)}>
-                Cancel
-              </button>
-              <button
-                className="btn-amber px-6 py-2.5 rounded-lg font-medium disabled:opacity-50 transition"
-                onClick={handleAddStock}
-                disabled={savingId === addProductId}
-              >
-                {savingId === addProductId ? "Saving…" : "Add to Inventory"}
-              </button>
-            </>
-          }
-        >
-          {addCandidates.length === 0 ? (
-            <div className="py-10 text-center text-[#777766]">
-              <div className="text-5xl mb-4">✅</div>
-              <p className="font-medium">All catalog products are already tracked</p>
-            </div>
-          ) : (
-            <div className="space-y-6">
-              <div>
-                <label className="block text-xs font-medium uppercase tracking-wider text-[#999977] mb-2">Select Product</label>
-                <select
-                  className="w-full rounded-lg border border-[#E5E5D5] px-4 py-2.5 text-sm focus:border-[#F5C518]/60 focus:ring-2 focus:ring-[#FFF9DC] outline-none"
-                  value={addProductId}
-                  onChange={(e) => setAddProductId(e.target.value)}
-                >
-                  {addCandidates.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}{p.sku ? ` — ${p.sku}` : ""}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-5">
-                <div>
-                  <label className="block text-xs font-medium uppercase tracking-wider text-[#999977] mb-2">Initial Quantity</label>
-                  <input
-                    className="w-full rounded-lg border border-[#E5E5D5] px-4 py-2.5 text-sm focus:border-[#F5C518]/60 focus:ring-2 focus:ring-[#FFF9DC] outline-none"
-                    type="number"
-                    min={0}
-                    value={addQty}
-                    onChange={(e) => setAddQty(e.target.value)}
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium uppercase tracking-wider text-[#999977] mb-2">Reorder Level</label>
-                  <input
-                    className="w-full rounded-lg border border-[#E5E5D5] px-4 py-2.5 text-sm focus:border-[#F5C518]/60 focus:ring-2 focus:ring-[#FFF9DC] outline-none"
-                    type="number"
-                    min={0}
-                    value={addReorder}
-                    onChange={(e) => setAddReorder(e.target.value)}
-                  />
-                </div>
-              </div>
-            </div>
+        {/* Footer */}
+        <div className="flex items-center justify-between border-t border-slate-100 px-6 py-3">
+          <span className="text-xs text-slate-400">
+            Showing {filtered.length} of {rows.length} product{rows.length !== 1 ? "s" : ""}
+          </span>
+          {stockFilter !== "all" && (
+            <button
+              onClick={() => setStockFilter("all")}
+              className="text-xs font-medium text-amber-600 hover:text-amber-700"
+            >
+              Clear filter
+            </button>
           )}
-        </Modal>
-
-        {/* Adjust Modal */}
-        <Modal
-          open={adjustOpen}
-          title={adjustRow ? `Adjust — ${adjustRow.products?.name || "Product"}` : "Adjust Stock"}
-          onClose={() => setAdjustOpen(false)}
-          footer={
-            <>
-              <button className="px-5 py-2.5 rounded-lg border border-[#E5E5D5] text-[#777766] hover:bg-[#F5F5F0] transition" onClick={() => setAdjustOpen(false)}>
-                Cancel
-              </button>
-              <button
-                className="btn-amber px-6 py-2.5 rounded-lg font-medium disabled:opacity-50 transition"
-                onClick={handleAdjustSave}
-                disabled={savingId === adjustRow?.product_id}
-              >
-                {savingId === adjustRow?.product_id ? "Saving…" : "Confirm Adjustment"}
-              </button>
-            </>
-          }
-        >
-          {adjustRow && (
-            <div className="space-y-6">
-              <div className="rounded-xl bg-[#FAFAF5] p-5 border border-[#F5C518]/15 flex items-center gap-6">
-                <div>
-                  <div className="text-xs uppercase tracking-wider text-[#999977]">Current Stock</div>
-                  <div className="text-4xl font-display font-bold text-[#1a1a0a] mt-1">
-                    {Number(adjustRow.qty_on_hand ?? 0)}
-                  </div>
-                  <div className="text-sm text-[#777766] mt-1">
-                    Reorder at <span className="font-medium">{Number(adjustRow.reorder_level ?? 0)}</span>
-                  </div>
-                </div>
-                <div className="ml-auto">
-                  <StatusBadge qty={Number(adjustRow.qty_on_hand ?? 0)} reorder={Number(adjustRow.reorder_level ?? 0)} />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-3">
-                {(["add", "remove", "set"] as const).map((m) => (
-                  <button
-                    key={m}
-                    className={`py-3 rounded-xl border text-sm font-medium transition ${
-                      adjustMode === m
-                        ? "border-[#F5C518] bg-[#FFF9DC] text-[#926E0A] shadow-sm"
-                        : "border-[#E5E5D5] text-[#777766] hover:bg-[#F5F5F0]"
-                    }`}
-                    onClick={() => setAdjustMode(m)}
-                  >
-                    {m === "add" ? "+ Add" : m === "remove" ? "− Remove" : "= Set"}
-                  </button>
-                ))}
-              </div>
-
-              <div className="grid grid-cols-2 gap-5">
-                <div>
-                  <label className="block text-xs font-medium uppercase tracking-wider text-[#999977] mb-2">
-                    {adjustMode === "set" ? "New Quantity" : "Amount"}
-                  </label>
-                  <input
-                    className="w-full rounded-lg border border-[#E5E5D5] px-4 py-2.5 text-sm focus:border-[#F5C518]/60 focus:ring-2 focus:ring-[#FFF9DC] outline-none"
-                    type="number"
-                    min={0}
-                    value={adjustValue}
-                    onChange={(e) => setAdjustValue(e.target.value)}
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium uppercase tracking-wider text-[#999977] mb-2">Note (optional)</label>
-                  <input
-                    className="w-full rounded-lg border border-[#E5E5D5] px-4 py-2.5 text-sm focus:border-[#F5C518]/60 focus:ring-2 focus:ring-[#FFF9DC] outline-none"
-                    placeholder="Reason for adjustment…"
-                    value={adjustNote}
-                    onChange={(e) => setAdjustNote(e.target.value)}
-                  />
-                </div>
-              </div>
-
-              <p className="text-xs text-[#999977]">Removing stock will never go below zero.</p>
-            </div>
-          )}
-        </Modal>
+        </div>
       </div>
-    </>
+
+      {/* ── Add Stock Modal ── */}
+      <Modal
+        open={addOpen}
+        title="Add New Stock Item"
+        onClose={() => setAddOpen(false)}
+        footer={
+          <>
+            <button className={S.btnGhost} onClick={() => setAddOpen(false)}>
+              Cancel
+            </button>
+            <button
+              className={S.btnPrimary}
+              onClick={handleAddStock}
+              disabled={savingId === addProductId}
+            >
+              {savingId === addProductId ? "Saving…" : "Add to Inventory"}
+            </button>
+          </>
+        }
+      >
+        {addCandidates.length === 0 ? (
+          <div className="py-10 text-center">
+            <div className="text-5xl mb-4">✅</div>
+            <p className="font-semibold text-slate-700">All catalog products are already tracked</p>
+          </div>
+        ) : (
+          <div className="space-y-5">
+            <div>
+              <label className="mb-1.5 block text-sm font-semibold text-slate-700">Select Product</label>
+              <select
+                className={S.input}
+                value={addProductId}
+                onChange={(e) => setAddProductId(e.target.value)}
+              >
+                {addCandidates.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}{p.sku ? ` — ${p.sku}` : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="mb-1.5 block text-sm font-semibold text-slate-700">Initial Quantity</label>
+                <input
+                  className={S.input}
+                  type="number"
+                  min={0}
+                  value={addQty}
+                  onChange={(e) => setAddQty(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-sm font-semibold text-slate-700">Reorder Level</label>
+                <input
+                  className={S.input}
+                  type="number"
+                  min={0}
+                  value={addReorder}
+                  onChange={(e) => setAddReorder(e.target.value)}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* ── Adjust Modal ── */}
+      <Modal
+        open={adjustOpen}
+        title={adjustRow ? `Adjust — ${adjustRow.products?.name || "Product"}` : "Adjust Stock"}
+        onClose={() => setAdjustOpen(false)}
+        footer={
+          <>
+            <button className={S.btnGhost} onClick={() => setAdjustOpen(false)}>
+              Cancel
+            </button>
+            <button
+              className={S.btnPrimary}
+              onClick={handleAdjustSave}
+              disabled={savingId === adjustRow?.product_id}
+            >
+              {savingId === adjustRow?.product_id ? "Saving…" : "Confirm Adjustment"}
+            </button>
+          </>
+        }
+      >
+        {adjustRow && (
+          <div className="space-y-5">
+            <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-wider text-slate-500">Current Stock</div>
+                <div className="mt-1 text-3xl font-bold text-slate-900">
+                  {Number(adjustRow.qty_on_hand ?? 0)}
+                </div>
+                <div className="mt-1 text-sm text-slate-500">
+                  Reorder at <span className="font-semibold">{Number(adjustRow.reorder_level ?? 0)}</span>
+                </div>
+              </div>
+              <StatusBadge qty={Number(adjustRow.qty_on_hand ?? 0)} reorder={Number(adjustRow.reorder_level ?? 0)} />
+            </div>
+
+            <div className="grid grid-cols-3 gap-2">
+              {(["add", "remove", "set"] as const).map((m) => (
+                <button
+                  key={m}
+                  className={`rounded-xl border py-2.5 text-sm font-semibold transition ${
+                    adjustMode === m
+                      ? "border-amber-500 bg-amber-50 text-amber-700 shadow-sm"
+                      : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                  }`}
+                  onClick={() => setAdjustMode(m)}
+                >
+                  {m === "add" ? "+ Add" : m === "remove" ? "− Remove" : "= Set"}
+                </button>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="mb-1.5 block text-sm font-semibold text-slate-700">
+                  {adjustMode === "set" ? "New Quantity" : "Amount"}
+                </label>
+                <input
+                  className={S.input}
+                  type="number"
+                  min={0}
+                  value={adjustValue}
+                  onChange={(e) => setAdjustValue(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-sm font-semibold text-slate-700">Note (optional)</label>
+                <input
+                  className={S.input}
+                  placeholder="Reason…"
+                  value={adjustNote}
+                  onChange={(e) => setAdjustNote(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-400">Removing stock will never go below zero.</p>
+          </div>
+        )}
+      </Modal>
+    </div>
   );
 }
