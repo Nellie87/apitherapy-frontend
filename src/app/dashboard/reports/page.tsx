@@ -12,7 +12,7 @@ export default function ReportsHomePage() {
       icon: "🧾",
     },
     // next ones we’ll add:
-    { title: "Inventory Valuation", desc: "Stock value per product + totals", href: "#", icon: "📦" },
+    { title: "Inventory Valuation", desc: "Stock value per product + totals", href: "/dashboard/reports/inventory", icon: "📦" },
     { title: "Discount Report", desc: "Which products got discounts", href: "#", icon: "🏷️" },
     { title: "Expenses Summary", desc: "Spend by category + totals", href: "#", icon: "💳" },
   ];
