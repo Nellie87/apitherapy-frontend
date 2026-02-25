@@ -1,24 +1,29 @@
+// src/app/(dashboard)/sales/page.styles.ts
 
 export const card =
-  "rounded-sm border border-yellow-100 bg-white shadow-[0_2px_12px_rgba(245,197,24,0.08)]";
+  "rounded-2xl border border-slate-200 bg-white shadow-sm";
 
 export const input =
-  "w-full rounded-sm border border-yellow-200 bg-[#FFFEF5] px-4 py-2.5 text-sm font-light outline-none transition focus:border-yellow-400 focus:ring-2 focus:ring-yellow-100 placeholder:text-[#aaa990]";
+  "w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 outline-none transition " +
+  "focus:border-amber-500 focus:ring-2 focus:ring-amber-100 placeholder:text-slate-400";
 
 export const btnPrimary =
-  "inline-flex items-center justify-center gap-2 rounded-sm bg-[#1a1a0a] px-5 py-2.5 text-sm font-medium tracking-wide text-[#F5C518] transition hover:bg-[#2e2e18] hover:-translate-y-px hover:shadow-md disabled:opacity-50 disabled:pointer-events-none";
+  "inline-flex items-center justify-center gap-2 rounded-xl bg-amber-500 px-5 py-2.5 text-sm font-bold text-white " +
+  "transition hover:bg-amber-600 active:scale-[.97] disabled:opacity-50 disabled:pointer-events-none whitespace-nowrap shadow-sm";
 
 export const btnGhost =
-  "inline-flex items-center justify-center gap-2 rounded-sm border border-[#1a1a0a]/15 bg-white px-5 py-2.5 text-sm font-medium text-[#555540] transition hover:bg-[#FFF9DC] hover:border-yellow-300 hover:text-[#1a1a0a]";
+  "inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-5 py-2.5 " +
+  "text-sm font-semibold text-slate-700 transition hover:bg-slate-50 active:scale-[.97] whitespace-nowrap";
 
 export const btnDanger =
-  "inline-flex items-center justify-center gap-2 rounded-sm border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-medium text-rose-700 transition hover:bg-rose-100 disabled:opacity-50 disabled:pointer-events-none";
+  "inline-flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2 " +
+  "text-sm font-semibold text-red-700 transition hover:bg-red-100 disabled:opacity-50 disabled:pointer-events-none";
 
 export const badge =
-  "inline-flex items-center rounded-full px-3 py-1 text-xs font-medium tracking-wide";
+  "inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold tracking-wide";
 
 export const tableHead =
-  "grid text-[10.5px] font-medium uppercase tracking-widest text-[#999977]";
+  "grid text-xs font-semibold uppercase tracking-wider text-slate-500 bg-slate-50 border-b border-slate-200";
 
 export const alert =
-  "rounded-sm border border-rose-200 bg-rose-50 p-4 text-sm font-medium text-rose-700";
+  "flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-700";

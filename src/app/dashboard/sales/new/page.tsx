@@ -5,18 +5,24 @@ import { bootstrapOrg } from "@/lib/org/bootstrapOrg";
 import { listSellable, type SellableRow } from "@/lib/api/sellable";
 import { createSaleStrict } from "@/lib/api/sales";
 import * as S from "./page.styles";
+import Link from "next/link";
 
+/* ─── Types ──────────────────────────────────────────────────── */
 type CartLine = {
   product_id: string;
   name: string;
+  category?: string | null;
   available: number;
   base_price: number;
   qty: number;
   unit_price_override?: number | null;
 };
 
+type PaymentMethod = "cash" | "mpesa" | "card" | "credit";
+
+/* ─── Helpers ────────────────────────────────────────────────── */
 function fmtMoney(v: number) {
-  return `Ksh ${Number(v || 0).toFixed(2)}`;
+  return `Ksh ${Number(v || 0).toLocaleString("en-KE", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 }
 
 function hasProduct(
@@ -25,14 +31,79 @@ function hasProduct(
   return r.products != null;
 }
 
+/* ─── Icons ──────────────────────────────────────────────────── */
+const IconSearch = () => (
+  <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.2" className="text-slate-400 shrink-0">
+    <circle cx="9" cy="9" r="5.5" /><line x1="13.5" y1="13.5" x2="18" y2="18" />
+  </svg>
+);
+const IconTrash = () => (
+  <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M4 6h12M8 6V4a1 1 0 011-1h2a1 1 0 011 1v2m-6 0v10a1 1 0 001 1h6a1 1 0 001-1V6" />
+  </svg>
+);
+const IconPlus = () => (
+  <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.5">
+    <line x1="10" y1="4" x2="10" y2="16" /><line x1="4" y1="10" x2="16" y2="10" />
+  </svg>
+);
+const IconSpinner = () => (
+  <svg className="animate-spin" width="14" height="14" viewBox="0 0 24 24" fill="none">
+    <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" opacity="0.25" />
+    <path fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+  </svg>
+);
+
+/* ─── Payment Method Selector ────────────────────────────────── */
+const PAYMENT_METHODS: { key: PaymentMethod; label: string; icon: string }[] = [
+  { key: "cash",   label: "Cash",   icon: "💵" },
+  { key: "mpesa",  label: "M-Pesa", icon: "📱" },
+  { key: "card",   label: "Card",   icon: "💳" },
+  { key: "credit", label: "Credit", icon: "📋" },
+];
+
+function PaymentSelector({ value, onChange }: { value: PaymentMethod; onChange: (v: PaymentMethod) => void }) {
+  return (
+    <div className="grid grid-cols-4 gap-2">
+      {PAYMENT_METHODS.map(({ key, label, icon }) => (
+        <button
+          key={key}
+          type="button"
+          onClick={() => onChange(key)}
+          className={`flex flex-col items-center gap-1 rounded-xl border py-2.5 text-xs font-semibold transition ${
+            value === key
+              ? "border-amber-500 bg-amber-50 text-amber-700 shadow-sm"
+              : "border-slate-200 text-slate-500 hover:border-slate-300 hover:bg-slate-50"
+          }`}
+        >
+          <span className="text-base">{icon}</span>
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/* ─── Stock Badge ────────────────────────────────────────────── */
+function StockBadge({ available }: { available: number }) {
+  if (available <= 0)
+    return <span className="text-xs font-semibold text-red-500">Out of stock</span>;
+  if (available <= 3)
+    return <span className="text-xs font-semibold text-amber-600">{available} left</span>;
+  return <span className="text-xs text-slate-400">{available} avail.</span>;
+}
+
+/* ─── Page ───────────────────────────────────────────────────── */
 export default function NewSalePage() {
   const [orgId,    setOrgId]    = useState<string | null>(null);
   const [rows,     setRows]     = useState<SellableRow[]>([]);
   const [cart,     setCart]     = useState<CartLine[]>([]);
   const [q,        setQ]        = useState("");
   const [customer, setCustomer] = useState("");
+  const [payment,  setPayment]  = useState<PaymentMethod>("cash");
   const [saving,   setSaving]   = useState(false);
   const [err,      setErr]      = useState("");
+  const [success,  setSuccess]  = useState("");
 
   async function refresh(o: string) {
     const data = await listSellable(o);
@@ -45,75 +116,11 @@ export default function NewSalePage() {
         const o = await bootstrapOrg();
         setOrgId(o);
         await refresh(o);
-      } catch (e: any) {
-        setErr(e.message ?? String(e));
-      }
+      } catch (e: any) { setErr(e.message ?? String(e)); }
     })();
   }, []);
 
-  const productList = useMemo(() => {
-    const t = q.trim().toLowerCase();
-    return rows
-      .filter((r) => r.products)
-      .filter((r) => {
-        if (!t) return true;
-        const name    = (r.products?.name    ?? "").toLowerCase();
-        const sku     = (r.products?.sku     ?? "").toLowerCase();
-        const barcode = (r.products?.barcode ?? "").toLowerCase();
-        return name.includes(t) || sku.includes(t) || barcode.includes(t);
-      })
-      .slice(0, 24);
-  }, [rows, q]);
-
-  function addToCart(r: SellableRow & { products: NonNullable<SellableRow["products"]> }) {
-    setCart((prev) => {
-      const existing  = prev.find((x) => x.product_id === r.product_id);
-      const available = Number(r.qty_on_hand ?? 0);
-      if (existing) {
-        return prev.map((x) =>
-          x.product_id === r.product_id
-            ? { ...x, qty: Math.min(x.qty + 1, available), available }
-            : x
-        );
-      }
-      return [
-        ...prev,
-        {
-          product_id: r.product_id,
-          name: r.products.name,
-          available,
-          base_price: Number(r.products.unit_price ?? 0),
-          qty: available > 0 ? 1 : 0,
-          unit_price_override: null,
-        },
-      ];
-    });
-  }
-
-  function updateQty(product_id: string, qty: number) {
-    setCart((prev) =>
-      prev.map((x) =>
-        x.product_id !== product_id
-          ? x
-          : { ...x, qty: Math.max(0, Math.min(qty, x.available)) }
-      )
-    );
-  }
-
-  function updateOverride(product_id: string, price: number | null) {
-    setCart((prev) =>
-      prev.map((x) =>
-        x.product_id !== product_id
-          ? x
-          : { ...x, unit_price_override: price === null ? null : Math.max(0, price) }
-      )
-    );
-  }
-
-  function removeLine(product_id: string) {
-    setCart((prev) => prev.filter((x) => x.product_id !== product_id));
-  }
-
+  // Sync cart availability with fresh stock data
   useEffect(() => {
     const map = new Map(rows.map((r) => [r.product_id, Number(r.qty_on_hand ?? 0)]));
     setCart((prev) =>
@@ -123,6 +130,67 @@ export default function NewSalePage() {
       })
     );
   }, [rows]);
+
+  const productList = useMemo(() => {
+    const t = q.trim().toLowerCase();
+    return rows
+      .filter(hasProduct)
+      .filter((r) => {
+        if (!t) return true;
+        const name    = (r.products.name    ?? "").toLowerCase();
+        const sku     = (r.products.sku     ?? "").toLowerCase();
+        const barcode = (r.products.barcode ?? "").toLowerCase();
+        const cat     = ((r.products as any).category ?? "").toLowerCase();
+        return name.includes(t) || sku.includes(t) || barcode.includes(t) || cat.includes(t);
+      })
+      .slice(0, 30);
+  }, [rows, q]);
+
+  function addToCart(r: SellableRow & { products: NonNullable<SellableRow["products"]> }) {
+    const available = Number(r.qty_on_hand ?? 0);
+    if (available <= 0) return;
+    setCart((prev) => {
+      const existing = prev.find((x) => x.product_id === r.product_id);
+      if (existing) {
+        return prev.map((x) =>
+          x.product_id === r.product_id
+            ? { ...x, qty: Math.min(x.qty + 1, available), available }
+            : x
+        );
+      }
+      return [...prev, {
+        product_id: r.product_id,
+        name: r.products.name,
+        category: (r.products as any).category ?? null,
+        available,
+        base_price: Number(r.products.unit_price ?? 0),
+        qty: 1,
+        unit_price_override: null,
+      }];
+    });
+  }
+
+  function updateQty(product_id: string, qty: number) {
+    setCart((prev) =>
+      prev.map((x) =>
+        x.product_id !== product_id ? x
+          : { ...x, qty: Math.max(0, Math.min(qty, x.available)) }
+      )
+    );
+  }
+
+  function updateOverride(product_id: string, price: number | null) {
+    setCart((prev) =>
+      prev.map((x) =>
+        x.product_id !== product_id ? x
+          : { ...x, unit_price_override: price === null ? null : Math.max(0, price) }
+      )
+    );
+  }
+
+  function removeLine(product_id: string) {
+    setCart((prev) => prev.filter((x) => x.product_id !== product_id));
+  }
 
   const totals = useMemo(() => {
     let subtotal = 0, total = 0, discountTotal = 0;
@@ -137,9 +205,12 @@ export default function NewSalePage() {
     return { subtotal, discountTotal, total };
   }, [cart]);
 
+  const cartItemCount = cart.filter((x) => x.qty > 0).length;
+  const hasErrors = cart.some((x) => x.qty > x.available);
+
   async function completeSale() {
     if (!orgId) return;
-    setErr("");
+    setErr(""); setSuccess("");
 
     const items = cart
       .filter((l) => l.qty > 0)
@@ -149,10 +220,10 @@ export default function NewSalePage() {
         unit_price_override: l.unit_price_override ?? null,
       }));
 
-    if (items.length === 0) { setErr("Cart is empty."); return; }
+    if (items.length === 0) { setErr("Cart is empty — add at least one product."); return; }
     for (const line of cart) {
       if (line.qty > line.available) {
-        setErr(`Insufficient stock for ${line.name}. Available: ${line.available}`);
+        setErr(`Insufficient stock for "${line.name}". Only ${line.available} available.`);
         return;
       }
     }
@@ -176,412 +247,348 @@ export default function NewSalePage() {
 
   if (!orgId && !err) {
     return (
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "1rem", padding: "6rem 0", fontFamily: "'DM Sans', sans-serif" }}>
-        <span style={{ fontSize: "2.5rem", animation: "floatBee 3s ease-in-out infinite" }}>🐝</span>
-        <p style={{ fontSize: "0.82rem", color: "#999977", letterSpacing: "0.06em" }}>Preparing your hive…</p>
+      <div className="flex h-64 items-center justify-center">
+        <div className="flex items-center gap-3 text-slate-500">
+          <svg className="h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="12" cy="12" r="10" strokeOpacity="0.2" />
+            <path d="M12 2a10 10 0 0110 10" />
+          </svg>
+          <span className="text-sm font-medium">Preparing sale…</span>
+        </div>
       </div>
     );
   }
 
-  const cartItemCount  = cart.filter((x) => x.qty > 0).length;
-  const hasCustomer    = customer.trim().length > 0;
-
   return (
-    <>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;1,400&family=DM+Sans:wght@300;400;500&display=swap');
+    <div className="flex flex-col gap-5">
 
-        .new-sale-page * { font-family: 'DM Sans', sans-serif; }
-
-        /* ── customer banner ── */
-        .customer-banner {
-          display: flex; align-items: center; gap: 1.1rem;
-          padding: 1rem 1.5rem;
-          border-radius: 2px;
-          border: 1.5px solid;
-          transition: background 0.35s, border-color 0.35s;
-          cursor: text;
-        }
-        .customer-banner.empty {
-          background: #FFFBEA;
-          border-color: rgba(245,197,24,0.45);
-        }
-        .customer-banner.filled {
-          background: #1a1a0a;
-          border-color: #1a1a0a;
-        }
-        .customer-avatar {
-          width: 44px; height: 44px; flex-shrink: 0;
-          border-radius: 2px;
-          display: grid; place-items: center;
-          font-size: 1.2rem;
-          transition: background 0.35s, border-color 0.35s;
-          border: 2px solid;
-        }
-        .customer-banner.empty .customer-avatar  { background: rgba(245,197,24,0.18); border-color: rgba(245,197,24,0.35); }
-        .customer-banner.filled .customer-avatar { background: #F5C518; border-color: #F5C518; box-shadow: 2px 2px 0 rgba(255,255,255,0.12); }
-        .customer-label {
-          font-size: 0.6rem; font-weight: 500; letter-spacing: 0.22em;
-          text-transform: uppercase; margin-bottom: 0.25rem;
-          transition: color 0.35s;
-        }
-        .customer-banner.empty  .customer-label { color: #999977; }
-        .customer-banner.filled .customer-label { color: rgba(245,197,24,0.55); }
-        .customer-input {
-          width: 100%; background: transparent; border: none; outline: none;
-          font-family: 'Playfair Display', serif;
-          font-size: 1.2rem; font-weight: 700;
-          transition: color 0.35s, caret-color 0.35s;
-        }
-        .customer-banner.empty  .customer-input { color: #92700a; caret-color: #92700a; }
-        .customer-banner.filled .customer-input { color: #F5C518; caret-color: #F5C518; }
-        .customer-input::placeholder { color: #c9a84c; opacity: 1; }
-        .customer-banner.filled .customer-input::placeholder { color: rgba(245,197,24,0.3); }
-        .customer-chip {
-          flex-shrink: 0; font-size: 0.66rem; font-weight: 500;
-          letter-spacing: 0.1em; text-transform: uppercase;
-          padding: 0.28rem 0.85rem; border-radius: 50px;
-          transition: background 0.35s, color 0.35s;
-        }
-        .customer-banner.empty  .customer-chip { background: rgba(26,26,10,0.07); color: #bbb; }
-        .customer-banner.filled .customer-chip { background: rgba(245,197,24,0.14); color: #F5C518; }
-
-        /* ── product rows ── */
-        .prod-row { width: 100%; text-align: left; border: none; background: none; cursor: pointer; transition: background 0.15s; }
-        .prod-row:hover:not(:disabled) { background: #FFFBEA; }
-        .prod-row.in-cart { background: #FFF9DC; }
-        .prod-row.in-cart:hover { background: #FFF3B0; }
-        .prod-row:disabled { opacity: 0.38; cursor: not-allowed; }
-
-        /* ── cart rows ── */
-        .cart-row { transition: background 0.15s; }
-        .cart-row:hover { background: #FFFBEA; }
-        .cart-row.over-qty { background: #fff5f5; }
-
-        /* ── remove btn ── */
-        .remove-btn { display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 2px; border: none; background: none; color: #ccc; cursor: pointer; transition: all 0.15s; font-size: 0.75rem; }
-        .remove-btn:hover { background: #fff0f0; color: #e05050; }
-
-        /* ── customer echo in cart footer ── */
-        .sale-for-chip {
-          display: flex; align-items: center; gap: 0.5rem;
-          padding: 0.45rem 0.75rem; margin-bottom: 0.85rem;
-          background: rgba(26,26,10,0.05); border-radius: 2px;
-          border: 1px solid rgba(26,26,10,0.08);
-        }
-
-        @keyframes floatBee {
-          0%, 100% { transform: translateY(0) rotate(-4deg); }
-          50%       { transform: translateY(-10px) rotate(4deg); }
-        }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        .spinner { animation: spin 0.7s linear infinite; }
-
-        input[type=number]::-webkit-inner-spin-button,
-        input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
-        input[type=number] { -moz-appearance: textfield; }
-      `}</style>
-
-      <div className="new-sale-page space-y-4">
-
-        {/* ══ CUSTOMER BANNER — full width, first thing you see ══ */}
-        <div
-          className={`customer-banner ${hasCustomer ? "filled" : "empty"}`}
-          onClick={() => (document.getElementById("customer-input") as HTMLInputElement)?.focus()}
-        >
-          <div className="customer-avatar">👤</div>
-
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div className="customer-label">Selling to</div>
-            <input
-              id="customer-input"
-              className="customer-input"
-              placeholder="Customer name…"
-              value={customer}
-              onChange={(e) => setCustomer(e.target.value)}
-            />
-          </div>
-
-          <div className="customer-chip">
-            {hasCustomer ? "✓ Set" : "Optional"}
-          </div>
+      {/* ── Page Header ── */}
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">New Sale</h1>
+          <p className="mt-1 text-sm text-slate-500">Select products, set quantities, complete transaction</p>
         </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <Link href="/dashboard/sales" className={S.btnGhost}>← Back</Link>
+          <button
+            className={S.btnPrimary}
+            onClick={completeSale}
+            disabled={saving || cartItemCount === 0 || hasErrors}
+          >
+            {saving ? <><IconSpinner /> Processing…</> : <>Complete{cartItemCount > 0 ? ` (${cartItemCount})` : ""} →</>}
+          </button>
+        </div>
+      </div>
 
-        {/* ══ HEADER — title + search + actions ══ */}
-        <div className={`${S.card} px-6 py-5`}>
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h1 style={{ fontFamily: "'Playfair Display', serif", fontSize: "1.5rem", fontWeight: 700, color: "#1a1a0a", lineHeight: 1.2 }}>
-                New <em style={{ fontStyle: "italic", color: "#3a7d44" }}>sale</em>
-              </h1>
-              <p style={{ fontSize: "0.78rem", color: "#999977", marginTop: "0.25rem" }}>
-                Select products · set quantities · complete transaction
-              </p>
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "wrap" }}>
-              <a className={S.btnGhost} href="/dashboard/sales">← Back</a>
-              <button
-                className={S.btnPrimary}
-                onClick={completeSale}
-                disabled={saving || cartItemCount === 0}
-              >
-                {saving ? (
-                  <>
-                    <svg className="spinner" width="13" height="13" viewBox="0 0 24 24" fill="none">
-                      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" opacity="0.25" />
-                      <path fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-                    </svg>
-                    Processing…
-                  </>
-                ) : <>Complete{cartItemCount > 0 ? ` (${cartItemCount})` : ""} →</>}
-              </button>
-            </div>
-          </div>
+      {/* ── Error / Success ── */}
+      {err && (
+        <div className={S.alert}>
+          <span className="shrink-0 mt-0.5">⚠️</span>
+          <span className="flex-1">{err}</span>
+          <button onClick={() => setErr("")} className="ml-auto shrink-0 text-red-400 hover:text-red-600">✕</button>
+        </div>
+      )}
 
-          {/* Search — full width, customer is already above */}
-          <div style={{ marginTop: "1rem" }}>
-            <label style={{ display: "block", fontSize: "0.62rem", fontWeight: 500, letterSpacing: "0.2em", color: "#999977", textTransform: "uppercase", marginBottom: "0.4rem" }}>
-              Search Products
-            </label>
-            <div style={{ position: "relative" }}>
-              <span style={{ position: "absolute", left: "0.85rem", top: "50%", transform: "translateY(-50%)", opacity: 0.35, fontSize: "0.85rem", pointerEvents: "none" }}>🔍</span>
+      {/* ── Main layout: left products | right order panel ── */}
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1fr_380px] xl:grid-cols-[1fr_420px]">
+
+        {/* ════ LEFT: PRODUCT BROWSER ════ */}
+        <div className={`${S.card} flex flex-col overflow-hidden`} style={{ minHeight: 0, maxHeight: "calc(100vh - 220px)" }}>
+
+          {/* Search header */}
+          <div className="border-b border-slate-100 p-4 shrink-0">
+            <label className="flex items-center gap-2.5 rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 focus-within:border-amber-500 focus-within:ring-2 focus-within:ring-amber-100 transition">
+              <IconSearch />
               <input
-                className={S.input}
-                style={{ paddingLeft: "2.2rem" }}
-                placeholder="Name, SKU, or barcode…"
+                className="flex-1 bg-transparent text-sm text-slate-800 outline-none placeholder:text-slate-400"
+                placeholder="Search by name, SKU, barcode or category…"
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
                 autoComplete="off"
               />
+              {q && <button onClick={() => setQ("")} className="text-slate-400 hover:text-slate-600 text-xs shrink-0">✕</button>}
+            </label>
+            <div className="mt-2 flex items-center justify-between">
+              <span className="text-xs text-slate-400">{productList.length} product{productList.length !== 1 ? "s" : ""} shown</span>
+              {cartItemCount > 0 && (
+                <span className="text-xs font-semibold text-amber-600">{cartItemCount} in cart</span>
+              )}
             </div>
+          </div>
+
+          {/* Product list */}
+          <div className="overflow-y-auto flex-1 divide-y divide-slate-100">
+            {productList.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-20 text-center">
+                <div className="text-4xl mb-3">🔍</div>
+                <p className="text-sm font-semibold text-slate-600">No products found</p>
+                <p className="text-xs text-slate-400 mt-1">Try a different search term</p>
+              </div>
+            ) : productList.map((r) => {
+              const p = r.products;
+              const available = Number(r.qty_on_hand ?? 0);
+              const outOfStock = available <= 0;
+              const cartLine = cart.find((x) => x.product_id === r.product_id);
+              const inCart = !!cartLine;
+
+              return (
+                <button
+                  key={r.product_id}
+                  type="button"
+                  onClick={() => !outOfStock && addToCart(r)}
+                  disabled={outOfStock}
+                  className={`w-full text-left px-4 py-3.5 transition-colors flex items-center gap-4 group ${
+                    outOfStock ? "opacity-40 cursor-not-allowed" :
+                    inCart ? "bg-amber-50 hover:bg-amber-100" : "hover:bg-slate-50"
+                  }`}
+                >
+                  {/* Product icon */}
+                  <div className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl text-lg ${
+                    inCart ? "bg-amber-200" : "bg-slate-100"
+                  }`}>
+                    🍯
+                  </div>
+
+                  {/* Name + meta */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-semibold text-slate-900 truncate">{p.name}</span>
+                      {inCart && (
+                        <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-amber-500 px-2 py-0.5 text-xs font-bold text-white">
+                          ✓ {cartLine.qty}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      {(p as any).category && (
+                        <span className="text-xs text-blue-600 font-medium">{(p as any).category}</span>
+                      )}
+                      {p.sku && <span className="text-xs text-slate-400">SKU {p.sku}</span>}
+                    </div>
+                  </div>
+
+                  {/* Price + stock */}
+                  <div className="text-right shrink-0">
+                    <div className="text-sm font-bold text-slate-900">{fmtMoney(Number(p.unit_price ?? 0))}</div>
+                    <StockBadge available={available} />
+                  </div>
+
+                  {/* Add indicator */}
+                  {!outOfStock && !inCart && (
+                    <div className="shrink-0 grid h-7 w-7 place-items-center rounded-lg bg-slate-100 text-slate-400 group-hover:bg-amber-500 group-hover:text-white transition-colors">
+                      <IconPlus />
+                    </div>
+                  )}
+                </button>
+              );
+            })}
           </div>
         </div>
 
-        {/* ══ ERROR ══ */}
-        {err && (
-          <div style={{ display: "flex", alignItems: "flex-start", gap: "0.75rem", borderRadius: 2, border: "1px solid #fecaca", background: "#fff5f5", padding: "0.85rem 1rem" }}>
-            <span style={{ color: "#e05050", flexShrink: 0 }}>⚠</span>
-            <p style={{ fontSize: "0.85rem", color: "#c0392b" }}>{err}</p>
-          </div>
-        )}
+        {/* ════ RIGHT: ORDER PANEL ════ */}
+        <div className="flex flex-col gap-4">
 
-        {/* ══ SPLIT PANEL ══ */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.2rem" }}>
-
-          {/* ── LEFT: PRODUCTS ── */}
-          <div className={`${S.card} overflow-hidden`} style={{ display: "flex", flexDirection: "column", maxHeight: "66vh" }}>
-            <div style={{ padding: "0.9rem 1.25rem", borderBottom: "1.5px solid rgba(245,197,24,0.2)", background: "#FFFEF5", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
-              <div style={{ fontFamily: "'Playfair Display', serif", fontSize: "1rem", fontWeight: 700, color: "#1a1a0a" }}>Products</div>
-              <span className={`${S.badge} bg-[#FFF9DC] text-[#92700a]`} style={{ fontSize: "0.66rem" }}>
-                {productList.length} shown
-              </span>
+          {/* Customer + Payment */}
+          <div className={`${S.card} p-4 space-y-4`}>
+            <div>
+              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-500">
+                Customer Name
+              </label>
+              <input
+                className={S.input}
+                placeholder="Walk-in customer (optional)"
+                value={customer}
+                onChange={(e) => setCustomer(e.target.value)}
+              />
             </div>
-
-            <div style={{ overflowY: "auto", flex: 1 }}>
-              {productList.filter(hasProduct).length === 0 ? (
-                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "4rem 1.5rem", textAlign: "center", gap: "0.6rem" }}>
-                  <span style={{ fontSize: "2rem" }}>🔍</span>
-                  <p style={{ fontSize: "0.82rem", color: "#999977" }}>No products match your search</p>
-                </div>
-              ) : productList.filter(hasProduct).map((r) => {
-                const p          = r.products;
-                const available  = Number(r.qty_on_hand ?? 0);
-                const outOfStock = available <= 0;
-                const inCart     = cart.some((x) => x.product_id === r.product_id);
-
-                return (
-                  <button
-                    key={r.product_id}
-                    className={`prod-row ${inCart ? "in-cart" : ""}`}
-                    style={{ padding: "0.85rem 1.25rem", borderBottom: "1px solid rgba(26,26,10,0.05)" }}
-                    onClick={() => !outOfStock && addToCart(r)}
-                    disabled={outOfStock}
-                  >
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "1rem" }}>
-                      <div style={{ minWidth: 0, flex: 1 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                          <span style={{ fontSize: "0.88rem", fontWeight: 500, color: "#1a1a0a", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                            {p.name}
-                          </span>
-                          {inCart && (
-                            <span className={`${S.badge} bg-[#FFF9DC] text-[#92700a]`} style={{ flexShrink: 0, fontSize: "0.62rem" }}>
-                              ✓ In cart
-                            </span>
-                          )}
-                        </div>
-                        {(p.sku || p.barcode) && (
-                          <p style={{ fontSize: "0.72rem", color: "#bbb", marginTop: "0.15rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                            {[p.sku && `SKU: ${p.sku}`, p.barcode && `# ${p.barcode}`].filter(Boolean).join(" · ")}
-                          </p>
-                        )}
-                      </div>
-                      <div style={{ textAlign: "right", flexShrink: 0 }}>
-                        <div style={{ fontFamily: "'Playfair Display', serif", fontSize: "0.95rem", fontWeight: 700, color: "#1a1a0a" }}>
-                          {fmtMoney(Number(p.unit_price ?? 0))}
-                        </div>
-                        <div style={{ fontSize: "0.7rem", color: outOfStock ? "#e05050" : "#999977", marginTop: "0.1rem" }}>
-                          {outOfStock ? "Out of stock" : `${available} avail.`}
-                        </div>
-                      </div>
-                    </div>
-                  </button>
-                );
-              })}
+            <div>
+              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-500">
+                Payment Method
+              </label>
+              <PaymentSelector value={payment} onChange={setPayment} />
             </div>
           </div>
 
-          {/* ── RIGHT: CART ── */}
-          <div className={`${S.card} overflow-hidden`} style={{ display: "flex", flexDirection: "column", maxHeight: "66vh" }}>
-            <div style={{ padding: "0.9rem 1.25rem", borderBottom: "1.5px solid rgba(245,197,24,0.2)", background: "#FFFEF5", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
-              <div style={{ fontFamily: "'Playfair Display', serif", fontSize: "1rem", fontWeight: 700, color: "#1a1a0a" }}>
-                Cart
+          {/* Cart */}
+          <div className={`${S.card} flex flex-col overflow-hidden flex-1`} style={{ minHeight: "200px", maxHeight: "calc(100vh - 520px)" }}>
+            <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3 shrink-0">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-bold text-slate-900">Cart</span>
                 {cart.length > 0 && (
-                  <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "0.78rem", fontWeight: 300, color: "#999977", marginLeft: "0.5rem" }}>
-                    {cart.length} item{cart.length !== 1 ? "s" : ""}
+                  <span className="rounded-full bg-amber-500 px-2 py-0.5 text-xs font-bold text-white">
+                    {cartItemCount}
                   </span>
                 )}
               </div>
-              <button
-                className={S.btnDanger}
-                onClick={() => setCart([])}
-                disabled={cart.length === 0}
-                style={{ padding: "0.3rem 0.8rem", fontSize: "0.75rem" }}
-              >
-                Clear all
-              </button>
-            </div>
-
-            <div style={{ overflowY: "auto", flex: 1 }}>
-              {cart.length === 0 ? (
-                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "4rem 1.5rem", textAlign: "center", gap: "0.6rem" }}>
-                  <span style={{ fontSize: "2rem" }}>🛒</span>
-                  <p style={{ fontSize: "0.85rem", color: "#999977" }}>Cart is empty</p>
-                  <p style={{ fontSize: "0.75rem", color: "#bbb" }}>Click a product on the left to add it</p>
-                </div>
-              ) : (
-                <>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 72px 72px 32px", gap: "0.5rem", padding: "0.5rem 1.25rem", background: "#FAFAF5", borderBottom: "1px solid rgba(26,26,10,0.05)", fontSize: "0.62rem", fontWeight: 500, letterSpacing: "0.18em", color: "#bbb", textTransform: "uppercase" }}>
-                    <div>Item</div>
-                    <div style={{ textAlign: "center" }}>Qty</div>
-                    <div style={{ textAlign: "center" }}>Price</div>
-                    <div />
-                  </div>
-
-                  {cart.map((line) => {
-                    const base         = Number(line.base_price ?? 0);
-                    const final        = line.unit_price_override == null ? base : Number(line.unit_price_override);
-                    const isDiscounted = line.unit_price_override != null && final !== base;
-                    const lineTotal    = final * Number(line.qty ?? 0);
-                    const overQty      = line.qty > line.available;
-
-                    return (
-                      <div
-                        key={line.product_id}
-                        className={`cart-row ${overQty ? "over-qty" : ""}`}
-                        style={{ display: "grid", gridTemplateColumns: "1fr 72px 72px 32px", gap: "0.5rem", alignItems: "start", padding: "0.85rem 1.25rem", borderBottom: "1px solid rgba(26,26,10,0.05)" }}
-                      >
-                        <div style={{ minWidth: 0 }}>
-                          <p style={{ fontSize: "0.85rem", fontWeight: 500, color: "#1a1a0a", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{line.name}</p>
-                          <p style={{ fontSize: "0.7rem", color: "#999977", marginTop: "0.15rem" }}>Base {fmtMoney(base)}</p>
-                          <p style={{ fontSize: "0.75rem", color: isDiscounted ? "#3a7d44" : "#555540", fontWeight: isDiscounted ? 500 : 300, marginTop: "0.2rem" }}>
-                            = {fmtMoney(lineTotal)}
-                            {isDiscounted && <span style={{ marginLeft: "0.3rem", fontSize: "0.65rem", color: "#3a7d44" }}>✓ discount</span>}
-                          </p>
-                          {overQty && <p style={{ fontSize: "0.68rem", color: "#e05050", marginTop: "0.15rem" }}>⚠ Exceeds stock ({line.available})</p>}
-                        </div>
-
-                        <div>
-                          <input
-                            className={S.inputSoft}
-                            style={{ textAlign: "center", padding: "0.4rem 0.3rem", ...(overQty ? { borderColor: "#fca5a5", background: "#fff5f5" } : {}) }}
-                            type="number" min={0} max={line.available} value={line.qty}
-                            onChange={(e) => updateQty(line.product_id, Number(e.target.value || 0))}
-                          />
-                          <p style={{ fontSize: "0.62rem", color: "#bbb", textAlign: "center", marginTop: "0.2rem" }}>{line.available} max</p>
-                        </div>
-
-                        <div>
-                          <input
-                            className={S.inputSoft}
-                            style={{ textAlign: "right", padding: "0.4rem 0.5rem", ...(isDiscounted ? { borderColor: "#fcd34d", background: "#FFFBEA" } : {}) }}
-                            type="number" min={0} step="0.01"
-                            value={line.unit_price_override == null ? "" : line.unit_price_override}
-                            placeholder={`${base}`}
-                            onChange={(e) => {
-                              const v = e.target.value;
-                              updateOverride(line.product_id, v === "" ? null : Number(v));
-                            }}
-                            title="Override unit price (leave blank for default)"
-                          />
-                          <p style={{ fontSize: "0.62rem", color: "#bbb", textAlign: "center", marginTop: "0.2rem" }}>override</p>
-                        </div>
-
-                        <button className="remove-btn" onClick={() => removeLine(line.product_id)} title="Remove">✕</button>
-                      </div>
-                    );
-                  })}
-                </>
+              {cart.length > 0 && (
+                <button onClick={() => setCart([])} className={S.btnDanger}>
+                  Clear all
+                </button>
               )}
             </div>
 
-            {/* ── TOTALS FOOTER ── */}
-            {cart.length > 0 && (
-              <div style={{ borderTop: "1.5px solid rgba(245,197,24,0.25)", background: "#FFFBEA", padding: "1rem 1.25rem", flexShrink: 0 }}>
+            {cart.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 text-center px-4">
+                <div className="text-4xl mb-3">🛒</div>
+                <p className="text-sm font-semibold text-slate-600">Cart is empty</p>
+                <p className="text-xs text-slate-400 mt-1">Click a product on the left to add it</p>
+              </div>
+            ) : (
+              <div className="overflow-y-auto flex-1 divide-y divide-slate-100">
 
-                {/* Customer echo — confirms who the sale belongs to */}
-                {hasCustomer && (
-                  <div className="sale-for-chip">
-                    <span style={{ fontSize: "0.78rem" }}>👤</span>
-                    <span style={{ fontSize: "0.75rem", color: "#999977" }}>Sale for</span>
-                    <span style={{ fontSize: "0.82rem", fontWeight: 500, color: "#1a1a0a" }}>{customer}</span>
-                  </div>
-                )}
-
-                <div style={{ display: "flex", flexDirection: "column", gap: "0.45rem", marginBottom: "0.9rem" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.82rem" }}>
-                    <span style={{ color: "#999977" }}>Subtotal</span>
-                    <span style={{ color: "#555540" }}>{fmtMoney(totals.subtotal)}</span>
-                  </div>
-                  {totals.discountTotal > 0 && (
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.82rem" }}>
-                      <span style={{ color: "#999977" }}>Discounts</span>
-                      <span style={{ color: "#3a7d44", fontWeight: 500 }}>−{fmtMoney(totals.discountTotal)}</span>
-                    </div>
-                  )}
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: "0.55rem", borderTop: "1.5px solid #F5C518", marginTop: "0.2rem" }}>
-                    <span style={{ fontSize: "0.9rem", fontWeight: 500, color: "#1a1a0a" }}>Total</span>
-                    <span style={{ fontFamily: "'Playfair Display', serif", fontSize: "1.4rem", fontWeight: 700, color: "#1a1a0a" }}>
-                      {fmtMoney(totals.total)}
-                    </span>
-                  </div>
+                {/* Cart column headers */}
+                <div className="grid gap-2 px-4 py-2 bg-slate-50 text-xs font-semibold uppercase tracking-wider text-slate-500"
+                  style={{ gridTemplateColumns: "1fr 64px 72px 28px" }}>
+                  <div>Item</div>
+                  <div className="text-center">Qty</div>
+                  <div className="text-center">Price</div>
+                  <div />
                 </div>
 
-                <button
-                  className={S.btnPrimary}
-                  style={{ width: "100%", padding: "0.85rem", fontSize: "0.9rem", justifyContent: "center" }}
-                  onClick={completeSale}
-                  disabled={saving || cartItemCount === 0}
-                >
-                  {saving ? (
-                    <>
-                      <svg className="spinner" width="14" height="14" viewBox="0 0 24 24" fill="none">
-                        <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" opacity="0.25" />
-                        <path fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-                      </svg>
-                      Processing…
-                    </>
-                  ) : "Complete Sale →"}
-                </button>
+                {cart.map((line) => {
+                  const base = Number(line.base_price ?? 0);
+                  const final = line.unit_price_override == null ? base : Number(line.unit_price_override);
+                  const isDiscounted = line.unit_price_override != null && final !== base;
+                  const lineTotal = final * Number(line.qty ?? 0);
+                  const overQty = line.qty > line.available;
 
-                <p style={{ textAlign: "center", fontSize: "0.68rem", color: "#bbb", marginTop: "0.6rem" }}>
-                  Stock is enforced server-side · cannot oversell
-                </p>
+                  return (
+                    <div
+                      key={line.product_id}
+                      className={`grid gap-2 items-start px-4 py-3 transition-colors ${overQty ? "bg-red-50" : "hover:bg-slate-50"}`}
+                      style={{ gridTemplateColumns: "1fr 64px 72px 28px" }}
+                    >
+                      {/* Name + total */}
+                      <div className="min-w-0">
+                        <div className="text-xs font-semibold text-slate-900 truncate leading-tight">{line.name}</div>
+                        <div className={`text-xs font-bold mt-0.5 ${isDiscounted ? "text-green-600" : "text-slate-600"}`}>
+                          {fmtMoney(lineTotal)}
+                          {isDiscounted && <span className="ml-1 font-normal text-green-500">disc.</span>}
+                        </div>
+                        {overQty && (
+                          <div className="text-xs text-red-500 font-semibold mt-0.5">
+                            ⚠ Max {line.available}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Qty */}
+                      <div>
+                        <input
+                          className={`w-full rounded-lg border text-center text-sm font-semibold py-1.5 outline-none transition text-slate-900 ${
+                            overQty
+                              ? "border-red-400 bg-red-50 focus:ring-2 focus:ring-red-100"
+                              : "border-slate-300 bg-white focus:border-amber-500 focus:ring-2 focus:ring-amber-100"
+                          }`}
+                          type="number" min={0} max={line.available}
+                          value={line.qty}
+                          onChange={(e) => updateQty(line.product_id, Number(e.target.value || 0))}
+                        />
+                        <div className="text-center text-[10px] text-slate-400 mt-0.5">{line.available} max</div>
+                      </div>
+
+                      {/* Price override */}
+                      <div>
+                        <input
+                          className={`w-full rounded-lg border text-right text-sm py-1.5 px-2 outline-none transition text-slate-900 ${
+                            isDiscounted
+                              ? "border-amber-400 bg-amber-50 focus:ring-2 focus:ring-amber-100"
+                              : "border-slate-300 bg-white focus:border-amber-500 focus:ring-2 focus:ring-amber-100"
+                          }`}
+                          type="number" min={0} step="1"
+                          value={line.unit_price_override == null ? "" : line.unit_price_override}
+                          placeholder={String(base)}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            updateOverride(line.product_id, v === "" ? null : Number(v));
+                          }}
+                          title="Override unit price — leave blank to use default"
+                        />
+                        <div className="text-center text-[10px] text-slate-400 mt-0.5">
+                          {isDiscounted ? <span className="text-green-500">custom</span> : "default"}
+                        </div>
+                      </div>
+
+                      {/* Remove */}
+                      <button
+                        onClick={() => removeLine(line.product_id)}
+                        className="grid h-7 w-7 place-items-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-500 transition mt-0.5"
+                      >
+                        <IconTrash />
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
-        </div>
 
+          {/* Totals + Complete */}
+          {cart.length > 0 && (
+            <div className={`${S.card} p-4`}>
+              {/* Customer confirm */}
+              {customer.trim() && (
+                <div className="flex items-center gap-2 rounded-xl bg-slate-50 border border-slate-200 px-3 py-2.5 mb-4">
+                  <span className="text-base">👤</span>
+                  <div className="min-w-0">
+                    <div className="text-xs text-slate-500 font-medium">Sale for</div>
+                    <div className="text-sm font-bold text-slate-900 truncate">{customer}</div>
+                  </div>
+                  <div className="ml-auto shrink-0">
+                    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-bold ${
+                      payment === "cash" ? "bg-green-100 text-green-700" :
+                      payment === "mpesa" ? "bg-blue-100 text-blue-700" :
+                      payment === "card" ? "bg-purple-100 text-purple-700" :
+                      "bg-amber-100 text-amber-700"
+                    }`}>
+                      {PAYMENT_METHODS.find((m) => m.key === payment)?.label}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Line items */}
+              <div className="space-y-2 mb-4">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-slate-500">Subtotal</span>
+                  <span className="text-slate-700 font-medium">{fmtMoney(totals.subtotal)}</span>
+                </div>
+                {totals.discountTotal > 0 && (
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-slate-500">Discounts</span>
+                    <span className="text-green-600 font-semibold">−{fmtMoney(totals.discountTotal)}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Total */}
+              <div className="flex items-center justify-between rounded-xl bg-slate-900 px-4 py-3 mb-4">
+                <span className="text-sm font-semibold text-white">Total</span>
+                <span className="text-xl font-bold text-amber-400">{fmtMoney(totals.total)}</span>
+              </div>
+
+              {/* Complete button */}
+              <button
+                className={S.btnPrimary + " w-full py-3 text-base"}
+                onClick={completeSale}
+                disabled={saving || cartItemCount === 0 || hasErrors}
+              >
+                {saving ? <><IconSpinner /> Processing…</> : "Complete Sale →"}
+              </button>
+
+              {hasErrors && (
+                <p className="mt-2 text-center text-xs text-red-500 font-medium">
+                  Fix stock quantities above before completing
+                </p>
+              )}
+
+              <p className="mt-2 text-center text-xs text-slate-400">
+                Stock enforced server-side · cannot oversell
+              </p>
+            </div>
+          )}
+        </div>
       </div>
-    </>
+    </div>
   );
 }
