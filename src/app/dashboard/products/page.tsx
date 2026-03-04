@@ -521,7 +521,7 @@ export default function ProductsPage() {
         <KpiCard icon="✅" label="Active" value={String(kpis.active)} sub="for sale" variant="success" />
         <KpiCard icon="🏷️" label="Categories" value={String(kpis.categories)} sub="product groups" variant="info" />
         <KpiCard icon="📈" label="Avg Margin" value={`${kpis.avgMargin.toFixed(0)}%`} sub="gross margin" variant={kpis.avgMargin >= 30 ? "success" : kpis.avgMargin >= 10 ? "warning" : "neutral"} />
-        <KpiCard icon="💰" label="Catalog Value" value={`Ksh ${fmt(kpis.catalogValue)}`} sub="total sell prices" variant="neutral" />
+        {/* <KpiCard icon="💰" label="Catalog Value" value={`Ksh ${fmt(kpis.catalogValue)}`} sub="total sell prices" variant="neutral" /> */}
       </div>
 
       {/* ── Add Form (collapsible) ── */}
