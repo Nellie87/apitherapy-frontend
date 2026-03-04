@@ -216,8 +216,8 @@ export default function SalesPage() {
         const customerMatch = (s.customer_name ?? "").toLowerCase().includes(t);
 
         let productMatch = false;
-        if (Array.isArray(s.sale_items)) {
-          productMatch = s.sale_items.some((item: any) => {
+        if (Array.isArray((s as any).sale_items)) {
+          productMatch = (s as any).sale_items.some((item: any) => {
             const prod = Array.isArray(item.products) ? item.products[0] : item.products;
             return prod?.name && String(prod.name).toLowerCase().includes(t);
           });
@@ -431,7 +431,7 @@ export default function SalesPage() {
           ) : (
             filtered.map((s) => {
               const pv = saleProductsPreview(s);
-              const itemCount = s.sale_items?.length ?? (s as any).item_count ?? null;
+              const itemCount = (s as any).sale_items?.length ?? (s as any).item_count ?? null;
 
               return (
                 <Link
