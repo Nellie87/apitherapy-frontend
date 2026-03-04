@@ -37,23 +37,57 @@ export type CreateSaleItemInput = {
   qty: number;
   unit_price_override?: number | null; // optional (discount)
 };
+export type SaleItemLite = {
+  id: string;
+  qty: number;
+  product_id: string;
+  products?: { id: string; name: string } | null;
+};
+
+export type SaleRowWithItems = SaleRow & {
+  sale_items?: SaleItemLite[];
+};
 
 export async function listSales(orgId: string) {
   const { data, error } = await supabase
     .from("sales")
-    .select("id,org_id,sale_no,customer_name,status,subtotal,discount_total,total,created_at")
+    .select(`
+      id,
+      org_id,
+      sale_no,
+      customer_name,
+      status,
+      subtotal,
+      discount_total,
+      total,
+      created_at,
+      sale_items:sale_items (
+        id,
+        qty,
+        product_id,
+        products:products ( id, name )
+      )
+    `)
     .eq("org_id", orgId)
     .order("created_at", { ascending: false });
 
   if (error) throw new Error(error.message);
 
-  // numeric fields may come back as string depending on your generated types
   return (data ?? []).map((r: any) => ({
     ...r,
     subtotal: Number(r.subtotal ?? 0),
     discount_total: Number(r.discount_total ?? 0),
     total: Number(r.total ?? 0),
-  })) as SaleRow[];
+    sale_items: (r.sale_items ?? []).map((it: any) => {
+      const p = Array.isArray(it.products) ? it.products[0] ?? null : it.products ?? null;
+      return {
+        id: String(it.id),
+        qty: Number(it.qty ?? 0),
+        product_id: String(it.product_id),
+        products: p ? { id: String(p.id), name: String(p.name) } : null,
+      };
+    }),
+  })) as SaleRowWithItems[];
 }
 
 export async function getSale(orgId: string, saleId: string) {
