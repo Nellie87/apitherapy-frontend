@@ -277,20 +277,6 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
             <div style={{ color: "var(--text-secondary)", fontSize: 13, fontWeight: 500 }}>
               {new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
             </div>
-            <div className="flex items-center gap-3">
-              <div
-                style={{
-                  width: 8,
-                  height: 8,
-                  borderRadius: "50%",
-                  background: "#22C55E",
-                  boxShadow: "0 0 0 3px rgba(34,197,94,0.2)",
-                }}
-              />
-              <span style={{ color: "var(--text-secondary)", fontSize: 13, fontWeight: 500 }}>
-                System online
-              </span>
-            </div>
           </div>
 
           {/* Page content */}

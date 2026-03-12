@@ -280,7 +280,7 @@ export default function InventoryPage() {
           <h1 className="text-2xl font-bold text-slate-900">Inventory</h1>
           <p className="mt-1 text-sm text-slate-500">Track stock levels, reorder points, and total value</p>
         </div>
-        <button className={S.btnPrimary} onClick={() => setAddOpen(true)}>+ Add Stock</button>
+        {/* <button className={S.btnPrimary} onClick={() => setAddOpen(true)}>+ Add Stock</button> */}
       </div>
 
       {/* KPI cards */}

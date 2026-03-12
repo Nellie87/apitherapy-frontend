@@ -744,13 +744,7 @@ export default function DashboardPage() {
               </button>
             ))}
           </div>
-          <button onClick={loadAll} disabled={loading}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 transition">
-            {loading
-              ? <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" strokeOpacity="0.2" /><path d="M12 2a10 10 0 0110 10" /></svg>
-              : <span>↻</span>}
-            {loading ? "…" : "Refresh"}
-          </button>
+
         </div>
       </div>
 
