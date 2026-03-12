@@ -504,12 +504,12 @@ function SectionNav({ active, onChange }: { active: NavSection; onChange: (s: Na
 ════════════════════════════════════════════════════════════════ */
 function QuickActions() {
   const actions = [
-    { href: "/dashboard/sales/new",         icon: "🧾", label: "New Sale",        primary: true  },
-    { href: "/dashboard/expenses",           icon: "💸", label: "Add Expense",     primary: false },
-    { href: "/dashboard/inventory",          icon: "📦", label: "Inventory",       primary: false },
-    { href: "/dashboard/reports",            icon: "📊", label: "Reports",         primary: false },
-    { href: "/dashboard/reports/sales",      icon: "📈", label: "Sales Report",    primary: false },
-    { href: "/dashboard/reports/expenses-pnl", icon: "📉", label: "Expenses P&L", primary: false },
+    { href: "/sales/new",         icon: "🧾", label: "New Sale",        primary: true  },
+    { href: "/expenses",           icon: "💸", label: "Add Expense",     primary: false },
+    { href: "/inventory",          icon: "📦", label: "Inventory",       primary: false },
+    { href: "/reports",            icon: "📊", label: "Reports",         primary: false },
+    { href: "/reports/sales",      icon: "📈", label: "Sales Report",    primary: false },
+    { href: "/reports/expenses-pnl", icon: "📉", label: "Expenses P&L", primary: false },
   ];
   return (
     <div className="flex flex-wrap gap-2">
@@ -795,7 +795,7 @@ export default function DashboardPage() {
           </Card>
 
           <Card title="P&L Breakdown" sub="Hover bars to inspect"
-            action={<Link href="/dashboard/reports/expenses-pnl" className="text-xs font-semibold text-amber-600 hover:text-amber-700">Full report →</Link>}>
+            action={<Link href="/reports/expenses-pnl" className="text-xs font-semibold text-amber-600 hover:text-amber-700">Full report →</Link>}>
             <div className="px-4 py-4"><Waterfall totals={pnlTotals} loading={loading} /></div>
             {!loading && (
               <div className="border-t border-slate-100 px-5 py-3 flex justify-between items-center">
@@ -876,7 +876,7 @@ export default function DashboardPage() {
             {!loading && expCatSegs.length > 0 && (
               <div className="border-t border-slate-100 px-5 py-3 flex justify-between">
                 <span className="text-xs text-slate-500">{expCatSegs.length} categories</span>
-                <Link href="/dashboard/reports/expenses-pnl" className="text-xs font-semibold text-amber-600 hover:text-amber-700">Full P&L →</Link>
+                <Link href="/reports/expenses-pnl" className="text-xs font-semibold text-amber-600 hover:text-amber-700">Full P&L →</Link>
               </div>
             )}
           </Card>
@@ -889,13 +889,13 @@ export default function DashboardPage() {
         </div>
 
         <Card title="Expense vs Revenue Trend" sub={`${range.label} · daily · hover for tooltip`}
-          action={<Link href="/dashboard/expenses" className="text-xs font-semibold text-amber-600 hover:text-amber-700">Manage →</Link>}>
+          action={<Link href="/expenses" className="text-xs font-semibold text-amber-600 hover:text-amber-700">Manage →</Link>}>
           <div className="px-4 py-5"><AreaChart points={areaPoints} loading={loading} height={190} /></div>
         </Card>
 
         {/* Recent expenses table */}
         <Card title="Recent Expenses" sub="Latest entries"
-          action={<Link href="/dashboard/expenses" className="text-xs font-semibold text-amber-600 hover:text-amber-700">All expenses →</Link>}>
+          action={<Link href="/expenses" className="text-xs font-semibold text-amber-600 hover:text-amber-700">All expenses →</Link>}>
           <div className="hidden sm:grid gap-4 px-5 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500 bg-slate-50 border-b border-slate-200"
             style={{ gridTemplateColumns: "1.5fr 1fr 1fr" }}>
             <div>Category</div><div>Date</div><div className="text-right">Amount</div>
@@ -949,7 +949,7 @@ export default function DashboardPage() {
           action={
             <div className="flex items-center gap-2">
               {totalAlerts > 0 && <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-bold text-red-700">{totalAlerts}</span>}
-              <Link href="/dashboard/inventory" className="text-xs font-semibold text-amber-600 hover:text-amber-700">Manage all →</Link>
+              <Link href="/inventory" className="text-xs font-semibold text-amber-600 hover:text-amber-700">Manage all →</Link>
             </div>
           }>
           {loading ? <Spin h={100} />
@@ -990,7 +990,7 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
 
           <Card title="Recent Sales" sub={`Latest ${recentSales.length} transactions`}
-            action={<Link href="/dashboard/sales" className="text-xs font-semibold text-amber-600 hover:text-amber-700">All sales →</Link>}>
+            action={<Link href="/sales" className="text-xs font-semibold text-amber-600 hover:text-amber-700">All sales →</Link>}>
             <div className="hidden sm:grid gap-3 px-5 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500 bg-slate-50 border-b border-slate-200"
               style={{ gridTemplateColumns: "1fr 1.4fr 1fr 1fr" }}>
               <div>Sale #</div><div>Customer</div><div>Date</div><div className="text-right">Total</div>
@@ -1000,7 +1000,7 @@ export default function DashboardPage() {
               : recentSales.length === 0
                 ? <div className="py-12 text-center text-sm text-slate-400">No recent sales.</div>
                 : recentSales.map(s => (
-                  <Link key={s.id} href={`/dashboard/sales/${s.id}`}
+                  <Link key={s.id} href={`/sales/${s.id}`}
                     className="grid items-center gap-3 px-5 py-3.5 hover:bg-amber-50 transition-colors group"
                     style={{ gridTemplateColumns: "1fr 1.4fr 1fr 1fr" }}>
                     <div className="text-sm font-bold text-slate-900 group-hover:text-amber-700 transition-colors">{s.sale_no}</div>
@@ -1020,7 +1020,7 @@ export default function DashboardPage() {
           </Card>
 
           <Card title="Recent Expenses" sub={`Latest ${recentExpenses.length} entries`}
-            action={<Link href="/dashboard/expenses" className="text-xs font-semibold text-amber-600 hover:text-amber-700">All expenses →</Link>}>
+            action={<Link href="/expenses" className="text-xs font-semibold text-amber-600 hover:text-amber-700">All expenses →</Link>}>
             <div className="hidden sm:grid gap-3 px-5 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500 bg-slate-50 border-b border-slate-200"
               style={{ gridTemplateColumns: "1.5fr 1fr 1fr" }}>
               <div>Category</div><div>Date</div><div className="text-right">Amount</div>

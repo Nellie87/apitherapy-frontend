@@ -437,7 +437,7 @@ export default function ExpensesPnLReportPage() {
           <p className="mt-1 text-sm text-slate-500">Expense trends, category breakdown, and profit snapshot</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Link href="/dashboard/reports" className={S.btnGhost}>← Reports</Link>
+          <Link href="/reports" className={S.btnGhost}>← Reports</Link>
 
           <div className="flex rounded-xl border border-slate-200 bg-white overflow-hidden">
             {QUICK.map(q => (

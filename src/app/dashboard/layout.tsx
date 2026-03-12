@@ -6,11 +6,11 @@ import { usePathname } from "next/navigation";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: "⊞" },
-  { href: "/dashboard/inventory", label: "Our Stock", icon: "◫" },
-  { href: "/dashboard/products", label: "Products", icon: "◈" },
-  { href: "/dashboard/sales", label: "Sales", icon: "◉" },
-  { href: "/dashboard/reports", label: "Reports", icon: "◧" },
-    { href: "/dashboard/expenses", label: "Expenses", icon: "◧" },
+  { href: "/inventory", label: "Our Stock", icon: "◫" },
+  { href: "/products", label: "Products", icon: "◈" },
+  { href: "/sales", label: "Sales", icon: "◉" },
+  { href: "/reports", label: "Reports", icon: "◧" },
+    { href: "/expenses", label: "Expenses", icon: "◧" },
 
 ];
 
@@ -207,7 +207,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
               </span>
             </div>
 
-            <Link href="/dashboard/settings" className="nav-link" style={{ marginBottom: 2 }}>
+            <Link href="/settings" className="nav-link" style={{ marginBottom: 2 }}>
               <span className="nav-icon">◎</span>
               <span>Settings</span>
             </Link>

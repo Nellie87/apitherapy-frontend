@@ -237,7 +237,7 @@ export default function NewSalePage() {
       await refresh(orgId);
       setCart([]);
       setCustomer("");
-      window.location.href = `/dashboard/sales?created=${encodeURIComponent(res.sale_no)}`;
+      window.location.href = `/sales?created=${encodeURIComponent(res.sale_no)}`;
     } catch (e: any) {
       setErr(e.message ?? String(e));
     } finally {
@@ -269,7 +269,7 @@ export default function NewSalePage() {
           <p className="mt-1 text-sm text-slate-500">Select products, set quantities, complete transaction</p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <Link href="/dashboard/sales" className={S.btnGhost}>← Back</Link>
+          <Link href="/sales" className={S.btnGhost}>← Back</Link>
           <button
             className={S.btnPrimary}
             onClick={completeSale}

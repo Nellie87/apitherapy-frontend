@@ -9,7 +9,7 @@ export async function requireOrg() {
   }
   const orgId = getOrgId();
   if (!orgId) {
-    window.location.href = "/dashboard/org";
+    window.location.href = "/org";
     return null;
   }
   return orgId;
