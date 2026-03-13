@@ -225,7 +225,7 @@ export default function DiscountsReportPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2 shrink-0">
-          <Link href="/reports" className={S.btnGhost}>← Reports</Link>
+          <Link href="/dashboard/reports" className={S.btnGhost}>← Reports</Link>
           <button className={S.btnGhost} onClick={run} disabled={loading || !orgId}>↻ Refresh</button>
           <button className={S.btnGhost} disabled={!csvRows.length}
             onClick={() => downloadCSV(`discounts_${new Date().toISOString().slice(0,10)}.csv`, csvRows)}>

@@ -326,7 +326,7 @@ export default function SaleDetailsPage() {
             </p>
           </div>
           <div className="flex items-center gap-3 shrink-0">
-            <Link href="/sales" className={S.btnGhost}>← Back</Link>
+            <Link href="/dashboard/sales" className={S.btnGhost}>← Back</Link>
             <button
               className={S.btnPrimary}
               onClick={handleDownload}

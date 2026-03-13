@@ -35,7 +35,7 @@ export default function OrgPage() {
       if (error) throw error;
 
       setOrgId(data);
-      window.location.href = "/products";
+      window.location.href = "/dashboard/products";
     } catch (e: any) {
       setMsg(e.message);
     }
@@ -80,7 +80,7 @@ export default function OrgPage() {
                   className="border rounded-2xl p-4 hover:bg-zinc-50 text-left"
                   onClick={() => {
                     setOrgId(o.id);
-                    window.location.href = "/products";
+                    window.location.href = "/dashboard/products";
                   }}
                 >
                   <div className="font-bold">{o.name}</div>

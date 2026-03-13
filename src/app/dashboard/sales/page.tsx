@@ -287,7 +287,7 @@ export default function SalesPage() {
           <h1 className="text-2xl font-bold text-slate-900">Sales</h1>
           <p className="mt-1 text-sm text-slate-500">Track completed transactions and revenue</p>
         </div>
-        <Link href="/sales/new" className={S.btnPrimary}>
+        <Link href="/dashboard/sales/new" className={S.btnPrimary}>
           + New Sale
         </Link>
       </div>
@@ -436,7 +436,7 @@ export default function SalesPage() {
               return (
                 <Link
                   key={s.id}
-                  href={`/sales/${s.id}`}
+                  href={`/dashboard/sales/${s.id}`}
                   className="group block transition-colors hover:bg-slate-50 focus:outline-none focus:bg-amber-50"
                 >
                   {/* Desktop row */}

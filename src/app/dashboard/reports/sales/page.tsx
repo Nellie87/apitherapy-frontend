@@ -580,7 +580,7 @@ export default function SalesAnalyticsPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2 shrink-0">
-          <Link href="/reports" className={S.btnGhost}>← Reports</Link>
+          <Link href="/dashboard/reports" className={S.btnGhost}>← Reports</Link>
           <button className={S.btnGhost} disabled={!dailyStats.length || loading} onClick={handleCSV}>⬇ CSV</button>
         </div>
       </div>
