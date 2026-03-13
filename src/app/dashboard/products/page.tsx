@@ -1,15 +1,16 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { bootstrapOrg } from "@/lib/org/bootstrapOrg";
+import { supabase } from "@/lib/supabase/client";
 import { listProducts, createProduct, deleteProduct } from "@/lib/api/products";
 import { listUnitMeasures, listUnitSizes } from "@/lib/api/lookups";
-import { supabase } from "@/lib/supabase/client";
 
 import * as S from "./page.styles";
 
 /* ─────────────────────────────────────────────
-   Types
+   Types (unchanged)
 ───────────────────────────────────────────── */
 type UnitKind = "mass" | "volume" | "count";
 
@@ -46,7 +47,7 @@ type FormData = {
 };
 
 /* ─────────────────────────────────────────────
-   Helpers
+   Helpers (unchanged except toast)
 ───────────────────────────────────────────── */
 const BLANK_FORM: FormData = {
   name: "", category: "", barcode: "", supplier: "", notes: "",
@@ -62,8 +63,7 @@ function fmt(v: number | string | null | undefined) {
 function margin(cost: number | string | null | undefined, sell: number | string | null | undefined) {
   const c = Number(cost || 0), s = Number(sell || 0);
   if (c <= 0 || s <= 0) return null;
-  const pct = ((s - c) / s) * 100;
-  return pct;
+  return ((s - c) / s) * 100;
 }
 
 const CATEGORIES = [
@@ -72,38 +72,69 @@ const CATEGORIES = [
 ];
 
 /* ─────────────────────────────────────────────
-   Icons
+   Icons (slightly larger)
 ───────────────────────────────────────────── */
 const IconPlus = () => (
-  <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.5">
-    <line x1="10" y1="4" x2="10" y2="16" /><line x1="4" y1="10" x2="16" y2="10" />
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+    <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
   </svg>
 );
+
 const IconSearch = () => (
-  <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.2">
-    <circle cx="9" cy="9" r="5.5" /><line x1="13.5" y1="13.5" x2="18" y2="18" />
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+    <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
   </svg>
 );
+
 const IconTrash = () => (
-  <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2">
-    <path d="M4 6h12M8 6V4a1 1 0 011-1h2a1 1 0 011 1v2m-6 0v10a1 1 0 001 1h6a1 1 0 001-1V6M9 10v3M11 10v3" />
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14zM10 11v6M14 11v6" />
   </svg>
 );
+
 const IconEdit = () => (
-  <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2">
-    <path d="M13.5 3.5L16.5 6.5L8 15H5v-3L13.5 3.5z" />
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
   </svg>
 );
+
 const IconCheck = () => (
-  <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.5">
-    <polyline points="4,10 8,14 16,6" />
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+    <polyline points="20 6 9 17 4 12" />
   </svg>
 );
+
 const IconX = () => (
-  <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.5">
-    <line x1="5" y1="5" x2="15" y2="15" /><line x1="15" y1="5" x2="5" y2="15" />
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+    <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
   </svg>
 );
+
+/* ─────────────────────────────────────────────
+   Toast
+───────────────────────────────────────────── */
+function Toast({ message, type = "success", onClose }: {
+  message: string;
+  type?: "success" | "error";
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    const timer = setTimeout(onClose, 4000);
+    return () => clearTimeout(timer);
+  }, [onClose]);
+
+  return (
+    <div className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-xl px-6 py-4 shadow-2xl text-white text-base font-medium transition-all duration-300 ${
+      type === "success" ? "bg-green-600" : "bg-red-600"
+    }`}>
+      {type === "success" ? <IconCheck /> : <IconX />}
+      <span>{message}</span>
+      <button onClick={onClose} className="ml-2 text-white/80 hover:text-white">
+        <IconX />
+      </button>
+    </div>
+  );
+}
 
 /* ─────────────────────────────────────────────
    KPI Card
@@ -120,15 +151,15 @@ function KpiCard({ icon, label, value, sub, variant = "neutral" }: {
   }[variant];
 
   return (
-    <div className="rounded-2xl p-5 transition-all hover:shadow-md"
-      style={{ background: cfg.bg, border: `1.5px solid ${cfg.border}` }}>
-      <div className="flex items-start gap-4">
-        <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl text-lg"
-          style={{ background: cfg.iconBg, color: cfg.iconColor }}>{icon}</div>
+    <div className="rounded-2xl p-6 transition-all hover:shadow-lg" style={{ background: cfg.bg, border: `1.5px solid ${cfg.border}` }}>
+      <div className="flex items-center gap-5">
+        <div className="grid h-14 w-14 shrink-0 place-items-center rounded-xl text-2xl" style={{ background: cfg.iconBg, color: cfg.iconColor }}>
+          {icon}
+        </div>
         <div>
-          <div className="text-xs font-semibold uppercase tracking-wider" style={{ color: cfg.subColor }}>{label}</div>
-          <div className="mt-1 text-2xl font-bold leading-none" style={{ color: cfg.valueColor }}>{value}</div>
-          {sub && <div className="mt-1 text-xs font-medium" style={{ color: cfg.subColor }}>{sub}</div>}
+          <div className="text-base font-semibold uppercase tracking-wider" style={{ color: cfg.subColor }}>{label}</div>
+          <div className="mt-1 text-4xl font-bold leading-none" style={{ color: cfg.valueColor }}>{value}</div>
+          {sub && <div className="mt-2 text-base" style={{ color: cfg.subColor }}>{sub}</div>}
         </div>
       </div>
     </div>
@@ -136,14 +167,14 @@ function KpiCard({ icon, label, value, sub, variant = "neutral" }: {
 }
 
 /* ─────────────────────────────────────────────
-   Margin Badge
+   Margin & Sell Badges (larger)
 ───────────────────────────────────────────── */
 function MarginBadge({ pct }: { pct: number | null }) {
-  if (pct === null) return <span className="text-xs text-slate-400">—</span>;
+  if (pct === null) return <span className="text-base text-slate-400">—</span>;
   const good = pct >= 30;
   const ok = pct >= 10;
   return (
-    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-bold ${
+    <span className={`inline-flex items-center rounded-full px-4 py-1.5 text-base font-bold ${
       good ? "bg-green-100 text-green-700" : ok ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-700"
     }`}>
       {pct.toFixed(0)}%
@@ -151,40 +182,43 @@ function MarginBadge({ pct }: { pct: number | null }) {
   );
 }
 
-/* ─────────────────────────────────────────────
-   Status Badge
-───────────────────────────────────────────── */
 function SellBadge({ status }: { status?: string }) {
   const forSale = status !== "not_to_be_sold";
   return forSale
-    ? <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-semibold text-green-700"><span className="h-1.5 w-1.5 rounded-full bg-green-500" />For sale</span>
-    : <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-500"><span className="h-1.5 w-1.5 rounded-full bg-slate-400" />Inactive</span>;
+    ? <span className="inline-flex items-center gap-2 rounded-full bg-green-100 px-4 py-1.5 text-base font-semibold text-green-700">
+        <span className="h-3 w-3 rounded-full bg-green-500" />For sale
+      </span>
+    : <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-4 py-1.5 text-base font-semibold text-slate-500">
+        <span className="h-3 w-3 rounded-full bg-slate-400" />Inactive
+      </span>;
 }
 
 /* ─────────────────────────────────────────────
-   Delete Confirm Modal
+   Delete Modal
 ───────────────────────────────────────────── */
 function DeleteModal({ product, onConfirm, onCancel, loading }: {
   product: Product; onConfirm: () => void; onCancel: () => void; loading: boolean;
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={onCancel}>
-      <div className="w-full max-w-sm rounded-2xl bg-white shadow-2xl p-6" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center gap-4 mb-4">
-          <div className="grid h-12 w-12 place-items-center rounded-xl bg-red-100 text-red-600 text-2xl">🗑️</div>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onCancel}>
+      <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl p-8" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center gap-5 mb-6">
+          <div className="grid h-16 w-16 place-items-center rounded-xl bg-red-100 text-red-600 text-4xl">🗑️</div>
           <div>
-            <div className="font-bold text-slate-900">Delete Product?</div>
-            <div className="text-sm text-slate-500 mt-0.5">This cannot be undone.</div>
+            <div className="text-2xl font-bold text-slate-900">Delete Product?</div>
+            <div className="text-base text-slate-600 mt-1">This cannot be undone.</div>
           </div>
         </div>
-        <div className="rounded-xl bg-slate-50 px-4 py-3 mb-5 text-sm font-semibold text-slate-800">
+        <div className="rounded-xl bg-slate-50 px-5 py-4 mb-8 text-lg font-medium text-slate-800">
           {product.name}
         </div>
-        <div className="flex gap-3">
-          <button onClick={onCancel} className={S.btnGhost + " flex-1 justify-center"}>Cancel</button>
+        <div className="flex gap-4">
+          <button onClick={onCancel} className="flex-1 rounded-xl border border-slate-300 py-4 text-slate-700 text-lg font-semibold hover:bg-slate-50 transition">
+            Cancel
+          </button>
           <button onClick={onConfirm} disabled={loading}
-            className="flex-1 justify-center inline-flex items-center gap-2 rounded-xl bg-red-500 px-4 py-2 text-sm font-bold text-white hover:bg-red-600 disabled:opacity-50 transition">
-            {loading ? "Deleting…" : "Yes, delete"}
+            className="flex-1 rounded-xl bg-red-600 py-4 text-white text-lg font-semibold hover:bg-red-700 disabled:opacity-50 transition">
+            {loading ? "Deleting…" : "Yes, Delete"}
           </button>
         </div>
       </div>
@@ -193,7 +227,7 @@ function DeleteModal({ product, onConfirm, onCancel, loading }: {
 }
 
 /* ─────────────────────────────────────────────
-   Product Form (shared for Add + Edit modal)
+   Product Form (now used in modal)
 ───────────────────────────────────────────── */
 function ProductForm({
   form, setForm, measures, filteredSizes, onSubmit, onCancel, saving, mode,
@@ -209,71 +243,83 @@ function ProductForm({
   const marginPct = margin(form.costPrice, form.sellPrice);
 
   return (
-    <form onSubmit={onSubmit} className="space-y-4">
-      {/* Row 1: Name + Category */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+    <form onSubmit={onSubmit} className="space-y-6 text-base">
+      {/* Name + Category */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
-          <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-500">Product Name *</label>
-          <input className={S.inputCls} placeholder="e.g. Raw Honey 500g" value={form.name} onChange={set("name")} required />
+          <label className="mb-2 block text-base font-semibold text-slate-700">
+            Product Name <span className="text-red-500 text-lg">*</span>
+          </label>
+          <input
+            className={`${S.inputCls} text-base py-3 px-4`}
+            placeholder="e.g. Raw Honey 500g"
+            value={form.name}
+            onChange={set("name")}
+            required
+          />
         </div>
         <div>
-          <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-500">Category</label>
-          <select className={S.selectCls} style={S.selectChevronStyle} value={form.category} onChange={set("category")}>
-            <option value="">— Uncategorised —</option>
+          <label className="mb-2 block text-base font-semibold text-slate-700">Category</label>
+          <select className={`${S.selectCls} text-base py-3 px-4`} value={form.category} onChange={set("category")}>
+            <option value="">— Select category —</option>
             {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
         </div>
       </div>
 
-      {/* Row 2: Supplier + Barcode */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      {/* Supplier + Barcode */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
-          <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-500">Supplier</label>
-          <input className={S.inputCls} placeholder="Supplier name" value={form.supplier} onChange={set("supplier")} />
+          <label className="mb-2 block text-base font-semibold text-slate-700">Supplier</label>
+          <input className={`${S.inputCls} text-base py-3 px-4`} placeholder="Supplier name" value={form.supplier} onChange={set("supplier")} />
         </div>
         <div>
-          <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-500">Barcode</label>
-          <input className={S.inputCls} placeholder="EAN / UPC (optional)" value={form.barcode} onChange={set("barcode")} />
+          <label className="mb-2 block text-base font-semibold text-slate-700">Barcode</label>
+          <input className={`${S.inputCls} text-base py-3 px-4 font-mono`} placeholder="EAN / UPC (optional)" value={form.barcode} onChange={set("barcode")} />
         </div>
       </div>
 
-      {/* Row 3: Cost + Sell + live margin */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      {/* Cost + Sell + Margin */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div>
-          <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-500">Cost Price (Ksh)</label>
-          <input className={S.inputCls} type="number" min="0" step="0.01" value={form.costPrice} onChange={set("costPrice")} />
+          <label className="mb-2 block text-base font-semibold text-slate-700">Cost Price (Ksh)</label>
+          <input className={`${S.inputCls} text-base py-3 px-4`} type="number" min="0" step="0.01" value={form.costPrice} onChange={set("costPrice")} />
         </div>
         <div>
-          <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-500">Sell Price (Ksh)</label>
-          <input className={S.inputCls} type="number" min="0" step="0.01" value={form.sellPrice} onChange={set("sellPrice")} />
+          <label className="mb-2 block text-base font-semibold text-slate-700">Sell Price (Ksh)</label>
+          <input className={`${S.inputCls} text-base py-3 px-4`} type="number" min="0" step="0.01" value={form.sellPrice} onChange={set("sellPrice")} />
         </div>
         <div>
-          <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-500">Margin</label>
-          <div className="flex h-9 items-center rounded-xl border border-slate-200 bg-slate-50 px-3.5">
-            {marginPct !== null
-              ? <span className={`text-sm font-bold ${marginPct >= 30 ? "text-green-600" : marginPct >= 10 ? "text-amber-600" : "text-red-600"}`}>{marginPct.toFixed(1)}%</span>
-              : <span className="text-sm text-slate-400">—</span>}
+          <label className="mb-2 block text-base font-semibold text-slate-700">Margin</label>
+          <div className="flex h-14 items-center rounded-xl border border-slate-200 bg-slate-50 px-5 text-xl font-bold">
+            {marginPct !== null ? (
+              <span className={marginPct >= 30 ? "text-green-600" : marginPct >= 10 ? "text-amber-600" : "text-red-600"}>
+                {marginPct.toFixed(1)}%
+              </span>
+            ) : (
+              <span className="text-slate-400 text-xl">—</span>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Row 4: UOM + Size + Status */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      {/* Unit Measure + Size + Status */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div>
-          <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-500">Unit of Measure</label>
-          <select className={S.selectCls} style={S.selectChevronStyle} value={form.unitMeasureId} onChange={set("unitMeasureId")}>
+          <label className="mb-2 block text-base font-semibold text-slate-700">Unit of Measure</label>
+          <select className={`${S.selectCls} text-base py-3 px-4`} value={form.unitMeasureId} onChange={set("unitMeasureId")}>
             {measures.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
           </select>
         </div>
         <div>
-          <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-500">Unit Size</label>
-          <select className={S.selectCls} style={S.selectChevronStyle} value={form.unitSizeId} onChange={set("unitSizeId")} disabled={!filteredSizes.length}>
+          <label className="mb-2 block text-base font-semibold text-slate-700">Unit Size</label>
+          <select className={`${S.selectCls} text-base py-3 px-4`} value={form.unitSizeId} onChange={set("unitSizeId")} disabled={!filteredSizes.length}>
             {!filteredSizes.length ? <option value="">Select measure first</option> : filteredSizes.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
           </select>
         </div>
         <div>
-          <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-500">Sell Status</label>
-          <select className={S.selectCls} style={S.selectChevronStyle} value={form.sellStatus} onChange={set("sellStatus") as any}>
+          <label className="mb-2 block text-base font-semibold text-slate-700">Sell Status</label>
+          <select className={`${S.selectCls} text-base py-3 px-4`} value={form.sellStatus} onChange={set("sellStatus") as any}>
             <option value="to_be_sold">For sale</option>
             <option value="not_to_be_sold">Not for sale</option>
           </select>
@@ -282,14 +328,26 @@ function ProductForm({
 
       {/* Notes */}
       <div>
-        <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-500">Notes</label>
-        <textarea rows={2} className={S.inputCls + " resize-none"} placeholder="Batch details, allergies, etc." value={form.notes} onChange={set("notes")} />
+        <label className="mb-2 block text-base font-semibold text-slate-700">Notes</label>
+        <textarea
+          rows={4}
+          className={`${S.inputCls} text-base py-3 px-4 resize-none`}
+          placeholder="Batch details, allergies, storage info, etc."
+          value={form.notes}
+          onChange={set("notes")}
+        />
       </div>
 
       {/* Actions */}
-      <div className="flex justify-end gap-3 pt-2">
-        <button type="button" onClick={onCancel} className={S.btnGhost}>Cancel</button>
-        <button type="submit" disabled={saving || !form.name.trim()} className={S.btnPrimary}>
+      <div className="flex justify-end gap-4 pt-6">
+        <button type="button" onClick={onCancel} className="px-8 py-4 rounded-xl border border-slate-300 text-slate-700 text-lg font-semibold hover:bg-slate-50 transition">
+          Cancel
+        </button>
+        <button
+          type="submit"
+          disabled={saving || !form.name.trim()}
+          className="px-8 py-4 rounded-xl bg-amber-500 text-white text-lg font-semibold hover:bg-amber-600 disabled:opacity-50 transition flex items-center gap-3"
+        >
           {saving ? "Saving…" : mode === "add" ? "Add Product" : "Save Changes"}
         </button>
       </div>
@@ -304,6 +362,7 @@ export default function ProductsPage() {
   const [orgId, setOrgId] = useState<string | null>(null);
   const [items, setItems] = useState<Product[]>([]);
   const [err, setErr] = useState("");
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const [measures, setMeasures] = useState<MeasureLookup[]>([]);
   const [sizes, setSizes] = useState<SizeLookup[]>([]);
 
@@ -311,7 +370,7 @@ export default function ProductsPage() {
   const [search, setSearch] = useState("");
   const [filterCat, setFilterCat] = useState("");
   const [filterStatus, setFilterStatus] = useState<"" | "to_be_sold" | "not_to_be_sold">("");
-  const [showAddForm, setShowAddForm] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deletingProduct, setDeletingProduct] = useState<Product | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -321,7 +380,9 @@ export default function ProductsPage() {
   const [addForm, setAddForm] = useState<FormData>({ ...BLANK_FORM });
   const [editForm, setEditForm] = useState<FormData>({ ...BLANK_FORM });
 
-  async function refresh(o: string) { setItems(await listProducts(o)); }
+  async function refresh(o: string) {
+    setItems(await listProducts(o));
+  }
 
   useEffect(() => {
     (async () => {
@@ -336,53 +397,55 @@ export default function ProductsPage() {
         const firstSizeId = (usizes as SizeLookup[]).find((s) => firstAllowed.includes(s.kind))?.id ?? "";
         setAddForm((f) => ({ ...f, unitMeasureId: firstId, unitSizeId: firstSizeId }));
         await refresh(o);
-      } catch (e: any) { setErr(e.message ?? String(e)); }
+      } catch (e: any) {
+        setErr(e.message ?? String(e));
+      }
     })();
   }, []);
 
-  // Filtered sizes for add form
   const addFilteredSizes = useMemo(() => {
     const m = measures.find((m) => m.id === addForm.unitMeasureId);
     if (!m) return sizes;
     return sizes.filter((s) => m.allowed_kinds.includes(s.kind));
   }, [sizes, measures, addForm.unitMeasureId]);
 
-  // Filtered sizes for edit form
   const editFilteredSizes = useMemo(() => {
     const m = measures.find((m) => m.id === editForm.unitMeasureId);
     if (!m) return sizes;
     return sizes.filter((s) => m.allowed_kinds.includes(s.kind));
   }, [sizes, measures, editForm.unitMeasureId]);
 
-  // Auto-pick first size when measure changes
   useEffect(() => {
-    if (addFilteredSizes.length && !addFilteredSizes.find((s) => s.id === addForm.unitSizeId))
+    if (addFilteredSizes.length && !addFilteredSizes.find((s) => s.id === addForm.unitSizeId)) {
       setAddForm((f) => ({ ...f, unitSizeId: addFilteredSizes[0].id }));
+    }
   }, [addFilteredSizes]);
 
   useEffect(() => {
-    if (editFilteredSizes.length && !editFilteredSizes.find((s) => s.id === editForm.unitSizeId))
+    if (editFilteredSizes.length && !editFilteredSizes.find((s) => s.id === editForm.unitSizeId)) {
       setEditForm((f) => ({ ...f, unitSizeId: editFilteredSizes[0].id }));
+    }
   }, [editFilteredSizes]);
 
-  // Categories derived from data (+ preset list)
   const allCategories = useMemo(() => {
     const fromData = Array.from(new Set(items.map((p) => p.category).filter(Boolean))) as string[];
     return Array.from(new Set([...CATEGORIES, ...fromData])).sort();
   }, [items]);
 
-  // Filtered rows
   const filtered = useMemo(() => {
     const t = search.trim().toLowerCase();
     return items.filter((p) => {
-      const matchText = !t || (p.name ?? "").toLowerCase().includes(t) || (p.barcode ?? "").toLowerCase().includes(t) || (p.supplier ?? "").toLowerCase().includes(t) || (p.category ?? "").toLowerCase().includes(t);
+      const matchText = !t || 
+        (p.name ?? "").toLowerCase().includes(t) || 
+        (p.barcode ?? "").toLowerCase().includes(t) || 
+        (p.supplier ?? "").toLowerCase().includes(t) || 
+        (p.category ?? "").toLowerCase().includes(t);
       const matchCat = !filterCat || p.category === filterCat;
       const matchStatus = !filterStatus || p.sell_status === filterStatus;
       return matchText && matchCat && matchStatus;
     });
   }, [items, search, filterCat, filterStatus]);
 
-  // KPIs
   const kpis = useMemo(() => {
     const total = items.length;
     const active = items.filter((p) => p.sell_status !== "not_to_be_sold").length;
@@ -390,15 +453,15 @@ export default function ProductsPage() {
       const m = margin(p.cost_price, p.unit_price);
       return sum + (m ?? 0);
     }, 0) / (items.length || 1);
-    const catalogValue = items.reduce((s, p) => s + Number(p.unit_price ?? 0), 0);
     const categories = new Set(items.map((p) => p.category).filter(Boolean)).size;
-    return { total, active, avgMargin, catalogValue, categories };
+    return { total, active, avgMargin, categories };
   }, [items]);
 
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault();
     if (!orgId) return;
-    setSaving(true); setErr("");
+    setSaving(true);
+    setErr("");
     try {
       if (!addForm.name.trim()) throw new Error("Product name is required");
       const created = await createProduct(orgId, {
@@ -412,20 +475,26 @@ export default function ProductsPage() {
         unit_size_id: addForm.unitSizeId || null,
         sell_status: addForm.sellStatus,
       });
-      // Patch category separately since it may not be in createProduct's type
       if (addForm.category && created?.id) {
         await supabase.from("products").update({ category: addForm.category }).eq("id", created.id);
       }
       setAddForm({ ...BLANK_FORM, unitMeasureId: addForm.unitMeasureId, unitSizeId: addForm.unitSizeId });
-      setShowAddForm(false);
+      setShowAddModal(false);
       await refresh(orgId);
-    } catch (e: any) { setErr(e.message ?? String(e)); } finally { setSaving(false); }
+      setToast({ message: "Product added successfully", type: "success" });
+    } catch (e: any) {
+      setErr(e.message ?? String(e));
+      setToast({ message: "Failed to add product", type: "error" });
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function handleEdit(e: React.FormEvent) {
     e.preventDefault();
     if (!orgId || !editProduct) return;
-    setSaving(true); setErr("");
+    setSaving(true);
+    setErr("");
     try {
       const { error } = await supabase
         .from("products")
@@ -446,7 +515,13 @@ export default function ProductsPage() {
       if (error) throw new Error(error.message);
       setEditProduct(null);
       await refresh(orgId);
-    } catch (e: any) { setErr(e.message ?? String(e)); } finally { setSaving(false); }
+      setToast({ message: "Product updated successfully", type: "success" });
+    } catch (e: any) {
+      setErr(e.message ?? String(e));
+      setToast({ message: "Failed to update product", type: "error" });
+    } finally {
+      setSaving(false);
+    }
   }
 
   function openEdit(p: Product) {
@@ -472,131 +547,149 @@ export default function ProductsPage() {
       await deleteProduct(orgId, deletingProduct.id);
       setDeletingProduct(null);
       await refresh(orgId);
-    } catch (e: any) { setErr(e.message ?? String(e)); } finally { setDeleting(false); }
+      setToast({ message: "Product deleted successfully", type: "success" });
+    } catch (e: any) {
+      setErr(e.message ?? String(e));
+      setToast({ message: "Failed to delete product", type: "error" });
+    } finally {
+      setDeleting(false);
+    }
   }
 
-  // ── Table headers: 9 columns matching tableGridCols ──
-  const HEADERS = ["Product", "Category", "Supplier", "Barcode", "Cost", "Sell", "Margin", "Status", ""];
+  const HEADERS = ["Product", "Category", "Supplier", "Barcode", "Cost", "Sell", "Margin", "Status", "Actions"];
 
   if (!orgId && !err) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <div className="flex items-center gap-3 text-slate-500">
-          <svg className="h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <circle cx="12" cy="12" r="10" strokeOpacity="0.2" /><path d="M12 2a10 10 0 0110 10" />
+        <div className="flex items-center gap-4 text-slate-500 text-lg">
+          <svg className="h-6 w-6 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="12" cy="12" r="10" strokeOpacity="0.2" />
+            <path d="M12 2a10 10 0 0110 10" />
           </svg>
-          <span className="text-sm font-medium">Loading catalog…</span>
+          <span className="font-medium">Loading catalog…</span>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col gap-6 h-full">
+    <div className="flex flex-col gap-8">
 
-      {/* ── Error ── */}
+      {/* Toast */}
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
+
+      {/* Error */}
       {err && (
-        <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-5 py-3 text-sm text-red-700">
-          <span className="mt-0.5 shrink-0">⚠️</span>
+        <div className="flex items-start gap-4 rounded-xl border border-red-200 bg-red-50 px-6 py-4 text-lg text-red-700">
+          <span className="mt-1 text-2xl">⚠️</span>
           <span className="flex-1">{err}</span>
-          <button onClick={() => setErr("")} className="shrink-0 text-red-400 hover:text-red-600">✕</button>
+          <button onClick={() => setErr("")} className="shrink-0 text-red-400 hover:text-red-600 text-3xl leading-none">×</button>
         </div>
       )}
 
-      {/* ── Page header ── */}
+      {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Product Catalog</h1>
-          <p className="mt-1 text-sm text-slate-500">Manage products, pricing, units and availability</p>
+          <h1 className="text-4xl font-bold text-slate-900 tracking-tight">Product Catalog</h1>
+          <p className="mt-3 text-xl text-slate-600">
+            Manage products, pricing, units and availability
+          </p>
         </div>
-        <button className={S.btnPrimary} onClick={() => { setShowAddForm((v) => !v); }}>
+        <button
+          className="inline-flex items-center gap-3 rounded-xl bg-amber-500 px-8 py-4 text-xl font-semibold text-white hover:bg-amber-600 transition shadow-md"
+          onClick={() => setShowAddModal(true)}
+        >
           <IconPlus />
-          {showAddForm ? "Cancel" : "Add Product"}
+          Add New Product
         </button>
       </div>
 
-      {/* ── KPIs ── */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
+      {/* KPIs */}
+      <div className="grid grid-cols-2 gap-6 lg:grid-cols-5">
         <KpiCard icon="📦" label="Total Products" value={String(kpis.total)} sub="in catalog" variant="neutral" />
         <KpiCard icon="✅" label="Active" value={String(kpis.active)} sub="for sale" variant="success" />
         <KpiCard icon="🏷️" label="Categories" value={String(kpis.categories)} sub="product groups" variant="info" />
         <KpiCard icon="📈" label="Avg Margin" value={`${kpis.avgMargin.toFixed(0)}%`} sub="gross margin" variant={kpis.avgMargin >= 30 ? "success" : kpis.avgMargin >= 10 ? "warning" : "neutral"} />
-        {/* <KpiCard icon="💰" label="Catalog Value" value={`Ksh ${fmt(kpis.catalogValue)}`} sub="total sell prices" variant="neutral" /> */}
       </div>
 
-      {/* ── Add Form (collapsible) ── */}
-      {showAddForm && (
-        <div className={`${S.cardCls} p-6`}>
-          <div className="flex items-center gap-3 mb-5">
-            <div className={S.iconChip}><IconPlus /></div>
-            <div>
-              <div className="font-bold text-slate-900">New Product</div>
-              <div className="text-xs text-slate-500">Fill in the details below</div>
-            </div>
+      {/* Search + Filters */}
+      <div className="flex flex-wrap gap-4 items-end">
+        <label className="flex-1 min-w-[320px] relative">
+          <div className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400">
+            <IconSearch />
           </div>
-          <ProductForm
-            form={addForm} setForm={setAddForm}
-            measures={measures} filteredSizes={addFilteredSizes}
-            onSubmit={handleAdd} onCancel={() => setShowAddForm(false)}
-            saving={saving} mode="add"
+          <input
+            className="w-full rounded-xl border border-slate-300 bg-white pl-14 pr-5 py-4 text-lg focus:border-amber-500 focus:ring-2 focus:ring-amber-100 outline-none transition"
+            placeholder="Search by name, supplier, barcode…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
           />
-        </div>
-      )}
-
-      {/* ── Search + Filters ── */}
-      <div className="flex flex-wrap gap-3 items-center">
-        <label className="flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-3.5 py-2 shadow-sm focus-within:border-amber-500 focus-within:ring-2 focus-within:ring-amber-100 transition flex-1 min-w-[200px] max-w-xs">
-          <IconSearch />
-          <input className="flex-1 bg-transparent text-sm text-slate-800 outline-none placeholder:text-slate-400 min-w-0"
-            placeholder="Search name, supplier, barcode…" value={search} onChange={(e) => setSearch(e.target.value)} />
-          {search && <button onClick={() => setSearch("")} className="text-slate-400 hover:text-slate-600 shrink-0"><IconX /></button>}
         </label>
 
-        <select className="rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-sm text-slate-700 focus:border-amber-500 focus:ring-2 focus:ring-amber-100 outline-none"
-          value={filterCat} onChange={(e) => setFilterCat(e.target.value)}>
+        <select
+          className="rounded-xl border border-slate-300 bg-white px-5 py-4 text-lg text-slate-700 focus:border-amber-500 focus:ring-2 focus:ring-amber-100 outline-none transition"
+          value={filterCat}
+          onChange={(e) => setFilterCat(e.target.value)}
+        >
           <option value="">All categories</option>
           {allCategories.map((c) => <option key={c} value={c}>{c}</option>)}
         </select>
 
-        <select className="rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-sm text-slate-700 focus:border-amber-500 focus:ring-2 focus:ring-amber-100 outline-none"
-          value={filterStatus} onChange={(e) => setFilterStatus(e.target.value as any)}>
+        <select
+          className="rounded-xl border border-slate-300 bg-white px-5 py-4 text-lg text-slate-700 focus:border-amber-500 focus:ring-2 focus:ring-amber-100 outline-none transition"
+          value={filterStatus}
+          onChange={(e) => setFilterStatus(e.target.value as any)}
+        >
           <option value="">All statuses</option>
           <option value="to_be_sold">For sale</option>
           <option value="not_to_be_sold">Inactive</option>
         </select>
 
         {(search || filterCat || filterStatus) && (
-          <button onClick={() => { setSearch(""); setFilterCat(""); setFilterStatus(""); }}
-            className="text-sm font-medium text-amber-600 hover:text-amber-700">
+          <button
+            onClick={() => {
+              setSearch("");
+              setFilterCat("");
+              setFilterStatus("");
+            }}
+            className="text-lg font-semibold text-amber-600 hover:text-amber-700 transition"
+          >
             Clear filters
           </button>
         )}
 
-        <span className="ml-auto text-xs text-slate-400 whitespace-nowrap">
-          {filtered.length} / {items.length} product{items.length !== 1 ? "s" : ""}
+        <span className="ml-auto text-lg text-slate-500 whitespace-nowrap">
+          {filtered.length} / {items.length} products
         </span>
       </div>
 
-      {/* ── Table ── */}
-      <div className={`${S.cardCls} overflow-hidden flex-1`}>
-
-        {/* Desktop header */}
-        <div className="hidden lg:grid items-center gap-4 px-5 py-3"
-          style={{ gridTemplateColumns: S.tableGridCols, background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
-          {HEADERS.map((h, i) => (
-            <div key={i} className="text-xs font-semibold uppercase tracking-wider text-slate-500">{h}</div>
+      {/* Table */}
+      <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+        {/* Desktop Header – centered */}
+        <div
+          className="hidden lg:grid items-center gap-4 px-6 py-5 text-base font-semibold uppercase tracking-wider text-slate-600 bg-slate-50 border-b border-slate-200"
+          style={{ gridTemplateColumns: "2fr 1fr 1.2fr 1fr 0.9fr 0.9fr 0.8fr 1fr 140px" }}
+        >
+          {HEADERS.map((h) => (
+            <div key={h} className="text-center">{h}</div>
           ))}
         </div>
 
         <div className="divide-y divide-slate-100">
           {filtered.length === 0 ? (
-            <div className="py-20 text-center">
-              <div className="text-5xl mb-4">🍯</div>
-              <p className="font-semibold text-slate-700">
+            <div className="py-24 text-center">
+              <div className="text-6xl mb-5">🍯</div>
+              <p className="text-2xl font-semibold text-slate-700">
                 {items.length === 0 ? "No products yet" : "No matching products"}
               </p>
-              <p className="text-sm text-slate-400 mt-1">
-                {items.length === 0 ? 'Click "Add Product" to get started' : "Try adjusting your filters"}
+              <p className="text-lg text-slate-500 mt-3">
+                {items.length === 0 ? 'Click "Add New Product" to get started' : "Try adjusting your filters"}
               </p>
             </div>
           ) : (
@@ -604,97 +697,84 @@ export default function ProductsPage() {
               const mgn = margin(p.cost_price, p.unit_price);
 
               return (
-                <div key={p.id} className="transition-colors hover:bg-slate-50 group">
-
-                  {/* Desktop row: 9 cells */}
-                  <div className="hidden lg:grid items-center gap-4 px-5 py-3.5"
-                    style={{ gridTemplateColumns: S.tableGridCols }}>
-
-                    {/* 1. Product */}
-                    <div className="min-w-0">
-                      <div className="font-semibold text-slate-900 truncate text-sm">{p.name || "Unnamed"}</div>
-                      {p.notes && <div className="text-xs text-slate-400 truncate mt-0.5">{p.notes}</div>}
+                <div key={p.id} className="transition-colors hover:bg-slate-50/70">
+                  {/* Desktop Row – centered text */}
+                  <div
+                    className="hidden lg:grid items-center gap-4 px-6 py-5 text-base"
+                    style={{ gridTemplateColumns: "2fr 1fr 1.2fr 1fr 0.9fr 0.9fr 0.8fr 1fr 140px" }}
+                  >
+                    <div className="text-center font-medium text-slate-900">{p.name || "Unnamed"}</div>
+                    <div className="text-center">
+                      {p.category ? <span className="rounded-lg bg-blue-50 px-4 py-1.5 text-base text-blue-700">{p.category}</span> : "—"}
                     </div>
-
-                    {/* 2. Category */}
-                    <div>
-                      {p.category
-                        ? <span className="rounded-lg bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">{p.category}</span>
-                        : <span className="text-xs text-slate-400">—</span>}
-                    </div>
-
-                    {/* 3. Supplier */}
-                    <div className="text-sm text-slate-600 truncate">{p.supplier || <span className="text-slate-400">—</span>}</div>
-
-                    {/* 4. Barcode */}
-                    <div className="font-mono text-xs text-slate-500 truncate">{p.barcode || <span className="text-slate-400">—</span>}</div>
-
-                    {/* 5. Cost */}
-                    <div className="text-sm text-slate-600 font-medium">{fmt(p.cost_price)}</div>
-
-                    {/* 6. Sell */}
-                    <div className="text-sm font-bold text-slate-900">{fmt(p.unit_price)}</div>
-
-                    {/* 7. Margin */}
-                    <div><MarginBadge pct={mgn} /></div>
-
-                    {/* 8. Status */}
-                    <div><SellBadge status={p.sell_status} /></div>
-
-                    {/* 9. Actions */}
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button onClick={() => openEdit(p)}
-                        className="grid h-8 w-8 place-items-center rounded-lg text-slate-500 hover:bg-amber-50 hover:text-amber-600 transition"
-                        title="Edit">
+                    <div className="text-center text-slate-600">{p.supplier || "—"}</div>
+                    <div className="text-center font-mono text-slate-500">{p.barcode || "—"}</div>
+                    <div className="text-center text-slate-700 font-medium">{fmt(p.cost_price)}</div>
+                    <div className="text-center font-bold text-slate-900">{fmt(p.unit_price)}</div>
+                    <div className="text-center"><MarginBadge pct={mgn} /></div>
+                    <div className="text-center"><SellBadge status={p.sell_status} /></div>
+                    <div className="flex items-center justify-center gap-4">
+                      <button
+                        onClick={() => openEdit(p)}
+                        className="grid h-12 w-12 place-items-center rounded-xl bg-blue-50 text-blue-600 hover:bg-blue-100 transition text-xl"
+                        title="Edit product"
+                      >
                         <IconEdit />
                       </button>
-                      <button onClick={() => setDeletingProduct(p)}
-                        className="grid h-8 w-8 place-items-center rounded-lg text-slate-500 hover:bg-red-50 hover:text-red-600 transition"
-                        title="Delete">
+                      <button
+                        onClick={() => setDeletingProduct(p)}
+                        className="grid h-12 w-12 place-items-center rounded-xl bg-red-50 text-red-600 hover:bg-red-100 transition text-xl"
+                        title="Delete product"
+                      >
                         <IconTrash />
                       </button>
                     </div>
                   </div>
 
-                  {/* Mobile card */}
-                  <div className="lg:hidden px-5 py-4 space-y-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0 flex-1">
-                        <div className="font-semibold text-slate-900">{p.name || "Unnamed"}</div>
-                        {p.category && <span className="mt-1 inline-block rounded-lg bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">{p.category}</span>}
+                  {/* Mobile Card */}
+                  <div className="lg:hidden px-6 py-6 space-y-5 border-b border-slate-100 last:border-b-0">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xl font-semibold text-slate-900">{p.name || "Unnamed"}</div>
+                        {p.category && <div className="mt-2 inline-block rounded-lg bg-blue-50 px-4 py-1.5 text-base text-blue-700">{p.category}</div>}
                       </div>
                       <SellBadge status={p.sell_status} />
                     </div>
 
-                    <div className="grid grid-cols-3 gap-3 rounded-xl bg-slate-50 p-3 text-sm">
+                    <div className="grid grid-cols-2 gap-5 rounded-xl bg-slate-50 p-5 text-base">
                       <div>
-                        <div className="text-xs text-slate-500 font-semibold uppercase tracking-wide">Cost</div>
-                        <div className="font-medium text-slate-700 mt-0.5">{fmt(p.cost_price)}</div>
+                        <div className="text-sm text-slate-500 font-semibold">Cost</div>
+                        <div className="font-medium text-slate-800 mt-1 text-lg">{fmt(p.cost_price)}</div>
                       </div>
                       <div>
-                        <div className="text-xs text-slate-500 font-semibold uppercase tracking-wide">Sell</div>
-                        <div className="font-bold text-slate-900 mt-0.5">{fmt(p.unit_price)}</div>
+                        <div className="text-sm text-slate-500 font-semibold">Sell</div>
+                        <div className="font-bold text-slate-900 mt-1 text-lg">{fmt(p.unit_price)}</div>
                       </div>
                       <div>
-                        <div className="text-xs text-slate-500 font-semibold uppercase tracking-wide">Margin</div>
-                        <div className="mt-0.5"><MarginBadge pct={mgn} /></div>
+                        <div className="text-sm text-slate-500 font-semibold">Margin</div>
+                        <div className="mt-1"><MarginBadge pct={mgn} /></div>
                       </div>
                     </div>
 
                     {(p.supplier || p.barcode) && (
-                      <div className="text-xs text-slate-400">
+                      <div className="text-base text-slate-500">
                         {p.supplier && <span>Supplier: {p.supplier}</span>}
-                        {p.supplier && p.barcode && <span className="mx-2">·</span>}
-                        {p.barcode && <span className="font-mono">{p.barcode}</span>}
+                        {p.supplier && p.barcode && <span className="mx-4">•</span>}
+                        {p.barcode && <span className="font-mono">Barcode: {p.barcode}</span>}
                       </div>
                     )}
 
-                    <div className="flex gap-2 pt-1">
-                      <button onClick={() => openEdit(p)} className={S.btnGhost + " text-xs py-1.5 px-3"}>
+                    <div className="flex gap-4 pt-3">
+                      <button
+                        onClick={() => openEdit(p)}
+                        className="flex-1 flex items-center justify-center gap-3 rounded-xl border border-blue-200 bg-blue-50 py-4 text-blue-700 text-lg font-semibold hover:bg-blue-100 transition"
+                      >
                         <IconEdit /> Edit
                       </button>
-                      <button onClick={() => setDeletingProduct(p)}
-                        className="inline-flex items-center gap-1.5 rounded-xl border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 transition">
+                      <button
+                        onClick={() => setDeletingProduct(p)}
+                        className="flex-1 flex items-center justify-center gap-3 rounded-xl border border-red-200 bg-red-50 py-4 text-red-700 text-lg font-semibold hover:bg-red-100 transition"
+                      >
                         <IconTrash /> Delete
                       </button>
                     </div>
@@ -706,48 +786,94 @@ export default function ProductsPage() {
         </div>
 
         {/* Footer */}
-        <div className="border-t border-slate-100 px-5 py-3 flex items-center justify-between">
-          <span className="text-xs text-slate-400">
+        <div className="border-t border-slate-100 px-6 py-5 flex items-center justify-between bg-slate-50">
+          <span className="text-lg text-slate-500">
             Showing {filtered.length} of {items.length} product{items.length !== 1 ? "s" : ""}
           </span>
-          {(filterCat || filterStatus || search) && (
-            <button onClick={() => { setSearch(""); setFilterCat(""); setFilterStatus(""); }}
-              className="text-xs font-medium text-amber-600 hover:text-amber-700">
-              Clear all filters
+          {(search || filterCat || filterStatus) && (
+            <button
+              onClick={() => {
+                setSearch("");
+                setFilterCat("");
+                setFilterStatus("");
+              }}
+              className="text-lg font-semibold text-amber-600 hover:text-amber-700 transition"
+            >
+              Clear filters
             </button>
           )}
         </div>
       </div>
 
-      {/* ── Edit Modal ── */}
-      {editProduct && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => setEditProduct(null)}>
-          <div className="w-full max-w-2xl rounded-2xl bg-white shadow-2xl max-h-[90vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4 shrink-0">
-              <div className="flex items-center gap-3">
-                <div className={S.iconChip}><IconEdit /></div>
+      {/* Add Modal (Popup) */}
+      {showAddModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setShowAddModal(false)}>
+          <div className="w-full max-w-4xl rounded-2xl bg-white shadow-2xl max-h-[90vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-slate-100 px-8 py-6 shrink-0">
+              <div className="flex items-center gap-5">
+                <div className="grid h-16 w-16 place-items-center rounded-xl bg-amber-100 text-amber-600 text-3xl">
+                  <IconPlus />
+                </div>
                 <div>
-                  <div className="font-bold text-slate-900">Edit Product</div>
-                  <div className="text-xs text-slate-500 truncate max-w-xs">{editProduct.name}</div>
+                  <div className="text-3xl font-bold text-slate-900">Add New Product</div>
+                  <div className="text-lg text-slate-600 mt-1">Fill in the product details below</div>
                 </div>
               </div>
-              <button onClick={() => setEditProduct(null)} className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-slate-100">
+              <button onClick={() => setShowAddModal(false)} className="grid h-14 w-14 place-items-center rounded-xl text-slate-400 hover:bg-slate-100 transition text-2xl">
                 <IconX />
               </button>
             </div>
-            <div className="overflow-y-auto p-6">
+            <div className="overflow-y-auto p-8">
               <ProductForm
-                form={editForm} setForm={setEditForm}
-                measures={measures} filteredSizes={editFilteredSizes}
-                onSubmit={handleEdit} onCancel={() => setEditProduct(null)}
-                saving={saving} mode="edit"
+                form={addForm}
+                setForm={setAddForm}
+                measures={measures}
+                filteredSizes={addFilteredSizes}
+                onSubmit={handleAdd}
+                onCancel={() => setShowAddModal(false)}
+                saving={saving}
+                mode="add"
               />
             </div>
           </div>
         </div>
       )}
 
-      {/* ── Delete Confirm Modal ── */}
+      {/* Edit Modal */}
+      {editProduct && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setEditProduct(null)}>
+          <div className="w-full max-w-4xl rounded-2xl bg-white shadow-2xl max-h-[90vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-slate-100 px-8 py-6 shrink-0">
+              <div className="flex items-center gap-5">
+                <div className="grid h-16 w-16 place-items-center rounded-xl bg-blue-100 text-blue-600 text-3xl">
+                  <IconEdit />
+                </div>
+                <div>
+                  <div className="text-3xl font-bold text-slate-900">Edit Product</div>
+                  <div className="text-lg text-slate-600 mt-1 truncate max-w-2xl">{editProduct.name}</div>
+                </div>
+              </div>
+              <button onClick={() => setEditProduct(null)} className="grid h-14 w-14 place-items-center rounded-xl text-slate-400 hover:bg-slate-100 transition text-2xl">
+                <IconX />
+              </button>
+            </div>
+            <div className="overflow-y-auto p-8">
+              <ProductForm
+                form={editForm}
+                setForm={setEditForm}
+                measures={measures}
+                filteredSizes={editFilteredSizes}
+                onSubmit={handleEdit}
+                onCancel={() => setEditProduct(null)}
+                saving={saving}
+                mode="edit"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirm */}
       {deletingProduct && (
         <DeleteModal
           product={deletingProduct}

@@ -4,7 +4,7 @@ import React, {
   useCallback, useEffect, useMemo, useRef, useState,
 } from "react";
 import Link from "next/link";
-import { bootstrapOrg } from "@/lib/org/bootstrapOrg";
+import { bootstrapOrg } from "../../../lib/org/bootstrapOrg";
 import { supabase } from "@/lib/supabase/client";
 import {
   getInventoryValuation, reportPnL, reportExpenses,
