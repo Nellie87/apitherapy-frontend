@@ -4,13 +4,13 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { bootstrapOrg } from "@/lib/org/bootstrapOrg";
 import { supabase } from "@/lib/supabase/client";
-import { listProducts, createProduct, deleteProduct } from "@/lib/api/products";
+import { listProducts, createProduct, archiveProduct, restoreProduct } from "@/lib/api/products";
 import { listUnitMeasures, listUnitSizes } from "@/lib/api/lookups";
 
 import * as S from "./page.styles";
 
 /* ─────────────────────────────────────────────
-   Types (unchanged)
+   Types
 ───────────────────────────────────────────── */
 type UnitKind = "mass" | "volume" | "count";
 
@@ -47,7 +47,7 @@ type FormData = {
 };
 
 /* ─────────────────────────────────────────────
-   Helpers (unchanged except toast)
+   Helpers
 ───────────────────────────────────────────── */
 const BLANK_FORM: FormData = {
   name: "", category: "", barcode: "", supplier: "", notes: "",
@@ -72,7 +72,7 @@ const CATEGORIES = [
 ];
 
 /* ─────────────────────────────────────────────
-   Icons (slightly larger)
+   Icons
 ───────────────────────────────────────────── */
 const IconPlus = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
@@ -167,7 +167,7 @@ function KpiCard({ icon, label, value, sub, variant = "neutral" }: {
 }
 
 /* ─────────────────────────────────────────────
-   Margin & Sell Badges (larger)
+   Margin & Sell Badges
 ───────────────────────────────────────────── */
 function MarginBadge({ pct }: { pct: number | null }) {
   if (pct === null) return <span className="text-base text-slate-400">—</span>;
@@ -194,19 +194,21 @@ function SellBadge({ status }: { status?: string }) {
 }
 
 /* ─────────────────────────────────────────────
-   Delete Modal
+   Archive Modal
 ───────────────────────────────────────────── */
-function DeleteModal({ product, onConfirm, onCancel, loading }: {
+function ArchiveModal({ product, onConfirm, onCancel, loading }: {
   product: Product; onConfirm: () => void; onCancel: () => void; loading: boolean;
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onCancel}>
       <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl p-8" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center gap-5 mb-6">
-          <div className="grid h-16 w-16 place-items-center rounded-xl bg-red-100 text-red-600 text-4xl">🗑️</div>
+          <div className="grid h-16 w-16 place-items-center rounded-xl bg-amber-100 text-amber-600 text-4xl">📦</div>
           <div>
-            <div className="text-2xl font-bold text-slate-900">Delete Product?</div>
-            <div className="text-base text-slate-600 mt-1">This cannot be undone.</div>
+            <div className="text-2xl font-bold text-slate-900">Archive Product?</div>
+            <div className="text-base text-slate-600 mt-1">
+              This product will be hidden from active sales but kept in records.
+            </div>
           </div>
         </div>
         <div className="rounded-xl bg-slate-50 px-5 py-4 mb-8 text-lg font-medium text-slate-800">
@@ -217,8 +219,8 @@ function DeleteModal({ product, onConfirm, onCancel, loading }: {
             Cancel
           </button>
           <button onClick={onConfirm} disabled={loading}
-            className="flex-1 rounded-xl bg-red-600 py-4 text-white text-lg font-semibold hover:bg-red-700 disabled:opacity-50 transition">
-            {loading ? "Deleting…" : "Yes, Delete"}
+            className="flex-1 rounded-xl bg-amber-600 py-4 text-white text-lg font-semibold hover:bg-amber-700 disabled:opacity-50 transition">
+            {loading ? "Archiving…" : "Yes, Archive"}
           </button>
         </div>
       </div>
@@ -227,7 +229,7 @@ function DeleteModal({ product, onConfirm, onCancel, loading }: {
 }
 
 /* ─────────────────────────────────────────────
-   Product Form (now used in modal)
+   Product Form
 ───────────────────────────────────────────── */
 function ProductForm({
   form, setForm, measures, filteredSizes, onSubmit, onCancel, saving, mode,
@@ -244,7 +246,6 @@ function ProductForm({
 
   return (
     <form onSubmit={onSubmit} className="space-y-6 text-base">
-      {/* Name + Category */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
           <label className="mb-2 block text-base font-semibold text-slate-700">
@@ -267,7 +268,6 @@ function ProductForm({
         </div>
       </div>
 
-      {/* Supplier + Barcode */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
           <label className="mb-2 block text-base font-semibold text-slate-700">Supplier</label>
@@ -279,7 +279,6 @@ function ProductForm({
         </div>
       </div>
 
-      {/* Cost + Sell + Margin */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div>
           <label className="mb-2 block text-base font-semibold text-slate-700">Cost Price (Ksh)</label>
@@ -303,7 +302,6 @@ function ProductForm({
         </div>
       </div>
 
-      {/* Unit Measure + Size + Status */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div>
           <label className="mb-2 block text-base font-semibold text-slate-700">Unit of Measure</label>
@@ -326,7 +324,6 @@ function ProductForm({
         </div>
       </div>
 
-      {/* Notes */}
       <div>
         <label className="mb-2 block text-base font-semibold text-slate-700">Notes</label>
         <textarea
@@ -338,7 +335,6 @@ function ProductForm({
         />
       </div>
 
-      {/* Actions */}
       <div className="flex justify-end gap-4 pt-6">
         <button type="button" onClick={onCancel} className="px-8 py-4 rounded-xl border border-slate-300 text-slate-700 text-lg font-semibold hover:bg-slate-50 transition">
           Cancel
@@ -366,7 +362,6 @@ export default function ProductsPage() {
   const [measures, setMeasures] = useState<MeasureLookup[]>([]);
   const [sizes, setSizes] = useState<SizeLookup[]>([]);
 
-  // UI state
   const [search, setSearch] = useState("");
   const [filterCat, setFilterCat] = useState("");
   const [filterStatus, setFilterStatus] = useState<"" | "to_be_sold" | "not_to_be_sold">("");
@@ -376,7 +371,6 @@ export default function ProductsPage() {
   const [deleting, setDeleting] = useState(false);
   const [editProduct, setEditProduct] = useState<Product | null>(null);
 
-  // Forms
   const [addForm, setAddForm] = useState<FormData>({ ...BLANK_FORM });
   const [editForm, setEditForm] = useState<FormData>({ ...BLANK_FORM });
 
@@ -524,6 +518,22 @@ export default function ProductsPage() {
     }
   }
 
+  async function handleArchive() {
+    if (!orgId || !deletingProduct?.id) return;
+    setDeleting(true);
+    try {
+      await archiveProduct(orgId, deletingProduct.id);
+      await refresh(orgId);
+      setToast({ message: "Product archived successfully", type: "success" });
+    } catch (e: any) {
+      setErr(e.message ?? String(e));
+      setToast({ message: "Failed to archive product", type: "error" });
+    } finally {
+      setDeleting(false);
+      setDeletingProduct(null);
+    }
+  }
+
   function openEdit(p: Product) {
     setEditForm({
       name: p.name ?? "",
@@ -538,22 +548,6 @@ export default function ProductsPage() {
       sellStatus: (p.sell_status as any) ?? "to_be_sold",
     });
     setEditProduct(p);
-  }
-
-  async function confirmDelete() {
-    if (!orgId || !deletingProduct) return;
-    setDeleting(true);
-    try {
-      await deleteProduct(orgId, deletingProduct.id);
-      setDeletingProduct(null);
-      await refresh(orgId);
-      setToast({ message: "Product deleted successfully", type: "success" });
-    } catch (e: any) {
-      setErr(e.message ?? String(e));
-      setToast({ message: "Failed to delete product", type: "error" });
-    } finally {
-      setDeleting(false);
-    }
   }
 
   const HEADERS = ["Product", "Category", "Supplier", "Barcode", "Cost", "Sell", "Margin", "Status", "Actions"];
@@ -575,7 +569,6 @@ export default function ProductsPage() {
   return (
     <div className="flex flex-col gap-8">
 
-      {/* Toast */}
       {toast && (
         <Toast
           message={toast.message}
@@ -584,7 +577,6 @@ export default function ProductsPage() {
         />
       )}
 
-      {/* Error */}
       {err && (
         <div className="flex items-start gap-4 rounded-xl border border-red-200 bg-red-50 px-6 py-4 text-lg text-red-700">
           <span className="mt-1 text-2xl">⚠️</span>
@@ -593,7 +585,6 @@ export default function ProductsPage() {
         </div>
       )}
 
-      {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-4xl font-bold text-slate-900 tracking-tight">Product Catalog</h1>
@@ -610,7 +601,6 @@ export default function ProductsPage() {
         </button>
       </div>
 
-      {/* KPIs */}
       <div className="grid grid-cols-2 gap-6 lg:grid-cols-5">
         <KpiCard icon="📦" label="Total Products" value={String(kpis.total)} sub="in catalog" variant="neutral" />
         <KpiCard icon="✅" label="Active" value={String(kpis.active)} sub="for sale" variant="success" />
@@ -618,7 +608,6 @@ export default function ProductsPage() {
         <KpiCard icon="📈" label="Avg Margin" value={`${kpis.avgMargin.toFixed(0)}%`} sub="gross margin" variant={kpis.avgMargin >= 30 ? "success" : kpis.avgMargin >= 10 ? "warning" : "neutral"} />
       </div>
 
-      {/* Search + Filters */}
       <div className="flex flex-wrap gap-4 items-end">
         <label className="flex-1 min-w-[320px] relative">
           <div className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400">
@@ -669,9 +658,7 @@ export default function ProductsPage() {
         </span>
       </div>
 
-      {/* Table */}
       <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-        {/* Desktop Header – centered */}
         <div
           className="hidden lg:grid items-center gap-4 px-6 py-5 text-base font-semibold uppercase tracking-wider text-slate-600 bg-slate-50 border-b border-slate-200"
           style={{ gridTemplateColumns: "2fr 1fr 1.2fr 1fr 0.9fr 0.9fr 0.8fr 1fr 140px" }}
@@ -698,7 +685,6 @@ export default function ProductsPage() {
 
               return (
                 <div key={p.id} className="transition-colors hover:bg-slate-50/70">
-                  {/* Desktop Row – centered text */}
                   <div
                     className="hidden lg:grid items-center gap-4 px-6 py-5 text-base"
                     style={{ gridTemplateColumns: "2fr 1fr 1.2fr 1fr 0.9fr 0.9fr 0.8fr 1fr 140px" }}
@@ -724,14 +710,13 @@ export default function ProductsPage() {
                       <button
                         onClick={() => setDeletingProduct(p)}
                         className="grid h-12 w-12 place-items-center rounded-xl bg-red-50 text-red-600 hover:bg-red-100 transition text-xl"
-                        title="Delete product"
+                        title="Archive product"
                       >
                         <IconTrash />
                       </button>
                     </div>
                   </div>
 
-                  {/* Mobile Card */}
                   <div className="lg:hidden px-6 py-6 space-y-5 border-b border-slate-100 last:border-b-0">
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1 min-w-0">
@@ -775,7 +760,7 @@ export default function ProductsPage() {
                         onClick={() => setDeletingProduct(p)}
                         className="flex-1 flex items-center justify-center gap-3 rounded-xl border border-red-200 bg-red-50 py-4 text-red-700 text-lg font-semibold hover:bg-red-100 transition"
                       >
-                        <IconTrash /> Delete
+                        <IconTrash /> Archive
                       </button>
                     </div>
                   </div>
@@ -785,7 +770,6 @@ export default function ProductsPage() {
           )}
         </div>
 
-        {/* Footer */}
         <div className="border-t border-slate-100 px-6 py-5 flex items-center justify-between bg-slate-50">
           <span className="text-lg text-slate-500">
             Showing {filtered.length} of {items.length} product{items.length !== 1 ? "s" : ""}
@@ -805,7 +789,6 @@ export default function ProductsPage() {
         </div>
       </div>
 
-      {/* Add Modal (Popup) */}
       {showAddModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setShowAddModal(false)}>
           <div className="w-full max-w-4xl rounded-2xl bg-white shadow-2xl max-h-[90vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
@@ -839,7 +822,6 @@ export default function ProductsPage() {
         </div>
       )}
 
-      {/* Edit Modal */}
       {editProduct && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setEditProduct(null)}>
           <div className="w-full max-w-4xl rounded-2xl bg-white shadow-2xl max-h-[90vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
@@ -873,11 +855,10 @@ export default function ProductsPage() {
         </div>
       )}
 
-      {/* Delete Confirm */}
       {deletingProduct && (
-        <DeleteModal
+        <ArchiveModal
           product={deletingProduct}
-          onConfirm={confirmDelete}
+          onConfirm={handleArchive}
           onCancel={() => setDeletingProduct(null)}
           loading={deleting}
         />

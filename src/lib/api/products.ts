@@ -2,20 +2,22 @@ import { supabase } from "@/lib/supabase/client";
 
 /* ─────────────────────────────────────────────
    List products WITH lookup joins
+   activeOnly = true by default
 ───────────────────────────────────────────── */
-export async function listProducts(orgId: string) {
-  const { data, error } = await supabase
+export async function listProducts(orgId: string, activeOnly = true) {
+  let query = supabase
     .from("products")
     .select(`
       id,
       org_id,
-      name, 
-      barcode, 
-      supplier, 
+      name,
+      barcode,
+      supplier,
       notes,
-      cost_price, 
-      unit_price, 
-      sell_status, 
+      cost_price,
+      unit_price,
+      sell_status,
+      active,
       created_at,
       unit_measure:unit_measures ( id, name ),
       unit_size:unit_sizes ( id, label, kind )
@@ -23,11 +25,20 @@ export async function listProducts(orgId: string) {
     .eq("org_id", orgId)
     .order("created_at", { ascending: false });
 
+  if (activeOnly) {
+    query = query.eq("active", true);
+  }
+
+  const { data, error } = await query;
+
   if (error) throw new Error(error.message);
 
   // Supabase returns FK joins as arrays — flatten to single object | null
-  return (data ?? []).map((row) => ({
+  return (data ?? []).map((row: any) => ({
     ...row,
+    active: Boolean(row.active),
+    cost_price: Number(row.cost_price ?? 0),
+    unit_price: Number(row.unit_price ?? 0),
     unit_measure: Array.isArray(row.unit_measure)
       ? (row.unit_measure[0] ?? null)
       : row.unit_measure,
@@ -59,6 +70,7 @@ export async function createProduct(
     .insert([
       {
         org_id: orgId,
+        active: true,
         ...payload,
       },
     ])
@@ -83,9 +95,47 @@ export async function createProduct(
 }
 
 /* ─────────────────────────────────────────────
-   Delete product
+   Archive product (soft delete)
 ───────────────────────────────────────────── */
-export async function deleteProduct(orgId: string, id: string) {
+export async function archiveProduct(orgId: string, id: string) {
+  const { error } = await supabase
+    .from("products")
+    .update({ active: false })
+    .eq("org_id", orgId)
+    .eq("id", id);
+
+  if (error) throw new Error(error.message);
+}
+
+/* ─────────────────────────────────────────────
+   Restore product
+───────────────────────────────────────────── */
+export async function restoreProduct(orgId: string, id: string) {
+  const { error } = await supabase
+    .from("products")
+    .update({ active: true })
+    .eq("org_id", orgId)
+    .eq("id", id);
+
+  if (error) throw new Error(error.message);
+}
+
+/* ─────────────────────────────────────────────
+   Hard delete ONLY if never used in sales
+───────────────────────────────────────────── */
+export async function deleteProductForever(orgId: string, id: string) {
+  const { count, error: countErr } = await supabase
+    .from("sale_items")
+    .select("id", { count: "exact", head: true })
+    .eq("org_id", orgId)
+    .eq("product_id", id);
+
+  if (countErr) throw new Error(countErr.message);
+
+  if ((count ?? 0) > 0) {
+    throw new Error("This product has sales history and cannot be deleted permanently. Archive it instead.");
+  }
+
   const { error } = await supabase
     .from("products")
     .delete()
