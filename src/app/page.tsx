@@ -1,380 +1,763 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import styles from "./page.module.css";
+import { useState } from "react";
+import Image from "next/image";
 
-/* ── DATA ─────────────────────────────────────────── */
-const TABS = ["Honey", "Drinks", "Desserts", "Gift Sets"];
-
-type Product = {
-  id: number; name: string; weight: string;
-  price: string; badge: string; emoji: string;
-};
-
-const PRODUCTS: Record<string, Product[]> = {
-  Honey: [
-    { id: 1,  name: "Wildflower Honey",  weight: "500 g",    price: "€12.90", badge: "Bestseller", emoji: "🍯" },
-    { id: 2,  name: "Forest Dark Honey", weight: "500 g",    price: "€14.50", badge: "Raw",         emoji: "🌲" },
-    { id: 3,  name: "Linden Blossom",    weight: "300 g",    price: "€10.00", badge: "Light",       emoji: "🌸" },
-    { id: 4,  name: "Mountain Thyme",    weight: "300 g",    price: "€15.90", badge: "Premium",     emoji: "🏔️" },
-  ],
-  Drinks: [
-    { id: 5,  name: "Honey Kombucha",    weight: "330 ml",   price: "€4.50",  badge: "Fermented",   emoji: "🍵" },
-    { id: 6,  name: "Mead Classic",      weight: "500 ml",   price: "€18.00", badge: "Craft",       emoji: "🍺" },
-    { id: 7,  name: "Propolis Tincture", weight: "30 ml",    price: "€22.00", badge: "Immunity",    emoji: "🌿" },
-    { id: 8,  name: "Pollen Smoothie",   weight: "250 g",    price: "€11.50", badge: "Superfood",   emoji: "🌼" },
-  ],
-  Desserts: [
-    { id: 9,  name: "Honey Granola",     weight: "400 g",    price: "€9.80",  badge: "New",         emoji: "🌾" },
-    { id: 10, name: "Honeycomb Slab",    weight: "200 g",    price: "€13.00", badge: "Pure",        emoji: "🍯" },
-    { id: 11, name: "Bee Pollen",        weight: "250 g",    price: "€11.00", badge: "Natural",     emoji: "🌼" },
-    { id: 12, name: "Walnut Nougat",     weight: "150 g",    price: "€8.50",  badge: "Artisan",     emoji: "🥜" },
-  ],
-  "Gift Sets": [
-    { id: 13, name: "The Beekeeper Box", weight: "3 items",  price: "€34.90", badge: "Gift",        emoji: "🎁" },
-    { id: 14, name: "Wellness Bundle",   weight: "4 items",  price: "€48.00", badge: "Popular",     emoji: "✨" },
-    { id: 15, name: "Honey Tasting Set", weight: "5 × 100g", price: "€29.50", badge: "Explorer",    emoji: "🍯" },
-    { id: 16, name: "Corporate Pack",    weight: "Custom",   price: "From €60", badge: "B2B",       emoji: "📦" },
-  ],
-};
-
-const TESTIMONIALS = [
-  { name: "Anna K.",    role: "Regular customer", avatar: "👩",   text: "Ordered the gift box for my family — everyone was amazed. So pure and rich, nothing like the supermarket." },
-  { name: "Markus L.", role: "Health coach",      avatar: "👨‍🦱", text: "I recommend the propolis tincture to every client. Real results, clean ingredients. I reorder every month." },
-  { name: "Sofia R.",  role: "Food blogger",      avatar: "👩‍💻", text: "The honeycomb slab is stunning AND delicious. Featured it three times on my page already!" },
-  { name: "Jan B.",    role: "Corporate buyer",   avatar: "👨‍💼", text: "40 gift sets, elegant packaging, fast delivery. Every colleague absolutely loved theirs." },
-];
-
-export default function HivePage() {
-  const [activeTab,      setActiveTab]      = useState("Honey");
-  const [testimonialIdx, setTestimonialIdx] = useState(0);
-  const [cartCount,      setCartCount]      = useState(0);
-  const [addedId,        setAddedId]        = useState<number | null>(null);
-  const [openFaq,        setOpenFaq]        = useState<number | null>(null);
-  const [form,           setForm]           = useState({ name: "", phone: "", email: "", note: "" });
-  const [sent,           setSent]           = useState(false);
-  const formRef = useRef<HTMLElement>(null);
-
-  useEffect(() => {
-    const t = setInterval(() => setTestimonialIdx(i => (i + 1) % TESTIMONIALS.length), 5000);
-    return () => clearInterval(t);
-  }, []);
-
-  const addToCart = (id: number) => {
-    setCartCount(c => c + 1);
-    setAddedId(id);
-    setTimeout(() => setAddedId(null), 1300);
-  };
-
-  const faqs = [
-    { q: "Where are your hives?",          a: "Our hives sit in certified organic forests in the Carpathian mountains — far from agriculture and pollution." },
-    { q: "Is the honey raw and unheated?", a: "Always. We never heat above 37°C (hive temperature), preserving all enzymes, pollen and aroma." },
-    { q: "Do you ship internationally?",   a: "Yes — across the EU with insulated packaging. Orders over €45 ship free in glass, leak-proof jars." },
-    { q: "Are any products vegan?",        a: "Our granola and pollen ranges are fully plant-based. Every product is clearly labelled." },
-  ];
+export default function PollinatorsBeekepersApitherapyPage() {
+  const [menuOpen, setMenuOpen] = useState(false);
 
   return (
-    <div className={styles.root}>
+    <main
+      style={{
+        fontFamily: "'Georgia', 'Times New Roman', serif",
+        backgroundColor: "#ffffff",
+        color: "#1a1a1a",
+        margin: 0,
+        padding: 0,
+        overflowX: "hidden",
+      }}
+    >
+      {/* ── NAV ── */}
+      <nav
+        style={{
+          position: "sticky",
+          top: 0,
+          zIndex: 100,
+          backgroundColor: "#ffffff",
+          borderBottom: "1px solid #f5e6c8",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "0 5%",
+          height: "64px",
+          boxShadow: "0 2px 12px rgba(0,0,0,0.04)",
+        }}
+      >
+        {/* Logo */}
+        <span
+          style={{
+            fontSize: "1.35rem",
+            fontWeight: "700",
+            letterSpacing: "0.04em",
+            color: "#1a1a1a",
+          }}
+        >
+          Pollinators Beekepers Apitherapy
+        </span>
 
-      {/* ══ TOP HONEY DRIP ══ */}
-      <div className={styles.dripTop} aria-hidden="true">
-        <svg viewBox="0 0 1440 110" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none">
-          <rect width="1440" height="18" fill="#F5C842" />
-          {/* drip 1 */}
-          <path d="M80,18 Q85,60 80,80 Q75,100 80,108 Q85,115 90,108 Q95,100 90,80 Q85,60 90,18 Z" fill="#F5C842"/>
-          {/* drip 2 */}
-          <path d="M200,18 Q208,70 200,95 Q192,115 200,110 Q208,118 216,110 Q224,102 216,95 Q208,70 216,18 Z" fill="#F5C842"/>
-          {/* drip 3 — long */}
-          <path d="M350,18 Q356,80 350,105 Q344,120 352,114 Q360,120 368,114 Q376,105 368,80 Q362,40 370,18 Z" fill="#F5C842"/>
-          {/* drip 4 */}
-          <path d="M500,18 Q506,55 500,72 Q494,85 500,82 Q506,88 512,82 Q518,72 512,55 Q507,32 516,18 Z" fill="#F5C842"/>
-          {/* drip 5 */}
-          <path d="M660,18 Q666,65 660,88 Q654,105 660,100 Q667,107 673,100 Q680,90 673,65 Q668,38 676,18 Z" fill="#F5C842"/>
-          {/* drip 6 */}
-          <path d="M820,18 Q826,50 820,66 Q814,78 820,75 Q826,80 832,75 Q838,66 832,50 Q828,28 836,18 Z" fill="#F5C842"/>
-          {/* drip 7 */}
-          <path d="M990,18 Q998,72 990,98 Q982,115 990,110 Q998,118 1006,110 Q1014,100 1006,72 Q1000,44 1008,18 Z" fill="#F5C842"/>
-          {/* drip 8 */}
-          <path d="M1160,18 Q1166,58 1160,76 Q1154,88 1160,84 Q1166,90 1172,84 Q1178,74 1172,58 Q1168,34 1176,18 Z" fill="#F5C842"/>
-          {/* drip 9 */}
-          <path d="M1330,18 Q1338,68 1330,92 Q1322,108 1330,103 Q1338,110 1346,103 Q1354,94 1346,68 Q1340,40 1348,18 Z" fill="#F5C842"/>
-        </svg>
-      </div>
+        {/* Desktop links */}
+        <ul
+          style={{
+            display: "flex",
+            gap: "2rem",
+            listStyle: "none",
+            margin: 0,
+            padding: 0,
+            fontSize: "0.85rem",
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+          }}
+          className="desktop-nav"
+        >
+          {["Home", "Blog", "Categories", "Products"].map((item) => (
+            <li key={item}>
+              <a
+                href="#"
+                style={{
+                  color: "#555",
+                  textDecoration: "none",
+                  transition: "color 0.2s",
+                }}
+                onMouseEnter={(e) =>
+                  ((e.target as HTMLAnchorElement).style.color = "#e8a000")
+                }
+                onMouseLeave={(e) =>
+                  ((e.target as HTMLAnchorElement).style.color = "#555")
+                }
+              >
+                {item}
+              </a>
+            </li>
+          ))}
+        </ul>
 
-      {/* ══ ABOVE-NAV HEADER ══ */}
-      <header className={styles.siteHeader}>
-        <p className={styles.headerEyebrow}>Online store</p>
-        <h1 className={styles.headerTitle}><em>Organic honey</em></h1>
-        <p className={styles.headerSub}>From the manufacturer</p>
-        {/* floating bees */}
-        <span className={styles.beeTL} aria-hidden="true">🐝</span>
-        <span className={styles.beeTR} aria-hidden="true">🐝</span>
-      </header>
+        <a
+          href="#"
+          style={{
+            backgroundColor: "#e8a000",
+            color: "#fff",
+            padding: "0.55rem 1.4rem",
+            borderRadius: "4px",
+            textDecoration: "none",
+            fontSize: "0.8rem",
+            fontFamily: "sans-serif",
+            fontWeight: "700",
+            letterSpacing: "0.07em",
+            textTransform: "uppercase",
+            transition: "background 0.2s",
+          }}
+          onMouseEnter={(e) =>
+            ((e.target as HTMLAnchorElement).style.backgroundColor = "#c88a00")
+          }
+          onMouseLeave={(e) =>
+            ((e.target as HTMLAnchorElement).style.backgroundColor = "#e8a000")
+          }
+          className="desktop-cta"
+        >
+          Contact Us
+        </a>
 
-      {/* ══ NAV CARD ══ */}
-      <div className={styles.navWrap}>
-        <nav className={styles.nav}>
-          <a href="#" className={styles.logo}>⬡ Alveare</a>
-          <ul className={styles.navLinks}>
-            <li><a href="#hero" className={styles.navActive}>Home</a></li>
-            <li><a href="#shop">Our Products</a></li>
-            <li><a href="#about">About Farm</a></li>
-            <li><a href="#contact">Delivery &amp; Order</a></li>
-            <li><a href="#contact">Contact</a></li>
-          </ul>
-          <div className={styles.navRight}>
-            <button className={styles.cartBtn} onClick={() => {}}>
-              🛒 {cartCount > 0 && <span className={styles.badge}>{cartCount}</span>}
-            </button>
-            <span className={styles.phone}>+31 76 555-0147</span>
-          </div>
-        </nav>
-      </div>
+        {/* Hamburger */}
+        <button
+          onClick={() => setMenuOpen(!menuOpen)}
+          style={{
+            display: "none",
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            fontSize: "1.5rem",
+            color: "#1a1a1a",
+          }}
+          className="hamburger"
+          aria-label="Toggle menu"
+        >
+          {menuOpen ? "✕" : "☰"}
+        </button>
+      </nav>
 
-      {/* ══ HERO ══ */}
-      <section className={styles.hero} id="hero">
-        {/* wavy blue-grey blob background */}
-        <div className={styles.heroBlob} aria-hidden="true">
-          <svg viewBox="0 0 900 480" xmlns="http://www.w3.org/2000/svg">
-            <path d="M0,120 C150,60 300,200 450,140 C600,80 750,220 900,160 L900,480 L0,480 Z" fill="#EAF1F8" opacity="0.7"/>
-            <path d="M0,200 C120,140 280,260 440,200 C600,140 760,260 900,200 L900,480 L0,480 Z" fill="#F0F5FB" opacity="0.5"/>
-          </svg>
+      {/* Mobile menu */}
+      {menuOpen && (
+        <div
+          style={{
+            backgroundColor: "#fff",
+            borderBottom: "1px solid #f5e6c8",
+            padding: "1.5rem 5%",
+            display: "flex",
+            flexDirection: "column",
+            gap: "1rem",
+          }}
+        >
+          {["Home", "Blog", "Categories", "Products", "Contact Us"].map(
+            (item) => (
+              <a
+                key={item}
+                href="#"
+                style={{
+                  color: "#1a1a1a",
+                  textDecoration: "none",
+                  fontSize: "1rem",
+                  fontFamily: "sans-serif",
+                  letterSpacing: "0.05em",
+                }}
+              >
+                {item}
+              </a>
+            )
+          )}
+        </div>
+      )}
+
+      {/* ── HERO ── */}
+      <section
+        style={{
+          background: "linear-gradient(135deg, #fffef5 0%, #fff9e6 60%, #fff3cc 100%)",
+          padding: "5rem 5% 4rem",
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+          alignItems: "center",
+          gap: "3rem",
+          minHeight: "80vh",
+        }}
+        className="hero-section"
+      >
+        {/* Text */}
+        <div>
+          <p
+            style={{
+              fontSize: "0.78rem",
+              letterSpacing: "0.18em",
+              textTransform: "uppercase",
+              color: "#e8a000",
+              fontFamily: "sans-serif",
+              marginBottom: "0.75rem",
+              fontWeight: 600,
+            }}
+          >
+            Artisan Honey Products
+          </p>
+          <h1
+            style={{
+              fontSize: "clamp(2.4rem, 5vw, 3.8rem)",
+              fontWeight: "800",
+              lineHeight: 1.1,
+              margin: "0 0 1.25rem",
+              color: "#1a1a1a",
+            }}
+          >
+            Crafting Sweet
+            <br />
+            Moments Just
+            <br />
+            <span style={{ color: "#e8a000" }}>For You!</span>
+          </h1>
+          <p
+            style={{
+              fontSize: "1rem",
+              lineHeight: 1.7,
+              color: "#666",
+              maxWidth: "420px",
+              fontFamily: "sans-serif",
+              fontWeight: 400,
+              marginBottom: "2rem",
+            }}
+          >
+            Our passion for honey is woven into every product we curate, ensuring you
+            receive nothing but the finest and most exquisite offerings.
+          </p>
+          <a
+            href="#products"
+            style={{
+              display: "inline-block",
+              backgroundColor: "#e8a000",
+              color: "#fff",
+              padding: "0.85rem 2.2rem",
+              borderRadius: "4px",
+              textDecoration: "none",
+              fontFamily: "sans-serif",
+              fontWeight: "700",
+              fontSize: "0.9rem",
+              letterSpacing: "0.06em",
+              textTransform: "uppercase",
+              transition: "background 0.2s, transform 0.15s",
+              boxShadow: "0 4px 16px rgba(232,160,0,0.3)",
+            }}
+            onMouseEnter={(e) => {
+              const el = e.target as HTMLAnchorElement;
+              el.style.backgroundColor = "#c88a00";
+              el.style.transform = "translateY(-2px)";
+            }}
+            onMouseLeave={(e) => {
+              const el = e.target as HTMLAnchorElement;
+              el.style.backgroundColor = "#e8a000";
+              el.style.transform = "translateY(0)";
+            }}
+          >
+            Shop Now
+          </a>
         </div>
 
-        <div className={styles.heroInner}>
-          <div className={styles.heroText}>
-            <h2 className={styles.heroHeadline}>
-              Natural honey 🐝<br />
-              <small>made by bees</small>
-            </h2>
-            <ul className={styles.heroBullets}>
-              <li>Perfect for breakfast</li>
-              <li>A wonderful sugar substitute</li>
-              <li>Tasty &amp; good for you</li>
-            </ul>
-            <button
-              className={styles.btnYellow}
-              onClick={() => formRef.current?.scrollIntoView({ behavior: "smooth" })}
-            >
-              View Products
-            </button>
-            <p className={styles.heroHint}>*When you really want something sweet</p>
-          </div>
-          <div className={styles.heroImageArea}>
-            <span className={styles.heroJar} aria-label="Honey jar">🍯</span>
-            <span className={styles.heroDipper} aria-hidden="true">🥄</span>
-            <span className={styles.heroFlower} aria-hidden="true">🌼</span>
-            <span className={styles.heroBeeA} aria-hidden="true">🐝</span>
-            <span className={styles.heroBeeB} aria-hidden="true">🐝</span>
-            <span className={styles.heroBeeC} aria-hidden="true">🐝</span>
-          </div>
-        </div>
+        {/* Hero image placeholder */}
+        <div
+  style={{
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+  }}
+>
+  <div
+    style={{
+      position: "relative",
+      width: "100%",
+      maxWidth: "480px",
+      aspectRatio: "4/3",
+      borderRadius: "16px",
+      overflow: "hidden",
+    }}
+  >
+    <Image
+      src="/images/honey drip.jpeg"
+      alt="Honey products"
+      fill
+      style={{ objectFit: "cover" }}
+    />
+  </div>
+</div>
       </section>
+      
 
-      {/* ══ WAVY TRANSITION ══ */}
-      <div className={styles.waveDivider} aria-hidden="true">
-        <svg viewBox="0 0 1440 80" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none">
-          <path d="M0,40 C360,80 720,0 1080,40 C1260,60 1380,30 1440,40 L1440,80 L0,80 Z" fill="#FAFBFF"/>
-        </svg>
-      </div>
+      {/* ── ABOUT ── */}
+      <section
+        style={{
+          padding: "5rem 5%",
+          backgroundColor: "#ffffff",
+        }}
+      >
+        <h2
+          style={{
+            textAlign: "center",
+            fontSize: "clamp(1.8rem, 4vw, 2.6rem)",
+            marginBottom: "3.5rem",
+            letterSpacing: "0.06em",
+            textTransform: "uppercase",
+            color: "#1a1a1a",
+          }}
+        >
+          About Us
+        </h2>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: "4rem",
+            alignItems: "center",
+            maxWidth: "1100px",
+            margin: "0 auto",
+          }}
+          className="about-grid"
+        >
+          {/* About image placeholder */}
+          <div
+            style={{
+              width: "100%",
+              aspectRatio: "4/3",
+              borderRadius: "12px",
+              background: "linear-gradient(135deg, #fff9e6, #ffe8a0)",
+              border: "2px dashed #e8c870",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "0.6rem",
+              color: "#b8860b",
+              fontFamily: "sans-serif",
+              fontSize: "0.85rem",
+              textAlign: "center",
+              padding: "2rem",
+            }}
+          >
+            <span style={{ fontSize: "2.5rem" }}>📸</span>
+            <strong style={{ fontWeight: 700 }}>About Image</strong>
+            <span style={{ opacity: 0.7 }}>Replace with your brand / process photo</span>
+          </div>
 
-      {/* ══ ABOUT / GOALS / VISION (dashed path section) ══ */}
-      <section className={styles.about} id="about">
-        {/* scattered honey drops */}
-        <span className={styles.drop} style={{ top: "5%",  left: "6%"  }}>🫙</span>
-        <span className={styles.drop} style={{ top: "22%", left: "3%"  }}>💛</span>
-        <span className={styles.drop} style={{ top: "50%", left: "8%"  }}>🫙</span>
-        <span className={styles.drop} style={{ top: "72%", left: "2%"  }}>💛</span>
-        <span className={styles.drop} style={{ top: "14%", right: "5%" }}>💛</span>
-        <span className={styles.drop} style={{ top: "38%", right: "7%" }}>🫙</span>
-        <span className={styles.drop} style={{ top: "60%", right: "4%" }}>💛</span>
-
-        {/* dashed SVG path */}
-        <div className={styles.dashedPath} aria-hidden="true">
-          <svg viewBox="0 0 800 900" xmlns="http://www.w3.org/2000/svg" fill="none">
-            <path
-              d="M100,60 C200,80 350,40 450,120 C550,200 300,300 400,400 C500,500 620,420 580,560 C540,680 300,640 320,780"
-              stroke="#F5C842"
-              strokeWidth="2"
-              strokeDasharray="8 10"
-              strokeLinecap="round"
+          {/* Text */}
+          <div>
+            <div
+              style={{
+                width: "40px",
+                height: "3px",
+                backgroundColor: "#e8a000",
+                marginBottom: "1.5rem",
+                borderRadius: "2px",
+              }}
             />
-          </svg>
-        </div>
-
-        <div className={styles.aboutGrid}>
-          {/* Research */}
-          <div className={styles.aboutBlock} style={{ gridColumn: "1", gridRow: "1" }}>
-            <h2 className={styles.sectionScript}>Research</h2>
-          </div>
-
-          {/* About */}
-          <div className={styles.aboutBlock} style={{ gridColumn: "2", gridRow: "1" }}>
-            <h3 className={styles.aboutBlockTitle}>About</h3>
-            <p>Alveare is the bee products online store. Our main activity is the sale of healthy, organic honey — harvested from untouched European forests.</p>
-          </div>
-
-          {/* Goals */}
-          <div className={styles.aboutBlock} style={{ gridColumn: "1", gridRow: "2" }}>
-            <h3 className={styles.aboutBlockTitle}>Goals &amp; Objectives</h3>
-            <ul className={styles.goalsList}>
-              <li>Original design, creating a feeling of comfort and warmth</li>
-              <li>High usability of site</li>
-              <li>Boost of sales with new design</li>
-            </ul>
-          </div>
-
-          {/* Vision */}
-          <div className={styles.aboutBlock} style={{ gridColumn: "2", gridRow: "2" }}>
-            <h3 className={styles.aboutBlockTitle}>My Vision</h3>
-            <blockquote className={styles.visionQuote}>
-              Usually, a feeling of coziness is created with a warm, natural style. We decided to go one step further — adding a touch of realism to every detail. The most important thing should always be the convenience of our customers.
-            </blockquote>
-          </div>
-
-          {/* Prototype */}
-          <div className={styles.aboutBlock} style={{ gridColumn: "1", gridRow: "3" }}>
-            <h2 className={styles.sectionScript}>Prototype</h2>
-            <p style={{ fontSize: "0.85rem", color: "#8a9a78", marginTop: 8 }}>
-              The process begins with designing the model of user interaction with the site.
+            <p
+              style={{
+                fontSize: "1.05rem",
+                lineHeight: 1.85,
+                color: "#444",
+                fontFamily: "sans-serif",
+                marginBottom: "1.25rem",
+              }}
+            >
+              Welcome to Pollinators Beekepers Apitherapy, where we craft sweet moments for you to savor
+              and cherish. Our passion for honey is woven into every product we curate,
+              ensuring you receive nothing but the finest and most exquisite offerings.
+            </p>
+            <p
+              style={{
+                fontSize: "1.05rem",
+                lineHeight: 1.85,
+                color: "#444",
+                fontFamily: "sans-serif",
+              }}
+            >
+              From golden liquid honey to delectable honey-based confections, each
+              creation embodies the essence of{" "}
+              <strong style={{ color: "#1a1a1a" }}>
+                craftsmanship and dedication
+              </strong>
+              .
             </p>
           </div>
         </div>
       </section>
 
-      {/* ══ SHOP ══ */}
-      <section className={styles.shop} id="shop">
-        <div className={styles.shopHead}>
-          <span className={styles.eyebrow}>The Collection</span>
-          <h2 className={styles.shopTitle}>Our Products</h2>
+      {/* ── DECORATIVE DIVIDER ── */}
+      <div
+        style={{
+          height: "2px",
+          background: "linear-gradient(90deg, transparent, #ffe08a, transparent)",
+          margin: "0 5%",
+        }}
+      />
+
+      {/* ── BEST SELLING PRODUCTS ── */}
+      <section
+        id="products"
+        style={{
+          padding: "5rem 5%",
+          backgroundColor: "#fffef8",
+        }}
+      >
+        <div style={{ textAlign: "center", marginBottom: "3.5rem" }}>
+          <h2
+            style={{
+              fontSize: "clamp(1.8rem, 4vw, 2.6rem)",
+              letterSpacing: "0.06em",
+              textTransform: "uppercase",
+              color: "#1a1a1a",
+              marginBottom: "0.75rem",
+            }}
+          >
+            Best Selling Products
+          </h2>
+          <p
+            style={{
+              color: "#888",
+              fontFamily: "sans-serif",
+              fontSize: "0.95rem",
+              maxWidth: "540px",
+              margin: "0 auto",
+              lineHeight: 1.65,
+            }}
+          >
+            Handcrafted honey delights, carefully designed to elevate your everyday
+            indulgences and make every moment sweeter.
+          </p>
         </div>
 
-        <div className={styles.tabs}>
-          {TABS.map(t => (
-            <button
-              key={t}
-              className={`${styles.tab} ${activeTab === t ? styles.tabOn : ""}`}
-              onClick={() => setActiveTab(t)}
-            >{t}</button>
-          ))}
-        </div>
+        {/* Product grid */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(3, 1fr)",
+            gap: "2rem",
+            maxWidth: "1100px",
+            margin: "0 auto",
+          }}
+          className="products-grid"
+        >
+          {[
+            { name: "Pure Raw Honey", price: "$20.00", desc: "Honey is a sweet, liquid food, heaven-sent product by bees." },
+            { name: "Wildflower", price: "$100.00", desc: "Honey is a sweet, liquid food, heaven-sent product by bees." },
+            { name: "Forest Honey", price: "$100.00", desc: "Honey is a sweet-scented honey, heaven-sent product by bees." },
+          ].map((product) => (
+            <div
+              key={product.name}
+              style={{
+                backgroundColor: "#ffffff",
+                borderRadius: "12px",
+                overflow: "hidden",
+                border: "1px solid #f0e0b0",
+                transition: "transform 0.25s, box-shadow 0.25s",
+                cursor: "pointer",
+              }}
+              onMouseEnter={(e) => {
+                const el = e.currentTarget as HTMLDivElement;
+                el.style.transform = "translateY(-6px)";
+                el.style.boxShadow = "0 12px 32px rgba(232,160,0,0.18)";
+              }}
+              onMouseLeave={(e) => {
+                const el = e.currentTarget as HTMLDivElement;
+                el.style.transform = "translateY(0)";
+                el.style.boxShadow = "none";
+              }}
+            >
+              {/* Product image placeholder */}
+              <div
+                style={{
+                  width: "100%",
+                  aspectRatio: "1/1",
+                  background: "linear-gradient(135deg, #fff9e6, #ffe8a0)",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderBottom: "1px dashed #e8c870",
+                  gap: "0.4rem",
+                  color: "#b8860b",
+                  fontFamily: "sans-serif",
+                  fontSize: "0.75rem",
+                  textAlign: "center",
+                  padding: "1rem",
+                }}
+              >
+                <span style={{ fontSize: "2.5rem" }}>🫙</span>
+                <strong style={{ fontWeight: 700, fontSize: "0.8rem" }}>Product Image</strong>
+                <span style={{ opacity: 0.65 }}>Replace with product photo</span>
+              </div>
 
-        <div className={styles.productGrid}>
-          {PRODUCTS[activeTab].map(p => (
-            <div key={p.id} className={styles.productCard}>
-              <span className={styles.productEmoji}>{p.emoji}</span>
-              <span className={styles.productBadge}>{p.badge}</span>
-              <h4>{p.name}</h4>
-              <p className={styles.productWeight}>{p.weight}</p>
-              <div className={styles.productFoot}>
-                <strong>{p.price}</strong>
-                <button
-                  className={`${styles.addBtn} ${addedId === p.id ? styles.addDone : ""}`}
-                  onClick={() => addToCart(p.id)}
+              {/* Product info */}
+              <div style={{ padding: "1.25rem" }}>
+                <h3
+                  style={{
+                    fontSize: "0.85rem",
+                    letterSpacing: "0.1em",
+                    textTransform: "uppercase",
+                    margin: "0 0 0.3rem",
+                    fontFamily: "sans-serif",
+                    fontWeight: 700,
+                    color: "#1a1a1a",
+                  }}
                 >
-                  {addedId === p.id ? "✓" : "+"}
-                </button>
+                  {product.name}
+                </h3>
+                <p
+                  style={{
+                    color: "#e8a000",
+                    fontWeight: "700",
+                    fontSize: "1.05rem",
+                    margin: "0 0 0.6rem",
+                    fontFamily: "sans-serif",
+                  }}
+                >
+                  {product.price}
+                </p>
+                <p
+                  style={{
+                    fontSize: "0.82rem",
+                    color: "#888",
+                    lineHeight: 1.55,
+                    fontFamily: "sans-serif",
+                    margin: 0,
+                  }}
+                >
+                  {product.desc}
+                </p>
               </div>
             </div>
           ))}
         </div>
+
+        {/* View all button */}
+        <div style={{ textAlign: "center", marginTop: "3rem" }}>
+          <a
+            href="#"
+            style={{
+              display: "inline-block",
+              border: "2px solid #e8a000",
+              color: "#e8a000",
+              padding: "0.75rem 2rem",
+              borderRadius: "4px",
+              textDecoration: "none",
+              fontFamily: "sans-serif",
+              fontWeight: "700",
+              fontSize: "0.85rem",
+              letterSpacing: "0.08em",
+              textTransform: "uppercase",
+              transition: "background 0.2s, color 0.2s",
+            }}
+            onMouseEnter={(e) => {
+              const el = e.target as HTMLAnchorElement;
+              el.style.backgroundColor = "#e8a000";
+              el.style.color = "#fff";
+            }}
+            onMouseLeave={(e) => {
+              const el = e.target as HTMLAnchorElement;
+              el.style.backgroundColor = "transparent";
+              el.style.color = "#e8a000";
+            }}
+          >
+            View All Products
+          </a>
+        </div>
       </section>
 
-      {/* ══ REVIEWS ══ */}
-      <section className={styles.reviews} id="reviews">
-        <span className={styles.eyebrow} style={{ display: "block", textAlign: "center" }}>Happy Customers</span>
-        <h2 className={styles.reviewsTitle}>What people are saying</h2>
+      {/* ── BANNER ── */}
+      <section
+        style={{
+          background: "linear-gradient(135deg, #e8a000, #ffcc44)",
+          padding: "4rem 5%",
+          textAlign: "center",
+          color: "#fff",
+        }}
+      >
+        <h2
+          style={{
+            fontSize: "clamp(1.8rem, 4vw, 2.8rem)",
+            fontWeight: "800",
+            margin: "0 0 1rem",
+            textShadow: "0 2px 8px rgba(0,0,0,0.1)",
+          }}
+        >
+          Pure. Natural. Crafted with Love.
+        </h2>
+        <p
+          style={{
+            fontFamily: "sans-serif",
+            fontSize: "1.05rem",
+            opacity: 0.92,
+            marginBottom: "2rem",
+            maxWidth: "500px",
+            margin: "0 auto 2rem",
+            lineHeight: 1.65,
+          }}
+        >
+          Join thousands of honey lovers who trust Pollinators Beekepers Apitherapy for their daily sweetness.
+        </p>
+        <a
+          href="#"
+          style={{
+            display: "inline-block",
+            backgroundColor: "#fff",
+            color: "#e8a000",
+            padding: "0.85rem 2.4rem",
+            borderRadius: "4px",
+            textDecoration: "none",
+            fontFamily: "sans-serif",
+            fontWeight: "800",
+            fontSize: "0.9rem",
+            letterSpacing: "0.06em",
+            textTransform: "uppercase",
+            transition: "transform 0.15s",
+            boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
+          }}
+          onMouseEnter={(e) =>
+            ((e.target as HTMLAnchorElement).style.transform = "scale(1.04)")
+          }
+          onMouseLeave={(e) =>
+            ((e.target as HTMLAnchorElement).style.transform = "scale(1)")
+          }
+        >
+          Explore Collection
+        </a>
+      </section>
 
-        <div className={styles.reviewCard}>
-          <p className={styles.reviewText}>"{TESTIMONIALS[testimonialIdx].text}"</p>
-          <div className={styles.reviewBy}>
-            <span className={styles.reviewAvatar}>{TESTIMONIALS[testimonialIdx].avatar}</span>
-            <div>
-              <strong>{TESTIMONIALS[testimonialIdx].name}</strong>
-              <span>{TESTIMONIALS[testimonialIdx].role}</span>
-            </div>
+      {/* ── FOOTER ── */}
+      <footer
+        style={{
+          backgroundColor: "#1a1a1a",
+          color: "#ccc",
+          padding: "3rem 5% 2rem",
+          fontFamily: "sans-serif",
+        }}
+      >
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "2fr 1fr 1fr",
+            gap: "3rem",
+            maxWidth: "1100px",
+            margin: "0 auto 2rem",
+          }}
+          className="footer-grid"
+        >
+          <div>
+            <h3
+              style={{
+                color: "#fff",
+                fontSize: "1.2rem",
+                marginBottom: "0.75rem",
+                fontFamily: "Georgia, serif",
+              }}
+            >
+              Pollinators Beekepers Apitherapy
+            </h3>
+            <p style={{ lineHeight: 1.7, fontSize: "0.88rem", color: "#aaa" }}>
+              Crafting sweet moments with the finest artisan honey products since 2010.
+            </p>
           </div>
-        </div>
-
-        <div className={styles.reviewDots}>
-          {TESTIMONIALS.map((_, i) => (
-            <button
-              key={i}
-              className={`${styles.dot} ${i === testimonialIdx ? styles.dotOn : ""}`}
-              onClick={() => setTestimonialIdx(i)}
-              aria-label={`Review ${i + 1}`}
-            />
-          ))}
-        </div>
-      </section>
-
-      {/* ══ FAQ ══ */}
-      <section className={styles.faq}>
-        <h2 className={styles.sectionScript} style={{ textAlign: "center", marginBottom: 36 }}>Questions</h2>
-        <div className={styles.faqList}>
-          {faqs.map((f, i) => (
-            <div key={i} className={`${styles.faqItem} ${openFaq === i ? styles.faqOpen : ""}`}>
-              <button className={styles.faqQ} onClick={() => setOpenFaq(openFaq === i ? null : i)}>
-                <span>{f.q}</span>
-                <span className={styles.faqArrow}>{openFaq === i ? "−" : "+"}</span>
-              </button>
-              {openFaq === i && <p className={styles.faqA}>{f.a}</p>}
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* ══ CONTACT ══ */}
-      <section className={styles.contact} id="contact" ref={formRef}>
-        <div className={styles.contactInner}>
-          <div className={styles.contactText}>
-            <h2 className={styles.sectionScript}>Order</h2>
-            <p>Leave a request and we will contact you. Free EU shipping on orders over €45.</p>
-            <span aria-hidden="true" style={{ fontSize: "3rem", display: "block", marginTop: 16 }}>🐝</span>
-          </div>
-          <div className={styles.formWrap}>
-            {sent ? (
-              <div className={styles.formThanks}>
-                <span>🍯</span>
-                <strong>Thank you!</strong>
-                <p>We'll get back to you within 24 hours.</p>
+          <div>
+            <h4
+              style={{
+                color: "#fff",
+                fontSize: "0.8rem",
+                textTransform: "uppercase",
+                letterSpacing: "0.1em",
+                marginBottom: "1rem",
+              }}
+            >
+              Links
+            </h4>
+            {["Home", "Blog", "Categories", "Products", "Contact"].map((l) => (
+              <div key={l} style={{ marginBottom: "0.5rem" }}>
+                <a
+                  href="#"
+                  style={{
+                    color: "#aaa",
+                    textDecoration: "none",
+                    fontSize: "0.88rem",
+                    transition: "color 0.2s",
+                  }}
+                  onMouseEnter={(e) =>
+                    ((e.target as HTMLAnchorElement).style.color = "#e8a000")
+                  }
+                  onMouseLeave={(e) =>
+                    ((e.target as HTMLAnchorElement).style.color = "#aaa")
+                  }
+                >
+                  {l}
+                </a>
               </div>
-            ) : (
-              <form className={styles.form} onSubmit={e => { e.preventDefault(); setSent(true); }}>
-                <input type="text"  placeholder="Your name"    required value={form.name}  onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
-                <input type="tel"   placeholder="Phone number"          value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} />
-                <input type="email" placeholder="E-mail"                value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
-                <textarea rows={3}  placeholder="Your message"          value={form.note}  onChange={e => setForm(f => ({ ...f, note: e.target.value }))} />
-                <button type="submit" className={styles.btnYellow}>Send Request →</button>
-              </form>
-            )}
+            ))}
+          </div>
+          <div>
+            <h4
+              style={{
+                color: "#fff",
+                fontSize: "0.8rem",
+                textTransform: "uppercase",
+                letterSpacing: "0.1em",
+                marginBottom: "1rem",
+              }}
+            >
+              Contact
+            </h4>
+            <p style={{ fontSize: "0.88rem", color: "#aaa", lineHeight: 1.7 }}>
+              hello@pollinatorsbeekepersapitherapy.com
+              <br />
+              +1 (800) 555-HONEY
+              <br />
+              Mon–Fri, 9am–5pm
+            </p>
           </div>
         </div>
-      </section>
-
-      {/* ══ FOOTER ══ */}
-      <footer className={styles.footer}>
-        <div className={styles.footerInner}>
-          <a href="#" className={styles.footerLogo}>⬡ Alveare</a>
-          <nav className={styles.footerNav}>
-            <a href="#hero">Main</a>
-            <a href="#shop">Catalog &amp; product card</a>
-            <a href="#about">About the farm</a>
-          </nav>
-          <p>© 2025 Alveare · hello@alveare.eu</p>
+        <div
+          style={{
+            borderTop: "1px solid #333",
+            paddingTop: "1.25rem",
+            textAlign: "center",
+            fontSize: "0.78rem",
+            color: "#666",
+          }}
+        >
+          © {new Date().getFullYear()} Pollinators Beekepers Apitherapy. All rights reserved.
         </div>
       </footer>
 
-      {/* bottom drip decoration */}
-      <div className={styles.dripBottom} aria-hidden="true">
-        <svg viewBox="0 0 400 60" xmlns="http://www.w3.org/2000/svg">
-          <path d="M10,0 Q14,28 10,42 Q6,52 10,50 Q14,55 18,50 Q22,42 18,28 Q14,8 18,0 Z" fill="#F5C842"/>
-          <path d="M80,0 Q86,35 80,52 Q74,62 80,58 Q86,64 92,58 Q98,50 92,35 Q88,10 94,0 Z" fill="#F5C842"/>
-          <path d="M200,0 Q205,22 200,34 Q195,42 200,40 Q205,44 210,40 Q215,34 210,22 Q206,6 212,0 Z" fill="#F5C842"/>
-          <path d="M310,0 Q317,30 310,46 Q303,58 310,54 Q317,60 324,54 Q331,44 324,30 Q319,8 326,0 Z" fill="#F5C842"/>
-          <path d="M370,0 Q374,18 370,28 Q366,35 370,33 Q374,37 378,33 Q382,28 378,18 Q375,5 380,0 Z" fill="#F5C842"/>
-        </svg>
-      </div>
-    </div>
+      {/* ── RESPONSIVE STYLES ── */}
+      <style>{`
+        @media (max-width: 768px) {
+          .desktop-nav,
+          .desktop-cta {
+            display: none !important;
+          }
+          .hamburger {
+            display: block !important;
+          }
+          .hero-section {
+            grid-template-columns: 1fr !important;
+            text-align: center;
+            padding: 3rem 5% !important;
+            min-height: auto !important;
+          }
+          .hero-section > div:first-child {
+            align-items: center;
+            display: flex;
+            flex-direction: column;
+          }
+          .about-grid {
+            grid-template-columns: 1fr !important;
+            gap: 2rem !important;
+          }
+          .products-grid {
+            grid-template-columns: 1fr !important;
+          }
+          .footer-grid {
+            grid-template-columns: 1fr !important;
+            gap: 2rem !important;
+          }
+        }
+        @media (min-width: 769px) and (max-width: 1024px) {
+          .products-grid {
+            grid-template-columns: repeat(2, 1fr) !important;
+          }
+          .footer-grid {
+            grid-template-columns: 1fr 1fr !important;
+          }
+        }
+      `}</style>
+    </main>
   );
 }

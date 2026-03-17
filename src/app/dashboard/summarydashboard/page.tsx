@@ -880,7 +880,7 @@ export default function DashboardPage() {
             </div>
 
             {/* Refresh */}
-            <button
+            {/* <button
               onClick={() => loadAll(true)}
               disabled={loading || refreshing}
               className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-50 transition-all duration-150"
@@ -899,7 +899,7 @@ export default function DashboardPage() {
                 )}
               </svg>
               {refreshing ? "Refreshing…" : "Refresh"}
-            </button>
+            </button> */}
           </div>
         </div>
 
