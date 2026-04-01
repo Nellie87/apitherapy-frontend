@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { supabase } from "@/lib/supabase/client";
+import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 
 
@@ -75,7 +75,9 @@ export default function LoginPage() {
     setMsg("");
     setLoading(true);
     try {
+      const supabase = createClient();
       if (mode === "signup") {
+        
         const { error } = await supabase.auth.signUp({ email, password });
         if (error) throw error;
         setMsg("Check your email to confirm your account.");

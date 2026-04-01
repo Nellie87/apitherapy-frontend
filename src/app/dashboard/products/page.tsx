@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { bootstrapOrg } from "@/lib/org/bootstrapOrg";
-import { supabase } from "@/lib/supabase/client";
+import { createClient } from "@/lib/supabase/client";
 import {
   listProducts,
   createProduct,
@@ -864,6 +864,7 @@ export default function ProductsPage() {
       });
 
       if (addForm.category && created?.id) {
+        const supabase = createClient();
         await supabase
           .from("products")
           .update({ category: addForm.category })
@@ -894,6 +895,7 @@ export default function ProductsPage() {
     setErr("");
 
     try {
+      const supabase = createClient();
       const { error } = await supabase
         .from("products")
         .update({
