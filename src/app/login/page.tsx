@@ -4,7 +4,6 @@ import { useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 
-
 const BeeSVG = () => (
   <svg
     viewBox="0 0 64 64"
@@ -50,13 +49,43 @@ const BeeSVG = () => (
 const HexBg = () => (
   <svg
     xmlns="http://www.w3.org/2000/svg"
-    style={{ position: "absolute", inset: 0, width: "100%", height: "100%", opacity: 0.10, pointerEvents: "none" }}
+    style={{
+      position: "absolute",
+      inset: 0,
+      width: "100%",
+      height: "100%",
+      opacity: 0.1,
+      pointerEvents: "none",
+    }}
   >
     <defs>
-      <pattern id="hexlogin" x="0" y="0" width="56" height="100" patternUnits="userSpaceOnUse" patternTransform="scale(1.5)">
-        <polygon points="28,2 54,16 54,44 28,58 2,44 2,16" fill="none" stroke="#1a1a0a" strokeWidth="0.8" />
-        <polygon points="28,52 54,66 54,94 28,108 2,94 2,66" fill="none" stroke="#1a1a0a" strokeWidth="0.8" />
-        <polygon points="56,27 82,41 82,69 56,83 30,69 30,41" fill="none" stroke="#1a1a0a" strokeWidth="0.8" />
+      <pattern
+        id="hexlogin"
+        x="0"
+        y="0"
+        width="56"
+        height="100"
+        patternUnits="userSpaceOnUse"
+        patternTransform="scale(1.5)"
+      >
+        <polygon
+          points="28,2 54,16 54,44 28,58 2,44 2,16"
+          fill="none"
+          stroke="#1a1a0a"
+          strokeWidth="0.8"
+        />
+        <polygon
+          points="28,52 54,66 54,94 28,108 2,94 2,66"
+          fill="none"
+          stroke="#1a1a0a"
+          strokeWidth="0.8"
+        />
+        <polygon
+          points="56,27 82,41 82,69 56,83 30,69 30,41"
+          fill="none"
+          stroke="#1a1a0a"
+          strokeWidth="0.8"
+        />
       </pattern>
     </defs>
     <rect width="100%" height="100%" fill="url(#hexlogin)" />
@@ -64,16 +93,18 @@ const HexBg = () => (
 );
 
 export default function LoginPage() {
+  const router = useRouter();
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [mode, setMode] = useState<"login" | "signup">("login");
-  const [msg, setMsg] = useState<string>("");
+  const [msg, setMsg] = useState("");
   const [loading, setLoading] = useState(false);
-  
 
   async function handleSubmit() {
     setMsg("");
     setLoading(true);
+
     try {
       if (mode === "signup") {
         const { error } = await supabase.auth.signUp({ email, password });
@@ -82,8 +113,7 @@ export default function LoginPage() {
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
-        const router = useRouter();
-        router.push("/dashboard");
+        router.push("/dashboard/dashboard/");
       }
     } catch (e: any) {
       setMsg(e.message || "An error occurred. Please try again.");
@@ -138,15 +168,19 @@ export default function LoginPage() {
         }
 
         .glow-1 {
-          width: 600px; height: 600px;
-          top: -150px; right: -120px;
+          width: 600px;
+          height: 600px;
+          top: -150px;
+          right: -120px;
           background: radial-gradient(circle, rgba(245,197,24,0.45) 0%, transparent 65%);
           filter: blur(80px);
         }
 
         .glow-2 {
-          width: 400px; height: 400px;
-          bottom: -100px; left: -100px;
+          width: 400px;
+          height: 400px;
+          bottom: -100px;
+          left: -100px;
           background: radial-gradient(circle, rgba(58,125,68,0.12) 0%, transparent 70%);
           filter: blur(60px);
         }
@@ -168,7 +202,9 @@ export default function LoginPage() {
 
         .card-top-bar {
           position: absolute;
-          top: 0; left: 0; right: 0;
+          top: 0;
+          left: 0;
+          right: 0;
           height: 4px;
           background: linear-gradient(90deg, var(--gold), var(--honey), var(--gold));
           border-radius: 12px 12px 0 0;
@@ -384,16 +420,7 @@ export default function LoginPage() {
             )}
 
             <button className="btn-submit" onClick={handleSubmit} disabled={loading}>
-              {loading ? (
-                <>
-                  <span className="spinner" style={{ marginRight: "8px" }} />
-                  Processing...
-                </>
-              ) : mode === "login" ? (
-                "Sign In"
-              ) : (
-                "Create Account"
-              )}
+              {loading ? "Processing..." : mode === "login" ? "Sign In" : "Create Account"}
             </button>
 
             <button
@@ -405,7 +432,7 @@ export default function LoginPage() {
             >
               {mode === "login" ? (
                 <>
-                  Don't have an account? <strong>Sign up</strong>
+                  Don&apos;t have an account? <strong>Sign up</strong>
                 </>
               ) : (
                 <>

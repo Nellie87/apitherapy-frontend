@@ -1,4 +1,5 @@
 import Image from "next/image";
+import Link from "next/link";
 
 export default function Page() {
   return (
@@ -87,12 +88,21 @@ export default function Page() {
               </a>
             </nav>
 
-            <a
-              href="#products"
-              className="rounded-full bg-[#f2bb2b] px-4 py-2 text-sm font-semibold text-[#3c2d0b] shadow-sm transition hover:scale-[1.02] hover:bg-[#eab51b]"
-            >
-              Shop now
-            </a>
+            <div className="flex items-center gap-3">
+              <Link
+                href="/login"
+                className="rounded-full border border-[#ddd4c7] px-4 py-2 text-sm font-medium text-[#524a44] transition hover:bg-[#faf7f2]"
+              >
+                Login
+              </Link>
+
+              <a
+                href="#products"
+                className="rounded-full bg-[#f2bb2b] px-4 py-2 text-sm font-semibold text-[#3c2d0b] shadow-sm transition hover:scale-[1.02] hover:bg-[#eab51b]"
+              >
+                Shop now
+              </a>
+            </div>
           </div>
 
           <div className="grid items-center gap-10 px-6 py-10 md:grid-cols-2 md:px-10 md:py-14">
@@ -127,11 +137,9 @@ export default function Page() {
             </div>
 
             <div className="relative flex items-center justify-center">
-              {/* Decorative background blob */}
               <div className="absolute h-[360px] w-[360px] rounded-full bg-[#fff4cf]" />
               <div className="absolute h-[280px] w-[280px] rounded-full border border-dashed border-[#d7d2c7]" />
 
-              {/* Replace this with your real jar image from /public if you have one */}
               <div className="relative z-10 rounded-[28px] bg-white p-6 shadow-[0_15px_40px_rgba(50,40,20,0.12)]">
                 <Image
                   src="/honey-.png"
@@ -142,14 +150,12 @@ export default function Page() {
                 />
               </div>
 
-              {/* Bees */}
               <span className="absolute left-4 top-10 text-2xl">🐝</span>
               <span className="absolute right-8 top-4 text-xl">🐝</span>
               <span className="absolute bottom-8 right-14 text-2xl">🐝</span>
             </div>
           </div>
 
-          {/* bottom wave */}
           <div className="h-20 bg-[#eef2ff] [clip-path:ellipse(72%_100%_at_50%_100%)]" />
         </div>
       </section>
