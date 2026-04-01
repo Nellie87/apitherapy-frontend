@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase/client";
+import { createClient } from "@/lib/supabase/client";
 
 export type SellableRow = {
   product_id: string;
@@ -14,6 +14,7 @@ export type SellableRow = {
 };
 
 export async function listSellable(orgId: string) {
+  const supabase = createClient();
   const { data, error } = await supabase
     .from("inventory")
     .select(`

@@ -1,10 +1,11 @@
-import { supabase } from "@/lib/supabase/client";
+import { createClient } from "@/lib/supabase/client";
 
 /* ─────────────────────────────────────────────
    List products WITH lookup joins
    activeOnly = true by default
 ───────────────────────────────────────────── */
 export async function listProducts(orgId: string, activeOnly = true) {
+  const supabase = createClient();
   let query = supabase
     .from("products")
     .select(`
@@ -65,6 +66,7 @@ export async function createProduct(
     sell_status?: "to_be_sold" | "not_to_be_sold";
   }
 ) {
+  const supabase = createClient();
   const { data, error } = await supabase
     .from("products")
     .insert([
@@ -98,6 +100,7 @@ export async function createProduct(
    Archive product (soft delete)
 ───────────────────────────────────────────── */
 export async function archiveProduct(orgId: string, id: string) {
+  const supabase = createClient();
   const { error } = await supabase
     .from("products")
     .update({ active: false })
@@ -111,6 +114,7 @@ export async function archiveProduct(orgId: string, id: string) {
    Restore product
 ───────────────────────────────────────────── */
 export async function restoreProduct(orgId: string, id: string) {
+  const supabase = createClient();
   const { error } = await supabase
     .from("products")
     .update({ active: true })
@@ -124,6 +128,7 @@ export async function restoreProduct(orgId: string, id: string) {
    Hard delete ONLY if never used in sales
 ───────────────────────────────────────────── */
 export async function deleteProductForever(orgId: string, id: string) {
+  const supabase = createClient();
   const { count, error: countErr } = await supabase
     .from("sale_items")
     .select("id", { count: "exact", head: true })

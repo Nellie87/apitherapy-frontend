@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase/client";
+import { createClient } from "@/lib/supabase/client";
 
 const navItems = [
   { href: "/dashboard/summarydashboard", label: "Dashboard", icon: "⊞" },
@@ -23,6 +23,7 @@ export default function DashboardShell({
   const router = useRouter();
 
   async function handleLogout() {
+    const supabase = createClient();
     await supabase.auth.signOut();
     router.replace("/login");
     router.refresh();

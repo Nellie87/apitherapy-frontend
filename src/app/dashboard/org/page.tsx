@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabase/client";
+import { createClient } from "@/lib/supabase/client";
 import { setOrgId } from "@/lib/org/org";
 
 export default function OrgPage() {
@@ -10,6 +10,7 @@ export default function OrgPage() {
   const [msg, setMsg] = useState("");
 
   async function loadOrgs() {
+    const supabase = createClient();
     const { data, error } = await supabase
       .from("my_orgs")
       .select("*")
@@ -21,6 +22,7 @@ export default function OrgPage() {
 
   useEffect(() => {
     async function init() {
+      const supabase = createClient();
       const {
         data: { session },
       } = await supabase.auth.getSession();
@@ -44,7 +46,7 @@ export default function OrgPage() {
         setMsg("Enter organization name.");
         return;
       }
-
+      const supabase = createClient();
       const { data, error } = await supabase.rpc("create_org", {
         p_name: name.trim(),
       });
@@ -114,6 +116,7 @@ export default function OrgPage() {
         <button
           className="text-sm text-zinc-700 underline"
           onClick={async () => {
+            const supabase = createClient();
             await supabase.auth.signOut();
             window.location.href = "/login";
           }}

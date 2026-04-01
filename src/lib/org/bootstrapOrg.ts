@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase/client";
+import { createClient } from "@/lib/supabase/client";
 import { getOrgId, setOrgId } from "@/lib/org/org";
 
 /**
@@ -7,10 +7,13 @@ import { getOrgId, setOrgId } from "@/lib/org/org";
  * - Else loads my_orgs and picks newest
  * - Else creates "My Shop" and returns it
  */
+
+
 export async function bootstrapOrg(): Promise<string> {
   const existing = getOrgId();
   if (existing) return existing;
 
+  const supabase = createClient();
   const { data: orgs, error } = await supabase
     .from("my_orgs")
     .select("id, name, created_at")

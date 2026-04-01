@@ -1,6 +1,7 @@
-import { supabase } from "@/lib/supabase/client";
+import { createClient } from "@/lib/supabase/client";
 
 export async function listUnitMeasures(orgId: string) {
+  const supabase = createClient();
   const { data, error } = await supabase
     .from("unit_measures")
     .select("id,name,allowed_kinds")
@@ -11,6 +12,7 @@ export async function listUnitMeasures(orgId: string) {
 }
 
 export async function listUnitSizes(orgId: string) {
+  const supabase = createClient();
   const { data, error } = await supabase
     .from("unit_sizes")
     .select("id,label,kind,grams,ml,count")

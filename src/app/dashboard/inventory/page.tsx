@@ -8,7 +8,7 @@ import {
   type InventoryRow,
 } from "@/lib/api/inventory";
 import { listProducts } from "@/lib/api/products";
-import { supabase } from "@/lib/supabase/client";
+import { createClient } from "@/lib/supabase/client";
 
 import * as S from "./page.styles";
 
@@ -109,10 +109,12 @@ function Modal({ open, title, children, onClose, footer }: {
 }
 
 /* ─── Movement log ───────────────────────────────────────────── */
+
 async function logMovement(payload: {
   org_id: string; product_id: string; type: "add" | "remove" | "set" | "restock";
   qty_delta: number; qty_before: number; qty_after: number; note?: string | null;
 }) {
+  const supabase = createClient();
   try { await supabase.from("inventory_movements").insert([payload]); } catch { /* silent */ }
 }
 
@@ -189,6 +191,7 @@ export default function InventoryPage() {
     if (!orgId || !addProductId) { setErr("Select a product."); return; }
     setSavingId(addProductId); setErr("");
     try {
+      const supabase = createClient();
       const qty = Number(addQty || 0); const reorder = Number(addReorder || 0);
       const { data: existing, error: e1 } = await supabase.from("inventory").select("org_id,product_id,qty_on_hand,reorder_level").eq("org_id", orgId).eq("product_id", addProductId).maybeSingle();
       if (e1) throw new Error(e1.message);

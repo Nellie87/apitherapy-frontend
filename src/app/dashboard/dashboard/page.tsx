@@ -5,7 +5,7 @@ import React, {
 } from "react";
 import Link from "next/link";
 import { bootstrapOrg } from "../../../lib/org/bootstrapOrg";
-import { supabase } from "@/lib/supabase/client";
+import { createClient } from "@/lib/supabase/client";
 import {
   getInventoryValuation, reportPnL, reportExpenses,
   type InventoryValuationRow,
@@ -622,6 +622,7 @@ export default function DashboardPage() {
         getInventoryValuation(orgId),
         reportExpenses(orgId, { from: range.from, to: range.to, granularity: "day" }),
       ]);
+      const supabase = createClient();
       const [{ data: sData, error: sErr }, { data: eData, error: eErr }] = await Promise.all([
         supabase.from("sales").select("id,sale_no,customer_name,total,discount_total,created_at")
           .eq("org_id", orgId).order("created_at", { ascending: false }).limit(12),

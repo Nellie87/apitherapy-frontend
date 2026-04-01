@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase/client";
+import { createClient } from "@/lib/supabase/client";
 
 /* ─────────────────────────────────────────────
    Shared Types
@@ -66,6 +66,7 @@ export async function getSalesSummary(orgId: string, args: { from: string; to: s
   const fromISO = isoStartDay(args.from);
   const toISOExclusive = isoEndExclusiveDay(args.to);
 
+  const supabase = createClient();
   const { data, error } = await supabase
     .from("sales")
     .select("created_at, subtotal, discount_total, total")
@@ -142,6 +143,7 @@ export type InventoryValuationResult = {
 };
 
 export async function getInventoryValuation(orgId: string) {
+  const supabase = createClient();
   const { data, error } = await supabase
     .from("inventory")
     .select(
@@ -235,6 +237,7 @@ export type DiscountReportResult = {
 export async function getDiscountReport(orgId: string, args: { from?: string; to?: string }) {
   const fromISO = args.from ? isoStartDay(args.from) : null;
   const toISOExclusive = args.to ? isoEndExclusiveDay(args.to) : null;
+  const supabase = createClient();
 
   let q = supabase
     .from("sale_items")
@@ -345,7 +348,7 @@ async function reportExpensesCore(
 ) {
   const g: Granularity = args.granularity ?? "day";
   const topN = args.topN ?? 8;
-
+  const supabase = createClient();
   const { data, error } = await supabase
     .from("expenses")
     .select("expense_date, amount, category")
@@ -437,6 +440,7 @@ async function reportPnLCore(orgId: string, args: { from: string; to: string; gr
   const toISOExclusive = isoEndExclusiveDay(args.to);
 
   // 1) Sales
+  const supabase = createClient();
   const { data: sales, error: salesErr } = await supabase
     .from("sales")
     .select("id,total,discount_total,created_at,sold_at")
@@ -610,6 +614,8 @@ export async function getBalanceSheet(orgId: string, args: { as_of: string }) {
   const toISOExclusive = isoEndExclusiveDay(asOf);
 
   // Inventory at cost (point-in-time)
+  const supabase = createClient();
+
   const { data: inv, error: invErr } = await supabase
     .from("inventory")
     .select(

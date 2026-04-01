@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase/client";
+import { createClient } from "@/lib/supabase/client";
 
 export type ExpenseRow = {
   id: string;
@@ -14,6 +14,7 @@ export async function listExpenses(
   orgId: string,
   args?: { from?: string; to?: string; q?: string }
 ) {
+  const supabase = createClient();
   let query = supabase
     .from("expenses")
     .select("id,org_id,expense_date,category,amount,note,created_at")
@@ -47,6 +48,7 @@ export async function createExpense(
     note?: string | null;
   }
 ) {
+  const supabase = createClient();
   const { data, error } = await supabase
     .from("expenses")
     .insert([
@@ -70,6 +72,7 @@ export async function updateExpense(
   id: string,
   patch: Partial<Pick<ExpenseRow, "expense_date" | "category" | "amount" | "note">>
 ) {
+  const supabase = createClient();
   const { data, error } = await supabase
     .from("expenses")
     .update(patch)
@@ -83,6 +86,7 @@ export async function updateExpense(
 }
 
 export async function deleteExpense(orgId: string, id: string) {
+  const supabase = createClient();
   const { error } = await supabase
     .from("expenses")
     .delete()
