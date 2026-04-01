@@ -1,763 +1,254 @@
-"use client";
-
-import { useState } from "react";
 import Image from "next/image";
 
-export default function PollinatorsBeekepersApitherapyPage() {
-  const [menuOpen, setMenuOpen] = useState(false);
-
+export default function Page() {
   return (
-    <main
-      style={{
-        fontFamily: "'Georgia', 'Times New Roman', serif",
-        backgroundColor: "#ffffff",
-        color: "#1a1a1a",
-        margin: 0,
-        padding: 0,
-        overflowX: "hidden",
-      }}
-    >
-      {/* ── NAV ── */}
-      <nav
-        style={{
-          position: "sticky",
-          top: 0,
-          zIndex: 100,
-          backgroundColor: "#ffffff",
-          borderBottom: "1px solid #f5e6c8",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          padding: "0 5%",
-          height: "64px",
-          boxShadow: "0 2px 12px rgba(0,0,0,0.04)",
-        }}
-      >
-        {/* Logo */}
-        <span
-          style={{
-            fontSize: "1.35rem",
-            fontWeight: "700",
-            letterSpacing: "0.04em",
-            color: "#1a1a1a",
-          }}
-        >
-          Pollinators Beekepers Apitherapy
-        </span>
-
-        {/* Desktop links */}
-        <ul
-          style={{
-            display: "flex",
-            gap: "2rem",
-            listStyle: "none",
-            margin: 0,
-            padding: 0,
-            fontSize: "0.85rem",
-            letterSpacing: "0.08em",
-            textTransform: "uppercase",
-          }}
-          className="desktop-nav"
-        >
-          {["Home", "Blog", "Categories", "Products"].map((item) => (
-            <li key={item}>
-              <a
-                href="#"
-                style={{
-                  color: "#555",
-                  textDecoration: "none",
-                  transition: "color 0.2s",
-                }}
-                onMouseEnter={(e) =>
-                  ((e.target as HTMLAnchorElement).style.color = "#e8a000")
-                }
-                onMouseLeave={(e) =>
-                  ((e.target as HTMLAnchorElement).style.color = "#555")
-                }
-              >
-                {item}
-              </a>
-            </li>
-          ))}
-        </ul>
-
-        <a
-          href="#"
-          style={{
-            backgroundColor: "#e8a000",
-            color: "#fff",
-            padding: "0.55rem 1.4rem",
-            borderRadius: "4px",
-            textDecoration: "none",
-            fontSize: "0.8rem",
-            fontFamily: "sans-serif",
-            fontWeight: "700",
-            letterSpacing: "0.07em",
-            textTransform: "uppercase",
-            transition: "background 0.2s",
-          }}
-          onMouseEnter={(e) =>
-            ((e.target as HTMLAnchorElement).style.backgroundColor = "#c88a00")
-          }
-          onMouseLeave={(e) =>
-            ((e.target as HTMLAnchorElement).style.backgroundColor = "#e8a000")
-          }
-          className="desktop-cta"
-        >
-          Contact Us
-        </a>
-
-        {/* Hamburger */}
-        <button
-          onClick={() => setMenuOpen(!menuOpen)}
-          style={{
-            display: "none",
-            background: "none",
-            border: "none",
-            cursor: "pointer",
-            fontSize: "1.5rem",
-            color: "#1a1a1a",
-          }}
-          className="hamburger"
-          aria-label="Toggle menu"
-        >
-          {menuOpen ? "✕" : "☰"}
-        </button>
-      </nav>
-
-      {/* Mobile menu */}
-      {menuOpen && (
-        <div
-          style={{
-            backgroundColor: "#fff",
-            borderBottom: "1px solid #f5e6c8",
-            padding: "1.5rem 5%",
-            display: "flex",
-            flexDirection: "column",
-            gap: "1rem",
-          }}
-        >
-          {["Home", "Blog", "Categories", "Products", "Contact Us"].map(
-            (item) => (
-              <a
-                key={item}
-                href="#"
-                style={{
-                  color: "#1a1a1a",
-                  textDecoration: "none",
-                  fontSize: "1rem",
-                  fontFamily: "sans-serif",
-                  letterSpacing: "0.05em",
-                }}
-              >
-                {item}
-              </a>
-            )
-          )}
+    <main className="relative overflow-hidden bg-[#f7f7f4] text-[#2f2a26]">
+      {/* Top honey drip */}
+      <div className="absolute inset-x-0 top-0 z-10 h-24 bg-gradient-to-b from-[#f4c23d] to-[#f0b61d] shadow-[0_8px_30px_rgba(240,182,29,0.25)]">
+        <div className="relative h-full w-full">
+          <span className="absolute left-[4%] top-full h-10 w-5 rounded-b-full bg-[#f0b61d]" />
+          <span className="absolute left-[12%] top-full h-16 w-6 rounded-b-full bg-[#f0b61d]" />
+          <span className="absolute left-[26%] top-full h-8 w-4 rounded-b-full bg-[#f0b61d]" />
+          <span className="absolute left-[47%] top-full h-12 w-5 rounded-b-full bg-[#f0b61d]" />
+          <span className="absolute left-[64%] top-full h-7 w-4 rounded-b-full bg-[#f0b61d]" />
+          <span className="absolute left-[78%] top-full h-14 w-6 rounded-b-full bg-[#f0b61d]" />
+          <span className="absolute left-[90%] top-full h-9 w-4 rounded-b-full bg-[#f0b61d]" />
         </div>
-      )}
+      </div>
 
-      {/* ── HERO ── */}
-      <section
-        style={{
-          background: "linear-gradient(135deg, #fffef5 0%, #fff9e6 60%, #fff3cc 100%)",
-          padding: "5rem 5% 4rem",
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          alignItems: "center",
-          gap: "3rem",
-          minHeight: "80vh",
-        }}
-        className="hero-section"
+      {/* Floating decorative dots */}
+      <div className="pointer-events-none absolute inset-0">
+        <span className="absolute left-8 top-[26rem] h-8 w-8 rounded-full bg-[#f2bb2b]/70 blur-[1px]" />
+        <span className="absolute left-16 top-[30rem] h-4 w-4 rounded-full bg-[#ffd564]/70" />
+        <span className="absolute right-20 top-[52rem] h-20 w-20 rounded-full bg-[#f2bb2b]/35 blur-[1px]" />
+        <span className="absolute right-10 top-[58rem] h-6 w-6 rounded-full bg-[#ffd564]/80" />
+        <span className="absolute left-[22%] bottom-40 h-5 w-5 rounded-full bg-[#f2bb2b]/50" />
+        <span className="absolute right-[18%] bottom-24 h-12 w-12 rounded-full bg-[#f2bb2b]/25" />
+      </div>
+
+      {/* Simple SVG dotted path */}
+      <svg
+        className="pointer-events-none absolute left-0 top-28 h-[1400px] w-full opacity-50"
+        viewBox="0 0 1440 1400"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
       >
-        {/* Text */}
-        <div>
-          <p
-            style={{
-              fontSize: "0.78rem",
-              letterSpacing: "0.18em",
-              textTransform: "uppercase",
-              color: "#e8a000",
-              fontFamily: "sans-serif",
-              marginBottom: "0.75rem",
-              fontWeight: 600,
-            }}
-          >
-            Artisan Honey Products
-          </p>
-          <h1
-            style={{
-              fontSize: "clamp(2.4rem, 5vw, 3.8rem)",
-              fontWeight: "800",
-              lineHeight: 1.1,
-              margin: "0 0 1.25rem",
-              color: "#1a1a1a",
-            }}
-          >
-            Crafting Sweet
-            <br />
-            Moments Just
-            <br />
-            <span style={{ color: "#e8a000" }}>For You!</span>
-          </h1>
-          <p
-            style={{
-              fontSize: "1rem",
-              lineHeight: 1.7,
-              color: "#666",
-              maxWidth: "420px",
-              fontFamily: "sans-serif",
-              fontWeight: 400,
-              marginBottom: "2rem",
-            }}
-          >
-            Our passion for honey is woven into every product we curate, ensuring you
-            receive nothing but the finest and most exquisite offerings.
-          </p>
-          <a
-            href="#products"
-            style={{
-              display: "inline-block",
-              backgroundColor: "#e8a000",
-              color: "#fff",
-              padding: "0.85rem 2.2rem",
-              borderRadius: "4px",
-              textDecoration: "none",
-              fontFamily: "sans-serif",
-              fontWeight: "700",
-              fontSize: "0.9rem",
-              letterSpacing: "0.06em",
-              textTransform: "uppercase",
-              transition: "background 0.2s, transform 0.15s",
-              boxShadow: "0 4px 16px rgba(232,160,0,0.3)",
-            }}
-            onMouseEnter={(e) => {
-              const el = e.target as HTMLAnchorElement;
-              el.style.backgroundColor = "#c88a00";
-              el.style.transform = "translateY(-2px)";
-            }}
-            onMouseLeave={(e) => {
-              const el = e.target as HTMLAnchorElement;
-              el.style.backgroundColor = "#e8a000";
-              el.style.transform = "translateY(0)";
-            }}
-          >
-            Shop Now
-          </a>
-        </div>
+        <path
+          d="M40 180C140 260 260 230 340 300C430 380 350 510 500 570C620 620 760 520 830 610C900 700 780 810 860 910C940 1010 1120 980 1210 1090C1270 1160 1270 1240 1360 1290"
+          stroke="#7f95c8"
+          strokeWidth="2.5"
+          strokeDasharray="8 9"
+          strokeLinecap="round"
+        />
+        <circle cx="340" cy="300" r="8" fill="#f5cd54" />
+        <circle cx="500" cy="570" r="8" fill="#9db7ff" />
+        <circle cx="830" cy="610" r="8" fill="#9db7ff" />
+        <circle cx="860" cy="910" r="8" fill="#9db7ff" />
+        <circle cx="1210" cy="1090" r="8" fill="#f5cd54" />
+      </svg>
 
-        {/* Hero image placeholder */}
-        <div
-  style={{
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
-  }}
->
-  <div
-    style={{
-      position: "relative",
-      width: "100%",
-      maxWidth: "480px",
-      aspectRatio: "4/3",
-      borderRadius: "16px",
-      overflow: "hidden",
-    }}
-  >
-    <Image
-      src="/images/honey drip.jpeg"
-      alt="Honey products"
-      fill
-      style={{ objectFit: "cover" }}
-    />
-  </div>
-</div>
-      </section>
-      
-
-      {/* ── ABOUT ── */}
-      <section
-        style={{
-          padding: "5rem 5%",
-          backgroundColor: "#ffffff",
-        }}
-      >
-        <h2
-          style={{
-            textAlign: "center",
-            fontSize: "clamp(1.8rem, 4vw, 2.6rem)",
-            marginBottom: "3.5rem",
-            letterSpacing: "0.06em",
-            textTransform: "uppercase",
-            color: "#1a1a1a",
-          }}
-        >
-          About Us
-        </h2>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: "4rem",
-            alignItems: "center",
-            maxWidth: "1100px",
-            margin: "0 auto",
-          }}
-          className="about-grid"
-        >
-          {/* About image placeholder */}
-          <div
-            style={{
-              width: "100%",
-              aspectRatio: "4/3",
-              borderRadius: "12px",
-              background: "linear-gradient(135deg, #fff9e6, #ffe8a0)",
-              border: "2px dashed #e8c870",
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "0.6rem",
-              color: "#b8860b",
-              fontFamily: "sans-serif",
-              fontSize: "0.85rem",
-              textAlign: "center",
-              padding: "2rem",
-            }}
-          >
-            <span style={{ fontSize: "2.5rem" }}>📸</span>
-            <strong style={{ fontWeight: 700 }}>About Image</strong>
-            <span style={{ opacity: 0.7 }}>Replace with your brand / process photo</span>
-          </div>
-
-          {/* Text */}
-          <div>
-            <div
-              style={{
-                width: "40px",
-                height: "3px",
-                backgroundColor: "#e8a000",
-                marginBottom: "1.5rem",
-                borderRadius: "2px",
-              }}
-            />
-            <p
-              style={{
-                fontSize: "1.05rem",
-                lineHeight: 1.85,
-                color: "#444",
-                fontFamily: "sans-serif",
-                marginBottom: "1.25rem",
-              }}
-            >
-              Welcome to Pollinators Beekepers Apitherapy, where we craft sweet moments for you to savor
-              and cherish. Our passion for honey is woven into every product we curate,
-              ensuring you receive nothing but the finest and most exquisite offerings.
-            </p>
-            <p
-              style={{
-                fontSize: "1.05rem",
-                lineHeight: 1.85,
-                color: "#444",
-                fontFamily: "sans-serif",
-              }}
-            >
-              From golden liquid honey to delectable honey-based confections, each
-              creation embodies the essence of{" "}
-              <strong style={{ color: "#1a1a1a" }}>
-                craftsmanship and dedication
-              </strong>
-              .
-            </p>
-          </div>
-        </div>
+      {/* Header */}
+      <section className="relative z-20 mx-auto flex max-w-7xl flex-col items-center px-6 pb-8 pt-36 text-center">
+        <p className="mb-2 text-lg text-[#6e655d]">Online store</p>
+        <h1 className="font-serif text-5xl font-bold tracking-tight text-[#2f2a26] md:text-6xl">
+          Organic honey
+        </h1>
+        <p className="mt-3 text-base text-[#7a7169] md:text-lg">
+          Pure, golden, natural sweetness from the manufacturer
+        </p>
       </section>
 
-      {/* ── DECORATIVE DIVIDER ── */}
-      <div
-        style={{
-          height: "2px",
-          background: "linear-gradient(90deg, transparent, #ffe08a, transparent)",
-          margin: "0 5%",
-        }}
-      />
+      {/* Hero card */}
+      <section className="relative z-20 mx-auto max-w-6xl px-4 pb-24">
+        <div className="relative overflow-hidden rounded-[32px] border border-white/60 bg-white/80 shadow-[0_15px_60px_rgba(45,36,22,0.08)] backdrop-blur">
+          {/* top nav */}
+          <div className="flex items-center justify-between border-b border-[#efe9de] px-6 py-5 md:px-10">
+            <div>
+              <p className="text-lg font-black uppercase tracking-wide text-[#db9f00]">
+                Honey Grove
+              </p>
+            </div>
 
-      {/* ── BEST SELLING PRODUCTS ── */}
-      <section
-        id="products"
-        style={{
-          padding: "5rem 5%",
-          backgroundColor: "#fffef8",
-        }}
-      >
-        <div style={{ textAlign: "center", marginBottom: "3.5rem" }}>
-          <h2
-            style={{
-              fontSize: "clamp(1.8rem, 4vw, 2.6rem)",
-              letterSpacing: "0.06em",
-              textTransform: "uppercase",
-              color: "#1a1a1a",
-              marginBottom: "0.75rem",
-            }}
-          >
-            Best Selling Products
-          </h2>
-          <p
-            style={{
-              color: "#888",
-              fontFamily: "sans-serif",
-              fontSize: "0.95rem",
-              maxWidth: "540px",
-              margin: "0 auto",
-              lineHeight: 1.65,
-            }}
-          >
-            Handcrafted honey delights, carefully designed to elevate your everyday
-            indulgences and make every moment sweeter.
-          </p>
-        </div>
+            <nav className="hidden gap-8 text-sm text-[#5f5852] md:flex">
+              <a href="#home" className="transition hover:text-[#db9f00]">
+                Home
+              </a>
+              <a href="#products" className="transition hover:text-[#db9f00]">
+                Our Products
+              </a>
+              <a href="#about" className="transition hover:text-[#db9f00]">
+                About
+              </a>
+              <a href="#delivery" className="transition hover:text-[#db9f00]">
+                Delivery
+              </a>
+              <a href="#contact" className="transition hover:text-[#db9f00]">
+                Contact
+              </a>
+            </nav>
 
-        {/* Product grid */}
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(3, 1fr)",
-            gap: "2rem",
-            maxWidth: "1100px",
-            margin: "0 auto",
-          }}
-          className="products-grid"
-        >
-          {[
-            { name: "Pure Raw Honey", price: "$20.00", desc: "Honey is a sweet, liquid food, heaven-sent product by bees." },
-            { name: "Wildflower", price: "$100.00", desc: "Honey is a sweet, liquid food, heaven-sent product by bees." },
-            { name: "Forest Honey", price: "$100.00", desc: "Honey is a sweet-scented honey, heaven-sent product by bees." },
-          ].map((product) => (
-            <div
-              key={product.name}
-              style={{
-                backgroundColor: "#ffffff",
-                borderRadius: "12px",
-                overflow: "hidden",
-                border: "1px solid #f0e0b0",
-                transition: "transform 0.25s, box-shadow 0.25s",
-                cursor: "pointer",
-              }}
-              onMouseEnter={(e) => {
-                const el = e.currentTarget as HTMLDivElement;
-                el.style.transform = "translateY(-6px)";
-                el.style.boxShadow = "0 12px 32px rgba(232,160,0,0.18)";
-              }}
-              onMouseLeave={(e) => {
-                const el = e.currentTarget as HTMLDivElement;
-                el.style.transform = "translateY(0)";
-                el.style.boxShadow = "none";
-              }}
+            <a
+              href="#products"
+              className="rounded-full bg-[#f2bb2b] px-4 py-2 text-sm font-semibold text-[#3c2d0b] shadow-sm transition hover:scale-[1.02] hover:bg-[#eab51b]"
             >
-              {/* Product image placeholder */}
-              <div
-                style={{
-                  width: "100%",
-                  aspectRatio: "1/1",
-                  background: "linear-gradient(135deg, #fff9e6, #ffe8a0)",
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  borderBottom: "1px dashed #e8c870",
-                  gap: "0.4rem",
-                  color: "#b8860b",
-                  fontFamily: "sans-serif",
-                  fontSize: "0.75rem",
-                  textAlign: "center",
-                  padding: "1rem",
-                }}
-              >
-                <span style={{ fontSize: "2.5rem" }}>🫙</span>
-                <strong style={{ fontWeight: 700, fontSize: "0.8rem" }}>Product Image</strong>
-                <span style={{ opacity: 0.65 }}>Replace with product photo</span>
+              Shop now
+            </a>
+          </div>
+
+          <div className="grid items-center gap-10 px-6 py-10 md:grid-cols-2 md:px-10 md:py-14">
+            <div>
+              <p className="mb-3 text-sm uppercase tracking-[0.3em] text-[#c9a651]">
+                Natural product
+              </p>
+              <h2 className="max-w-lg font-serif text-4xl font-bold leading-tight md:text-5xl">
+                Pure honey for a healthy and cozy lifestyle
+              </h2>
+
+              <ul className="mt-6 space-y-3 text-lg text-[#625952]">
+                <li>Ideal for breakfast</li>
+                <li>Perfect natural sugar alternative</li>
+                <li>Delicious, healthy, and organic</li>
+              </ul>
+
+              <div className="mt-8 flex flex-wrap gap-4">
+                <a
+                  href="#products"
+                  className="rounded-full bg-[#f2bb2b] px-6 py-3 text-sm font-semibold text-[#3c2d0b] transition hover:scale-[1.02] hover:bg-[#eab51b]"
+                >
+                  View products
+                </a>
+                <a
+                  href="#about"
+                  className="rounded-full border border-[#ddd4c7] px-6 py-3 text-sm font-medium text-[#524a44] transition hover:bg-[#faf7f2]"
+                >
+                  Learn more
+                </a>
+              </div>
+            </div>
+
+            <div className="relative flex items-center justify-center">
+              {/* Decorative background blob */}
+              <div className="absolute h-[360px] w-[360px] rounded-full bg-[#fff4cf]" />
+              <div className="absolute h-[280px] w-[280px] rounded-full border border-dashed border-[#d7d2c7]" />
+
+              {/* Replace this with your real jar image from /public if you have one */}
+              <div className="relative z-10 rounded-[28px] bg-white p-6 shadow-[0_15px_40px_rgba(50,40,20,0.12)]">
+                <Image
+                  src="/honey-.png"
+                  alt="Jar of organic honey"
+                  width={340}
+                  height={340}
+                  className="h-auto w-[240px] object-contain md:w-[300px]"
+                />
               </div>
 
-              {/* Product info */}
-              <div style={{ padding: "1.25rem" }}>
-                <h3
-                  style={{
-                    fontSize: "0.85rem",
-                    letterSpacing: "0.1em",
-                    textTransform: "uppercase",
-                    margin: "0 0 0.3rem",
-                    fontFamily: "sans-serif",
-                    fontWeight: 700,
-                    color: "#1a1a1a",
-                  }}
-                >
-                  {product.name}
-                </h3>
-                <p
-                  style={{
-                    color: "#e8a000",
-                    fontWeight: "700",
-                    fontSize: "1.05rem",
-                    margin: "0 0 0.6rem",
-                    fontFamily: "sans-serif",
-                  }}
-                >
-                  {product.price}
-                </p>
-                <p
-                  style={{
-                    fontSize: "0.82rem",
-                    color: "#888",
-                    lineHeight: 1.55,
-                    fontFamily: "sans-serif",
-                    margin: 0,
-                  }}
-                >
-                  {product.desc}
+              {/* Bees */}
+              <span className="absolute left-4 top-10 text-2xl">🐝</span>
+              <span className="absolute right-8 top-4 text-xl">🐝</span>
+              <span className="absolute bottom-8 right-14 text-2xl">🐝</span>
+            </div>
+          </div>
+
+          {/* bottom wave */}
+          <div className="h-20 bg-[#eef2ff] [clip-path:ellipse(72%_100%_at_50%_100%)]" />
+        </div>
+      </section>
+
+      {/* Research / story section */}
+      <section className="relative z-20 mx-auto max-w-6xl px-6 pb-24">
+        <div className="grid gap-14 md:grid-cols-2">
+          <div>
+            <h3 className="font-serif text-4xl font-bold">Research</h3>
+
+            <div className="mt-14 space-y-12">
+              <div>
+                <h4 className="mb-3 text-2xl font-bold">Goals and objectives</h4>
+                <ul className="space-y-2 text-[#5d5751]">
+                  <li>• Create an organic, warm, and inviting design</li>
+                  <li>• Improve usability and product discovery</li>
+                  <li>• Increase conversions with a cleaner layout</li>
+                </ul>
+              </div>
+
+              <div>
+                <h4 className="mb-3 text-2xl font-bold">Prototype</h4>
+                <p className="max-w-md leading-7 text-[#5d5751]">
+                  The design focuses on an easy customer journey, from landing
+                  page exploration to browsing products and learning more about
+                  the farm and production process.
                 </p>
               </div>
             </div>
-          ))}
-        </div>
+          </div>
 
-        {/* View all button */}
-        <div style={{ textAlign: "center", marginTop: "3rem" }}>
-          <a
-            href="#"
-            style={{
-              display: "inline-block",
-              border: "2px solid #e8a000",
-              color: "#e8a000",
-              padding: "0.75rem 2rem",
-              borderRadius: "4px",
-              textDecoration: "none",
-              fontFamily: "sans-serif",
-              fontWeight: "700",
-              fontSize: "0.85rem",
-              letterSpacing: "0.08em",
-              textTransform: "uppercase",
-              transition: "background 0.2s, color 0.2s",
-            }}
-            onMouseEnter={(e) => {
-              const el = e.target as HTMLAnchorElement;
-              el.style.backgroundColor = "#e8a000";
-              el.style.color = "#fff";
-            }}
-            onMouseLeave={(e) => {
-              const el = e.target as HTMLAnchorElement;
-              el.style.backgroundColor = "transparent";
-              el.style.color = "#e8a000";
-            }}
-          >
-            View All Products
-          </a>
+          <div className="space-y-12 pt-2">
+            <div>
+              <h4 className="mb-3 text-2xl font-bold">About</h4>
+              <p className="max-w-md leading-7 text-[#5d5751]">
+                Honey Grove is an organic honey brand focused on providing pure,
+                healthy, and naturally harvested honey. The site design reflects
+                softness, trust, warmth, and simplicity.
+              </p>
+            </div>
+
+            <div>
+              <h4 className="mb-3 text-2xl font-bold">My vision</h4>
+              <p className="max-w-md leading-7 text-[#5d5751]">
+                I wanted the website to feel comforting and natural, while still
+                looking modern. The key idea was to combine coziness with clear
+                usability, so customers can browse and shop effortlessly.
+              </p>
+            </div>
+
+            <div className="relative mt-6 flex h-44 items-center justify-center rounded-[28px] bg-[#fff8df] shadow-[0_10px_30px_rgba(60,45,10,0.08)]">
+              <Image
+                src="/honey-dipper.png"
+                alt="Honey dipper"
+                width={340}
+                height={160}
+                className="h-auto w-[260px] object-contain"
+              />
+            </div>
+          </div>
         </div>
       </section>
 
-      {/* ── BANNER ── */}
-      <section
-        style={{
-          background: "linear-gradient(135deg, #e8a000, #ffcc44)",
-          padding: "4rem 5%",
-          textAlign: "center",
-          color: "#fff",
-        }}
-      >
-        <h2
-          style={{
-            fontSize: "clamp(1.8rem, 4vw, 2.8rem)",
-            fontWeight: "800",
-            margin: "0 0 1rem",
-            textShadow: "0 2px 8px rgba(0,0,0,0.1)",
-          }}
-        >
-          Pure. Natural. Crafted with Love.
-        </h2>
-        <p
-          style={{
-            fontFamily: "sans-serif",
-            fontSize: "1.05rem",
-            opacity: 0.92,
-            marginBottom: "2rem",
-            maxWidth: "500px",
-            margin: "0 auto 2rem",
-            lineHeight: 1.65,
-          }}
-        >
-          Join thousands of honey lovers who trust Pollinators Beekepers Apitherapy for their daily sweetness.
-        </p>
-        <a
-          href="#"
-          style={{
-            display: "inline-block",
-            backgroundColor: "#fff",
-            color: "#e8a000",
-            padding: "0.85rem 2.4rem",
-            borderRadius: "4px",
-            textDecoration: "none",
-            fontFamily: "sans-serif",
-            fontWeight: "800",
-            fontSize: "0.9rem",
-            letterSpacing: "0.06em",
-            textTransform: "uppercase",
-            transition: "transform 0.15s",
-            boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
-          }}
-          onMouseEnter={(e) =>
-            ((e.target as HTMLAnchorElement).style.transform = "scale(1.04)")
-          }
-          onMouseLeave={(e) =>
-            ((e.target as HTMLAnchorElement).style.transform = "scale(1)")
-          }
-        >
-          Explore Collection
-        </a>
+      {/* Soft divider section */}
+      <section className="relative z-20 bg-[#eef2ff] py-24">
+        <div className="absolute inset-x-0 top-0 h-20 bg-[#f7f7f4] [clip-path:ellipse(70%_100%_at_50%_0%)]" />
+        <div className="mx-auto max-w-6xl px-6">
+          <div className="grid gap-10 md:grid-cols-3">
+            <div className="rounded-[28px] bg-white p-8 shadow-[0_10px_30px_rgba(0,0,0,0.06)]">
+              <h5 className="mb-3 text-xl font-bold">Main page</h5>
+              <p className="leading-7 text-[#5d5751]">
+                A warm hero section with clear product value, beautiful
+                visuals, and a strong call to action.
+              </p>
+            </div>
+
+            <div className="rounded-[28px] bg-white p-8 shadow-[0_10px_30px_rgba(0,0,0,0.06)]">
+              <h5 className="mb-3 text-xl font-bold">Catalog & product cards</h5>
+              <p className="leading-7 text-[#5d5751]">
+                Clean product browsing, simple filters, and product cards that
+                highlight quality and purity.
+              </p>
+            </div>
+
+            <div className="rounded-[28px] bg-white p-8 shadow-[0_10px_30px_rgba(0,0,0,0.06)]">
+              <h5 className="mb-3 text-xl font-bold">About the farm</h5>
+              <p className="leading-7 text-[#5d5751]">
+                A storytelling section about the brand, harvesting process, and
+                natural ingredients.
+              </p>
+            </div>
+          </div>
+        </div>
       </section>
 
-      {/* ── FOOTER ── */}
-      <footer
-        style={{
-          backgroundColor: "#1a1a1a",
-          color: "#ccc",
-          padding: "3rem 5% 2rem",
-          fontFamily: "sans-serif",
-        }}
-      >
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "2fr 1fr 1fr",
-            gap: "3rem",
-            maxWidth: "1100px",
-            margin: "0 auto 2rem",
-          }}
-          className="footer-grid"
-        >
-          <div>
-            <h3
-              style={{
-                color: "#fff",
-                fontSize: "1.2rem",
-                marginBottom: "0.75rem",
-                fontFamily: "Georgia, serif",
-              }}
-            >
-              Pollinators Beekepers Apitherapy
-            </h3>
-            <p style={{ lineHeight: 1.7, fontSize: "0.88rem", color: "#aaa" }}>
-              Crafting sweet moments with the finest artisan honey products since 2010.
-            </p>
-          </div>
-          <div>
-            <h4
-              style={{
-                color: "#fff",
-                fontSize: "0.8rem",
-                textTransform: "uppercase",
-                letterSpacing: "0.1em",
-                marginBottom: "1rem",
-              }}
-            >
-              Links
-            </h4>
-            {["Home", "Blog", "Categories", "Products", "Contact"].map((l) => (
-              <div key={l} style={{ marginBottom: "0.5rem" }}>
-                <a
-                  href="#"
-                  style={{
-                    color: "#aaa",
-                    textDecoration: "none",
-                    fontSize: "0.88rem",
-                    transition: "color 0.2s",
-                  }}
-                  onMouseEnter={(e) =>
-                    ((e.target as HTMLAnchorElement).style.color = "#e8a000")
-                  }
-                  onMouseLeave={(e) =>
-                    ((e.target as HTMLAnchorElement).style.color = "#aaa")
-                  }
-                >
-                  {l}
-                </a>
-              </div>
-            ))}
-          </div>
-          <div>
-            <h4
-              style={{
-                color: "#fff",
-                fontSize: "0.8rem",
-                textTransform: "uppercase",
-                letterSpacing: "0.1em",
-                marginBottom: "1rem",
-              }}
-            >
-              Contact
-            </h4>
-            <p style={{ fontSize: "0.88rem", color: "#aaa", lineHeight: 1.7 }}>
-              hello@pollinatorsbeekepersapitherapy.com
-              <br />
-              +1 (800) 555-HONEY
-              <br />
-              Mon–Fri, 9am–5pm
-            </p>
-          </div>
-        </div>
-        <div
-          style={{
-            borderTop: "1px solid #333",
-            paddingTop: "1.25rem",
-            textAlign: "center",
-            fontSize: "0.78rem",
-            color: "#666",
-          }}
-        >
-          © {new Date().getFullYear()} Pollinators Beekepers Apitherapy. All rights reserved.
-        </div>
+      {/* Footer */}
+      <footer className="relative z-20 px-6 py-10 text-center text-sm text-[#7a7169]">
+        <p>© 2026 Honey Grove. Crafted with warmth and simplicity.</p>
       </footer>
-
-      {/* ── RESPONSIVE STYLES ── */}
-      <style>{`
-        @media (max-width: 768px) {
-          .desktop-nav,
-          .desktop-cta {
-            display: none !important;
-          }
-          .hamburger {
-            display: block !important;
-          }
-          .hero-section {
-            grid-template-columns: 1fr !important;
-            text-align: center;
-            padding: 3rem 5% !important;
-            min-height: auto !important;
-          }
-          .hero-section > div:first-child {
-            align-items: center;
-            display: flex;
-            flex-direction: column;
-          }
-          .about-grid {
-            grid-template-columns: 1fr !important;
-            gap: 2rem !important;
-          }
-          .products-grid {
-            grid-template-columns: 1fr !important;
-          }
-          .footer-grid {
-            grid-template-columns: 1fr !important;
-            gap: 2rem !important;
-          }
-        }
-        @media (min-width: 769px) and (max-width: 1024px) {
-          .products-grid {
-            grid-template-columns: repeat(2, 1fr) !important;
-          }
-          .footer-grid {
-            grid-template-columns: 1fr 1fr !important;
-          }
-        }
-      `}</style>
     </main>
   );
 }

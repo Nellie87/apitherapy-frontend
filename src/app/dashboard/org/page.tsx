@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
-import { requireSession } from "@/lib/auth/session";
 import { setOrgId } from "@/lib/org/org";
 
 export default function OrgPage() {
@@ -11,33 +10,51 @@ export default function OrgPage() {
   const [msg, setMsg] = useState("");
 
   async function loadOrgs() {
-    const { data, error } = await supabase.from("my_orgs").select("*").order("created_at", { ascending: false });
+    const { data, error } = await supabase
+      .from("my_orgs")
+      .select("*")
+      .order("created_at", { ascending: false });
+
     if (error) throw error;
     setOrgs(data ?? []);
   }
 
   useEffect(() => {
-    (async () => {
-      const session = await requireSession();
+    async function init() {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
       if (!session) {
         window.location.href = "/login";
         return;
       }
+
       await loadOrgs();
-    })();
+    }
+
+    init();
   }, []);
 
   async function createOrg() {
     setMsg("");
+
     try {
-      if (!name.trim()) return setMsg("Enter organization name.");
-      const { data, error } = await supabase.rpc("create_org", { p_name: name.trim() });
+      if (!name.trim()) {
+        setMsg("Enter organization name.");
+        return;
+      }
+
+      const { data, error } = await supabase.rpc("create_org", {
+        p_name: name.trim(),
+      });
+
       if (error) throw error;
 
       setOrgId(data);
       window.location.href = "/dashboard/products";
     } catch (e: any) {
-      setMsg(e.message);
+      setMsg(e.message ?? "Something went wrong.");
     }
   }
 
@@ -64,6 +81,7 @@ export default function OrgPage() {
               Create
             </button>
           </div>
+
           {msg ? <div className="text-sm text-rose-600 mt-2">{msg}</div> : null}
         </div>
 
@@ -72,7 +90,9 @@ export default function OrgPage() {
 
           <div className="mt-4 grid gap-3">
             {orgs.length === 0 ? (
-              <div className="text-sm text-zinc-500">No orgs yet. Create one above.</div>
+              <div className="text-sm text-zinc-500">
+                No orgs yet. Create one above.
+              </div>
             ) : (
               orgs.map((o) => (
                 <button

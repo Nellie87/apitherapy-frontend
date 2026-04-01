@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { supabase } from "@/lib/supabase/client";
+import { useRouter } from "next/navigation";
+
 
 const BeeSVG = () => (
   <svg
@@ -67,6 +69,7 @@ export default function LoginPage() {
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [msg, setMsg] = useState<string>("");
   const [loading, setLoading] = useState(false);
+  
 
   async function handleSubmit() {
     setMsg("");
@@ -79,7 +82,8 @@ export default function LoginPage() {
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
-        window.location.href = "/dashboard"; // or use Next.js router
+        const router = useRouter();
+        router.push("/dashboard");
       }
     } catch (e: any) {
       setMsg(e.message || "An error occurred. Please try again.");
