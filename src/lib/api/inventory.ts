@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase/client";
+import { createClient } from "@/lib/supabase/client";
 
 export type InventoryProduct = {
   id: string;
@@ -20,6 +20,7 @@ export type InventoryRow = {
 };
 
 export async function listInventory(orgId: string): Promise<InventoryRow[]> {
+  const supabase = createClient();
   const { data, error } = await supabase
     .from("inventory")
     .select(`
@@ -49,6 +50,7 @@ export async function updateInventory(
   productId: string,
   patch: Partial<Pick<InventoryRow, "qty_on_hand" | "reorder_level">>
 ) {
+  const supabase = createClient();
   const { data, error } = await supabase
     .from("inventory")
     .update({ ...patch, updated_at: new Date().toISOString() })

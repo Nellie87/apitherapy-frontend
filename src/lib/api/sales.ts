@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase/client";
+import { createClient } from "@/lib/supabase/client";
 
 export type SaleRow = {
   id: string;
@@ -49,6 +49,7 @@ export type SaleRowWithItems = SaleRow & {
 };
 
 export async function listSales(orgId: string) {
+  const supabase = createClient();
   const { data, error } = await supabase
     .from("sales")
     .select(`
@@ -91,6 +92,7 @@ export async function listSales(orgId: string) {
 }
 
 export async function getSale(orgId: string, saleId: string) {
+  const supabase = createClient();
   const { data, error } = await supabase
     .from("sales")
     .select("id,org_id,sale_no,customer_name,status,subtotal,discount_total,total,created_at")
@@ -110,6 +112,7 @@ export async function getSale(orgId: string, saleId: string) {
 }
 
 export async function listSaleItems(orgId: string, saleId: string) {
+  const supabase = createClient();
   const { data, error } = await supabase
     .from("sale_items")
     .select(
@@ -153,6 +156,7 @@ export async function createSaleStrict(
   orgId: string,
   args: { customer_name?: string; items: CreateSaleItemInput[] }
 ) {
+  const supabase = createClient();
   const payload = {
     p_org_id: orgId,
     p_customer_name: args.customer_name ?? null,
