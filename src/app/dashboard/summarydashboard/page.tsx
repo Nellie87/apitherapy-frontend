@@ -2,6 +2,9 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { DayPicker, type DateRange } from "react-day-picker";
+import "react-day-picker/dist/style.css";
+
 import { bootstrapOrg } from "@/lib/org/bootstrapOrg";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -96,6 +99,19 @@ const fmtRangeLabel = (from: string, to: string) => {
   }
 };
 
+const dateToLocalIso = (date: Date) => {
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, "0");
+  const day = `${date.getDate()}`.padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const localIsoToDate = (value?: string) => {
+  if (!value) return undefined;
+  const [y, m, d] = value.split("-").map(Number);
+  return new Date(y, m - 1, d);
+};
+
 /* ─────────────────────────────────────────────
    Animated counter
 ───────────────────────────────────────────── */
@@ -108,12 +124,14 @@ function Counter({ to, duration = 600 }: { to: number; duration?: number }) {
     const t0 = performance.now();
     const from = prevTo.current;
     prevTo.current = to;
+
     const tick = (now: number) => {
       const p = Math.min((now - t0) / duration, 1);
       const ease = 1 - Math.pow(1 - p, 3);
       setV(Math.round(from + (to - from) * ease));
       if (p < 1) raf.current = requestAnimationFrame(tick);
     };
+
     raf.current = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf.current);
   }, [to, duration]);
@@ -124,13 +142,23 @@ function Counter({ to, duration = 600 }: { to: number; duration?: number }) {
 /* ─────────────────────────────────────────────
    Sparkline
 ───────────────────────────────────────────── */
-function Sparkline({ data, color = "#f59e0b", w = 72, h = 32 }: {
-  data: number[]; color?: string; w?: number; h?: number;
+function Sparkline({
+  data,
+  color = "#f59e0b",
+  w = 72,
+  h = 32,
+}: {
+  data: number[];
+  color?: string;
+  w?: number;
+  h?: number;
 }) {
   if (data.length < 2) return null;
+
   const max = Math.max(...data, 1);
   const min = Math.min(...data, 0);
   const range = max - min || 1;
+
   const pts = data
     .map((v, i) => {
       const x = (i / (data.length - 1)) * w;
@@ -138,11 +166,20 @@ function Sparkline({ data, color = "#f59e0b", w = 72, h = 32 }: {
       return `${x.toFixed(1)},${y.toFixed(1)}`;
     })
     .join(" ");
+
   const lastPt = pts.split(" ").pop()!.split(",").map(Number);
+
   return (
     <svg width={w} height={h} style={{ overflow: "visible", flexShrink: 0 }}>
-      <polyline points={pts} fill="none" stroke={color} strokeWidth="2"
-        strokeLinejoin="round" strokeLinecap="round" opacity="0.7" />
+      <polyline
+        points={pts}
+        fill="none"
+        stroke={color}
+        strokeWidth="2"
+        strokeLinejoin="round"
+        strokeLinecap="round"
+        opacity="0.7"
+      />
       <circle cx={lastPt[0]} cy={lastPt[1]} r="3" fill={color} />
     </svg>
   );
@@ -151,13 +188,21 @@ function Sparkline({ data, color = "#f59e0b", w = 72, h = 32 }: {
 /* ─────────────────────────────────────────────
    Skeleton loader
 ───────────────────────────────────────────── */
-function Skeleton({ w = "100%", h = 20, radius = 8 }: {
-  w?: string | number; h?: number; radius?: number;
+function Skeleton({
+  w = "100%",
+  h = 20,
+  radius = 8,
+}: {
+  w?: string | number;
+  h?: number;
+  radius?: number;
 }) {
   return (
     <div
       style={{
-        width: w, height: h, borderRadius: radius,
+        width: w,
+        height: h,
+        borderRadius: radius,
         background: "linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%)",
         backgroundSize: "200% 100%",
         animation: "shimmer 1.4s infinite",
@@ -170,59 +215,81 @@ function Skeleton({ w = "100%", h = 20, radius = 8 }: {
    KPI Card
 ───────────────────────────────────────────── */
 function KpiCard({
-  label, rawValue, sub, icon, variant = "neutral",
-  loading, spark, sparkColor, isCurrency = true,
+  label,
+  rawValue,
+  sub,
+  icon,
+  variant = "neutral",
+  loading,
+  spark,
+  sparkColor,
+  isCurrency = true,
 }: {
-  label: string; rawValue: number; sub?: string; icon: string;
+  label: string;
+  rawValue: number;
+  sub?: string;
+  icon: string;
   variant?: "neutral" | "success" | "warning" | "danger";
-  loading?: boolean; spark?: number[]; sparkColor?: string; isCurrency?: boolean;
+  loading?: boolean;
+  spark?: number[];
+  sparkColor?: string;
+  isCurrency?: boolean;
 }) {
   const cfg = {
     neutral: {
-      border: "#e2e8f0", bg: "#ffffff",
-      val: "#0f172a", sub: "#64748b",
-      iconBg: "#f8fafc", iconText: "#475569",
+      border: "#e2e8f0",
+      bg: "#ffffff",
+      val: "#0f172a",
+      sub: "#64748b",
+      iconBg: "#f8fafc",
       accent: "#64748b",
     },
     success: {
-      border: "#a7f3d0", bg: "#f0fdf4",
-      val: "#064e3b", sub: "#059669",
-      iconBg: "#d1fae5", iconText: "#047857",
+      border: "#a7f3d0",
+      bg: "#f0fdf4",
+      val: "#064e3b",
+      sub: "#059669",
+      iconBg: "#d1fae5",
       accent: "#10b981",
     },
     warning: {
-      border: "#fcd34d", bg: "#fffbeb",
-      val: "#78350f", sub: "#b45309",
-      iconBg: "#fef3c7", iconText: "#d97706",
+      border: "#fcd34d",
+      bg: "#fffbeb",
+      val: "#78350f",
+      sub: "#b45309",
+      iconBg: "#fef3c7",
       accent: "#f59e0b",
     },
     danger: {
-      border: "#fca5a5", bg: "#fff5f5",
-      val: "#7f1d1d", sub: "#dc2626",
-      iconBg: "#fee2e2", iconText: "#ef4444",
+      border: "#fca5a5",
+      bg: "#fff5f5",
+      val: "#7f1d1d",
+      sub: "#dc2626",
+      iconBg: "#fee2e2",
       accent: "#ef4444",
     },
   }[variant];
 
   return (
     <div
-      className="rounded-2xl p-5 transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5"
+      className="rounded-2xl p-5 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg"
       style={{ background: cfg.bg, border: `1.5px solid ${cfg.border}` }}
     >
-      <div className="flex items-start justify-between gap-2 mb-3">
+      <div className="mb-3 flex items-start justify-between gap-2">
         <div
-          className="grid h-10 w-10 place-items-center rounded-xl text-lg shrink-0"
+          className="grid h-10 w-10 shrink-0 place-items-center rounded-xl text-lg"
           style={{ background: cfg.iconBg }}
         >
           {icon}
         </div>
+
         {spark && spark.length > 1 && !loading && (
           <Sparkline data={spark} color={sparkColor ?? cfg.accent} />
         )}
       </div>
 
       <div
-        className="text-xs font-bold uppercase tracking-widest mb-1.5"
+        className="mb-1.5 text-xs font-bold uppercase tracking-widest"
         style={{ color: cfg.sub }}
       >
         {label}
@@ -232,7 +299,9 @@ function KpiCard({
         {loading ? (
           <Skeleton w="80%" h={28} />
         ) : isCurrency ? (
-          <span>Ksh <Counter to={rawValue} /></span>
+          <span>
+            Ksh <Counter to={rawValue} />
+          </span>
         ) : (
           <Counter to={rawValue} />
         )}
@@ -248,34 +317,29 @@ function KpiCard({
 }
 
 /* ─────────────────────────────────────────────
-   Spinner
-───────────────────────────────────────────── */
-function Spin({ h = 120 }: { h?: number }) {
-  return (
-    <div className="flex flex-col items-center justify-center gap-3" style={{ height: h }}>
-      <svg className="h-6 w-6 animate-spin text-amber-400" viewBox="0 0 24 24"
-        fill="none" stroke="currentColor" strokeWidth="2.5">
-        <circle cx="12" cy="12" r="10" strokeOpacity="0.2" />
-        <path d="M12 2a10 10 0 0110 10" />
-      </svg>
-      <span className="text-xs text-slate-400 font-medium">Loading…</span>
-    </div>
-  );
-}
-
-/* ─────────────────────────────────────────────
    Card shell
 ───────────────────────────────────────────── */
-function Card({ title, sub, action, children, className = "" }: {
-  title: string; sub?: string; action?: React.ReactNode;
-  children: React.ReactNode; className?: string;
+function Card({
+  title,
+  sub,
+  action,
+  children,
+  className = "",
+}: {
+  title: string;
+  sub?: string;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+  className?: string;
 }) {
   return (
-    <div className={`rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden transition-shadow duration-200 hover:shadow-md ${className}`}>
+    <div
+      className={`overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-shadow duration-200 hover:shadow-md ${className}`}
+    >
       <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
         <div>
-          <div className="font-bold text-slate-900 text-base">{title}</div>
-          {sub && <div className="text-xs text-slate-400 mt-0.5 font-medium">{sub}</div>}
+          <div className="text-base font-bold text-slate-900">{title}</div>
+          {sub && <div className="mt-0.5 text-xs font-medium text-slate-400">{sub}</div>}
         </div>
         {action}
       </div>
@@ -285,53 +349,69 @@ function Card({ title, sub, action, children, className = "" }: {
 }
 
 /* ─────────────────────────────────────────────
-   Date Picker Popover
+   Date Range Picker (react-day-picker)
 ───────────────────────────────────────────── */
 function DateRangePicker({
-  from, to, onChange, onClose,
+  from,
+  to,
+  onChange,
+  onClose,
 }: {
-  from: string; to: string;
+  from: string;
+  to: string;
   onChange: (from: string, to: string) => void;
   onClose: () => void;
 }) {
-  const [localFrom, setLocalFrom] = useState(from);
-  const [localTo, setLocalTo] = useState(to);
   const ref = useRef<HTMLDivElement>(null);
 
-  // Close on outside click
+  const [range, setRange] = useState<DateRange | undefined>({
+    from: localIsoToDate(from),
+    to: localIsoToDate(to),
+  });
+
+  useEffect(() => {
+    setRange({
+      from: localIsoToDate(from),
+      to: localIsoToDate(to),
+    });
+  }, [from, to]);
+
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) onClose();
     };
+
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, [onClose]);
-
-  const apply = () => {
-    if (localFrom && localTo && localFrom <= localTo) {
-      onChange(localFrom, localTo);
-      onClose();
-    }
-  };
 
   const quickPick = (days: number) => {
     const t = new Date();
     const f = new Date(t);
     f.setDate(t.getDate() - days + 1);
-    setLocalFrom(iso(f));
-    setLocalTo(iso(t));
+
+    const nextFrom = dateToLocalIso(f);
+    const nextTo = dateToLocalIso(t);
+
+    setRange({ from: f, to: t });
+    onChange(nextFrom, nextTo);
+    onClose();
   };
 
   return (
     <div
       ref={ref}
-      className="absolute right-0 top-full mt-2 z-50 rounded-2xl border border-slate-200 bg-white shadow-2xl p-5 w-80"
+      className="absolute right-0 top-full z-50 mt-2 rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl"
       style={{ boxShadow: "0 20px 60px -10px rgba(0,0,0,0.18)" }}
     >
-      <div className="font-bold text-slate-800 text-sm mb-4">Custom date range</div>
+      <div className="mb-3">
+        <div className="text-sm font-bold text-slate-800">Choose date range</div>
+        <p className="mt-1 text-xs font-medium text-slate-400">
+          Pick a start date, then an end date
+        </p>
+      </div>
 
-      {/* Quick picks */}
-      <div className="grid grid-cols-3 gap-2 mb-5">
+      <div className="mb-4 grid grid-cols-2 gap-2">
         {[
           { label: "Last 7 days", days: 7 },
           { label: "Last 14 days", days: 14 },
@@ -343,74 +423,89 @@ function DateRangePicker({
           <button
             key={days}
             onClick={() => quickPick(days)}
-            className="rounded-lg px-2 py-1.5 text-xs font-semibold text-slate-600 border border-slate-200 hover:bg-amber-50 hover:border-amber-300 hover:text-amber-700 transition-all"
+            className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 transition hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700"
           >
             {label}
           </button>
         ))}
       </div>
 
-      {/* Date inputs */}
-      <div className="flex flex-col gap-3 mb-5">
-        <div>
-          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1">From</label>
-          <input
-            type="date"
-            value={localFrom}
-            max={localTo || iso(new Date())}
-            onChange={(e) => setLocalFrom(e.target.value)}
-            className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent transition"
-          />
-        </div>
-        <div>
-          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1">To</label>
-          <input
-            type="date"
-            value={localTo}
-            min={localFrom}
-            max={iso(new Date())}
-            onChange={(e) => setLocalTo(e.target.value)}
-            className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent transition"
-          />
-        </div>
-      </div>
+      <div className="rounded-2xl border border-slate-100 bg-slate-50/70 p-3">
+        <DayPicker
+          mode="range"
+          selected={range}
+          defaultMonth={range?.from}
+          month={range?.from}
+          onMonthChange={(month) => {
+            setRange((prev) => ({
+              from: prev?.from && prev.from.getMonth() === month.getMonth() && prev.from.getFullYear() === month.getFullYear()
+                ? prev.from
+                : prev?.from,
+              to: prev?.to,
+            }));
+          }}
+          numberOfMonths={2}
+          disabled={{ after: new Date() }}
+          showOutsideDays
+          onSelect={(nextRange) => {
+            setRange(nextRange);
 
-      {localFrom && localTo && localFrom > localTo && (
-        <p className="text-xs text-red-500 font-medium mb-3">Start date must be before end date</p>
-      )}
-
-      <div className="flex gap-2">
-        <button
-          onClick={onClose}
-          className="flex-1 rounded-xl border border-slate-200 py-2.5 text-sm font-bold text-slate-500 hover:bg-slate-50 transition"
-        >
-          Cancel
-        </button>
-        <button
-          onClick={apply}
-          disabled={!localFrom || !localTo || localFrom > localTo}
-          className="flex-1 rounded-xl bg-amber-500 py-2.5 text-sm font-bold text-white hover:bg-amber-600 disabled:opacity-40 disabled:cursor-not-allowed transition"
-        >
-          Apply
-        </button>
+            if (nextRange?.from && nextRange?.to) {
+              onChange(dateToLocalIso(nextRange.from), dateToLocalIso(nextRange.to));
+              onClose();
+            }
+          }}
+          className="rdp-mykaya"
+          classNames={{
+            months: "flex flex-col gap-4 sm:flex-row sm:gap-6",
+            month: "space-y-3",
+            caption: "flex items-center justify-center pt-1 relative",
+            caption_label: "text-sm font-bold text-slate-800",
+            nav: "flex items-center gap-1",
+            nav_button:
+              "h-8 w-8 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-amber-50 hover:border-amber-300 hover:text-amber-700 transition",
+            table: "w-full border-collapse",
+            head_row: "flex",
+            head_cell:
+              "w-9 text-[11px] font-bold uppercase text-slate-400",
+            row: "flex w-full mt-1.5",
+            cell: "relative h-9 w-9 text-center text-sm p-0",
+            day: "h-9 w-9 rounded-xl text-sm font-semibold text-slate-700 hover:bg-amber-50 hover:text-amber-700 transition",
+            day_selected:
+              "bg-amber-500 text-white hover:bg-amber-500 hover:text-white",
+            day_today: "border border-amber-300 text-amber-700",
+            day_outside: "text-slate-300 opacity-60",
+            day_disabled: "text-slate-300 opacity-40",
+            day_range_middle:
+              "bg-amber-100 text-amber-800 rounded-none hover:bg-amber-100",
+            day_range_start:
+              "bg-amber-500 text-white rounded-xl hover:bg-amber-500 hover:text-white",
+            day_range_end:
+              "bg-amber-500 text-white rounded-xl hover:bg-amber-500 hover:text-white",
+          }}
+        />
       </div>
     </div>
   );
 }
 
 /* ─────────────────────────────────────────────
-   Revenue vs Expenses area chart — redesigned
+   Revenue vs Expenses area chart
 ───────────────────────────────────────────── */
 function AreaChart({
-  points, height = 220, loading,
+  points,
+  height = 220,
+  loading,
 }: {
   points: { period: string; revenue: number; expenses: number }[];
-  height?: number; loading?: boolean;
+  height?: number;
+  loading?: boolean;
 }) {
   const [hover, setHover] = useState<number | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
 
-  const W = 600; const H = height;
+  const W = 600;
+  const H = height;
   const P = { t: 16, r: 16, b: 36, l: 56 };
   const iW = W - P.l - P.r;
   const iH = H - P.t - P.b;
@@ -420,7 +515,6 @@ function AreaChart({
     [points]
   );
 
-  // Round up to nice number for grid
   const niceMax = useMemo(() => {
     const mag = Math.pow(10, Math.floor(Math.log10(maxV)));
     return Math.ceil(maxV / mag) * mag;
@@ -430,23 +524,42 @@ function AreaChart({
     (i: number) => P.l + (points.length < 2 ? iW / 2 : (i / (points.length - 1)) * iW),
     [points.length, iW]
   );
+
   const ys = useCallback((v: number) => P.t + iH - (v / niceMax) * iH, [niceMax, iH]);
 
   const linePath = (key: "revenue" | "expenses") =>
-    points.map((p, i) => `${i === 0 ? "M" : "L"}${xs(i).toFixed(1)},${ys(p[key]).toFixed(1)}`).join(" ");
+    points
+      .map((p, i) => `${i === 0 ? "M" : "L"}${xs(i).toFixed(1)},${ys(p[key]).toFixed(1)}`)
+      .join(" ");
 
   const areaPath = (key: "revenue" | "expenses") =>
-    points.length === 0 ? "" :
-      `${linePath(key)} L${xs(points.length - 1).toFixed(1)},${(P.t + iH).toFixed(1)} L${xs(0).toFixed(1)},${(P.t + iH).toFixed(1)} Z`;
+    points.length === 0
+      ? ""
+      : `${linePath(key)} L${xs(points.length - 1).toFixed(1)},${(P.t + iH).toFixed(
+          1
+        )} L${xs(0).toFixed(1)},${(P.t + iH).toFixed(1)} Z`;
 
-  const onMove = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
-    if (!svgRef.current || points.length < 2) return;
-    const rect = svgRef.current.getBoundingClientRect();
-    const mx = ((e.clientX - rect.left) / rect.width) * W;
-    let best = 0; let bd = Infinity;
-    points.forEach((_, i) => { const d = Math.abs(xs(i) - mx); if (d < bd) { bd = d; best = i; } });
-    setHover(best);
-  }, [points, xs]);
+  const onMove = useCallback(
+    (e: React.MouseEvent<SVGSVGElement>) => {
+      if (!svgRef.current || points.length < 2) return;
+      const rect = svgRef.current.getBoundingClientRect();
+      const mx = ((e.clientX - rect.left) / rect.width) * W;
+
+      let best = 0;
+      let bd = Infinity;
+
+      points.forEach((_, i) => {
+        const d = Math.abs(xs(i) - mx);
+        if (d < bd) {
+          bd = d;
+          best = i;
+        }
+      });
+
+      setHover(best);
+    },
+    [points, xs]
+  );
 
   const gridCount = 5;
   const gridVals = Array.from({ length: gridCount + 1 }, (_, i) => (niceMax / gridCount) * i);
@@ -457,17 +570,19 @@ function AreaChart({
     return points.map((p, i) => ({ p, i })).filter(({ i }) => i % step === 0 || i === points.length - 1);
   }, [points]);
 
-  if (loading) return (
-    <div className="px-6 py-4 flex flex-col gap-3">
-      {[100, 70, 85, 55, 90].map((w, i) => (
-        <Skeleton key={i} w={`${w}%`} h={16} />
-      ))}
-    </div>
-  );
+  if (loading) {
+    return (
+      <div className="flex flex-col gap-3 px-6 py-4">
+        {[100, 70, 85, 55, 90].map((w, i) => (
+          <Skeleton key={i} w={`${w}%`} h={16} />
+        ))}
+      </div>
+    );
+  }
 
   if (!points.length) {
     return (
-      <div className="flex flex-col items-center justify-center text-slate-400 gap-2" style={{ height }}>
+      <div className="flex flex-col items-center justify-center gap-2 text-slate-400" style={{ height }}>
         <span className="text-3xl">📭</span>
         <span className="text-sm font-semibold">No data for this period</span>
       </div>
@@ -501,54 +616,95 @@ function AreaChart({
           </filter>
         </defs>
 
-        {/* Grid lines */}
         {gridVals.map((v, i) => (
           <g key={i}>
             <line
-              x1={P.l} y1={ys(v)} x2={W - P.r} y2={ys(v)}
+              x1={P.l}
+              y1={ys(v)}
+              x2={W - P.r}
+              y2={ys(v)}
               stroke={i === 0 ? "#e2e8f0" : "#f1f5f9"}
               strokeWidth={i === 0 ? "1.5" : "1"}
             />
-            <text x={P.l - 8} y={ys(v) + 4} textAnchor="end" fontSize="10" fill="#94a3b8" fontWeight="600">
+            <text
+              x={P.l - 8}
+              y={ys(v) + 4}
+              textAnchor="end"
+              fontSize="10"
+              fill="#94a3b8"
+              fontWeight="600"
+            >
               {fmtK(v)}
             </text>
           </g>
         ))}
 
-        {/* Hover crosshair */}
         {hover !== null && (
           <line
-            x1={xs(hover)} y1={P.t - 4}
-            x2={xs(hover)} y2={P.t + iH}
-            stroke="#cbd5e1" strokeWidth="1.5" strokeDasharray="4 3"
+            x1={xs(hover)}
+            y1={P.t - 4}
+            x2={xs(hover)}
+            y2={P.t + iH}
+            stroke="#cbd5e1"
+            strokeWidth="1.5"
+            strokeDasharray="4 3"
           />
         )}
 
-        {/* Area fills */}
         <path d={areaPath("expenses")} fill="url(#gr-exp)" />
         <path d={areaPath("revenue")} fill="url(#gr-rev)" />
 
-        {/* Lines */}
-        <path d={linePath("expenses")} fill="none" stroke="#ef4444" strokeWidth="2" strokeDasharray="6 3" strokeLinejoin="round" />
-        <path d={linePath("revenue")} fill="none" stroke="#f59e0b" strokeWidth="3" strokeLinejoin="round" strokeLinecap="round" />
+        <path
+          d={linePath("expenses")}
+          fill="none"
+          stroke="#ef4444"
+          strokeWidth="2"
+          strokeDasharray="6 3"
+          strokeLinejoin="round"
+        />
+        <path
+          d={linePath("revenue")}
+          fill="none"
+          stroke="#f59e0b"
+          strokeWidth="3"
+          strokeLinejoin="round"
+          strokeLinecap="round"
+        />
 
-        {/* Revenue dots on hover */}
-        {points.map((p, i) => (
+        {points.map((p, i) =>
           hover === i ? (
-            <circle key={i} cx={xs(i)} cy={ys(p.revenue)} r="6"
-              fill="#fff" stroke="#f59e0b" strokeWidth="2.5" filter="url(#shadow-dot)" />
+            <circle
+              key={i}
+              cx={xs(i)}
+              cy={ys(p.revenue)}
+              r="6"
+              fill="#fff"
+              stroke="#f59e0b"
+              strokeWidth="2.5"
+              filter="url(#shadow-dot)"
+            />
           ) : null
-        ))}
-        {hover !== null && hp && (
-          <circle cx={xs(hover)} cy={ys(hp.expenses)} r="5"
-            fill="#fff" stroke="#ef4444" strokeWidth="2.5" filter="url(#shadow-dot)" />
         )}
 
-        {/* X-axis labels */}
+        {hover !== null && hp && (
+          <circle
+            cx={xs(hover)}
+            cy={ys(hp.expenses)}
+            r="5"
+            fill="#fff"
+            stroke="#ef4444"
+            strokeWidth="2.5"
+            filter="url(#shadow-dot)"
+          />
+        )}
+
         {xLabels.map(({ p, i }) => (
           <text
-            key={i} x={xs(i)} y={H - 8}
-            textAnchor="middle" fontSize="10"
+            key={i}
+            x={xs(i)}
+            y={H - 8}
+            textAnchor="middle"
+            fontSize="10"
             fill={hover === i ? "#475569" : "#94a3b8"}
             fontWeight={hover === i ? "700" : "500"}
           >
@@ -556,34 +712,39 @@ function AreaChart({
           </text>
         ))}
 
-        {/* X-axis baseline */}
         <line x1={P.l} y1={P.t + iH} x2={W - P.r} y2={P.t + iH} stroke="#e2e8f0" strokeWidth="1.5" />
       </svg>
 
-      {/* Hover tooltip */}
       {hover !== null && hp && (
         <div
-          className="pointer-events-none absolute top-3 left-14 z-10 rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl text-sm"
+          className="pointer-events-none absolute left-14 top-3 z-10 rounded-2xl border border-slate-200 bg-white p-4 text-sm shadow-2xl"
           style={{ width: 176, boxShadow: "0 12px 40px -8px rgba(0,0,0,0.18)" }}
         >
-          <div className="font-bold text-slate-700 text-xs mb-3 pb-2 border-b border-slate-100 uppercase tracking-wider">
+          <div className="mb-3 border-b border-slate-100 pb-2 text-xs font-bold uppercase tracking-wider text-slate-700">
             {hp.period}
           </div>
-          <div className="flex justify-between items-center mb-2">
-            <span className="flex items-center gap-1.5 text-slate-500 text-xs font-semibold">
-              <span className="h-2 w-2 rounded-full bg-amber-400" />Revenue
+
+          <div className="mb-2 flex items-center justify-between">
+            <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-500">
+              <span className="h-2 w-2 rounded-full bg-amber-400" />
+              Revenue
             </span>
-            <span className="font-bold text-slate-900 text-sm">{fmtMoney(hp.revenue)}</span>
+            <span className="text-sm font-bold text-slate-900">{fmtMoney(hp.revenue)}</span>
           </div>
-          <div className="flex justify-between items-center mb-3">
-            <span className="flex items-center gap-1.5 text-slate-500 text-xs font-semibold">
-              <span className="h-2 w-2 rounded-full bg-red-400" />Expenses
+
+          <div className="mb-3 flex items-center justify-between">
+            <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-500">
+              <span className="h-2 w-2 rounded-full bg-red-400" />
+              Expenses
             </span>
-            <span className="font-bold text-slate-900 text-sm">{fmtMoney(hp.expenses)}</span>
+            <span className="text-sm font-bold text-slate-900">{fmtMoney(hp.expenses)}</span>
           </div>
-          <div className={`pt-2.5 border-t border-slate-100 flex justify-between items-center font-extrabold ${
-            net >= 0 ? "text-emerald-600" : "text-red-500"
-          }`}>
+
+          <div
+            className={`flex items-center justify-between border-t border-slate-100 pt-2.5 font-extrabold ${
+              net >= 0 ? "text-emerald-600" : "text-red-500"
+            }`}
+          >
             <span className="text-xs uppercase tracking-wider">Net</span>
             <span className="text-sm">{fmtMoney(net)}</span>
           </div>
@@ -597,21 +758,28 @@ function AreaChart({
    Stock badge
 ───────────────────────────────────────────── */
 function StockBadge({ status }: { status: InventoryValuationRow["status"] }) {
-  if (status === "out")
+  if (status === "out") {
     return (
-      <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold bg-red-100 text-red-700 shrink-0">
-        <span className="h-1.5 w-1.5 rounded-full bg-red-500" />Out of stock
+      <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-red-100 px-2.5 py-1 text-xs font-bold text-red-700">
+        <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
+        Out of stock
       </span>
     );
-  if (status === "critical")
+  }
+
+  if (status === "critical") {
     return (
-      <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold bg-orange-100 text-orange-700 shrink-0">
-        <span className="h-1.5 w-1.5 rounded-full bg-orange-500" />Critical
+      <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-orange-100 px-2.5 py-1 text-xs font-bold text-orange-700">
+        <span className="h-1.5 w-1.5 rounded-full bg-orange-500" />
+        Critical
       </span>
     );
+  }
+
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold bg-amber-100 text-amber-700 shrink-0">
-      <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />Low stock
+    <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-700">
+      <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+      Low stock
     </span>
   );
 }
@@ -636,7 +804,6 @@ export default function DashboardPage() {
   const [recentSales, setRecentSales] = useState<RecentSale[]>([]);
   const [recentExpenses, setRecentExpenses] = useState<RecentExpense[]>([]);
 
-  /* ── Date range ── */
   const range = useMemo(() => {
     const to = new Date();
     const from = new Date(to);
@@ -648,97 +815,120 @@ export default function DashboardPage() {
         label: "Custom range",
       };
     }
-    if (preset === "today") return { from: iso(to), to: iso(to), label: "Today" };
+
+    if (preset === "today") {
+      return { from: iso(to), to: iso(to), label: "Today" };
+    }
+
     if (preset === "7d") {
       from.setDate(to.getDate() - 6);
       return { from: iso(from), to: iso(to), label: "Last 7 days" };
     }
+
     if (preset === "30d") {
       from.setDate(to.getDate() - 29);
       return { from: iso(from), to: iso(to), label: "Last 30 days" };
     }
+
     return { from: iso(startOfMonth(to)), to: iso(to), label: "This month" };
   }, [preset, customFrom, customTo]);
 
-  /* ── Bootstrap org ── */
   useEffect(() => {
     (async () => {
-      try { const o = await bootstrapOrg(); setOrgId(o); }
-      catch (e: any) { setErr(e.message ?? String(e)); }
+      try {
+        const o = await bootstrapOrg();
+        setOrgId(o);
+      } catch (e: any) {
+        setErr(e.message ?? String(e));
+      }
     })();
   }, []);
 
-  /* ── Load all data ── */
-  const loadAll = useCallback(async (isRefresh = false) => {
-    if (!orgId) return;
-    if (isRefresh) setRefreshing(true);
-    else setLoading(true);
-    setErr("");
+  const loadAll = useCallback(
+    async (isRefresh = false) => {
+      if (!orgId) return;
 
-    try {
-      const [pl, inv, ex] = await Promise.all([
-        reportPnL(orgId, { from: range.from, to: range.to, granularity: "day" }),
-        getInventoryValuation(orgId),
-        reportExpenses(orgId, { from: range.from, to: range.to, granularity: "day" }),
-      ]);
-      const supabase = createClient();
+      if (isRefresh) setRefreshing(true);
+      else setLoading(true);
 
-      const [{ data: sData, error: sErr }, { data: eData, error: eErr }] = await Promise.all([
-        supabase
-          .from("sales")
-          .select("id,sale_no,customer_name,total,created_at")
-          .eq("org_id", orgId)
-          .order("created_at", { ascending: false })
-          .limit(6),
-        supabase
-          .from("expenses")
-          .select("id,category,amount,expense_date,created_at")
-          .eq("org_id", orgId)
-          .order("created_at", { ascending: false })
-          .limit(6),
-      ]);
+      setErr("");
 
-      if (sErr) throw new Error(sErr.message);
-      if (eErr) throw new Error(eErr.message);
+      try {
+        const [pl, inv, ex] = await Promise.all([
+          reportPnL(orgId, { from: range.from, to: range.to, granularity: "day" }),
+          getInventoryValuation(orgId),
+          reportExpenses(orgId, { from: range.from, to: range.to, granularity: "day" }),
+        ]);
 
-      setPnl(pl); setInventory(inv); setExpData(ex);
-      setRecentSales((sData ?? []) as any);
-      setRecentExpenses((eData ?? []) as any);
-      setLastRefreshed(new Date());
-    } catch (e: any) {
-      setErr(e.message ?? String(e));
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [orgId, range.from, range.to]);
+        const supabase = createClient();
+
+        const [{ data: sData, error: sErr }, { data: eData, error: eErr }] = await Promise.all([
+          supabase
+            .from("sales")
+            .select("id,sale_no,customer_name,total,created_at")
+            .eq("org_id", orgId)
+            .order("created_at", { ascending: false })
+            .limit(6),
+          supabase
+            .from("expenses")
+            .select("id,category,amount,expense_date,created_at")
+            .eq("org_id", orgId)
+            .order("created_at", { ascending: false })
+            .limit(6),
+        ]);
+
+        if (sErr) throw new Error(sErr.message);
+        if (eErr) throw new Error(eErr.message);
+
+        setPnl(pl);
+        setInventory(inv);
+        setExpData(ex);
+        setRecentSales((sData ?? []) as any);
+        setRecentExpenses((eData ?? []) as any);
+        setLastRefreshed(new Date());
+      } catch (e: any) {
+        setErr(e.message ?? String(e));
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [orgId, range.from, range.to]
+  );
 
   useEffect(() => {
     if (orgId) loadAll();
-  }, [orgId, range.from, range.to]);
+  }, [orgId, range.from, range.to, loadAll]);
 
-  /* ── Derived values ── */
-  const kpis = useMemo(() => ({
-    revenue:  Number(pnl?.totals?.revenue ?? 0),
-    expenses: Number(pnl?.totals?.expenses ?? 0),
-    net:      Number(pnl?.totals?.net_profit ?? 0),
-    invValue: Number(inventory?.totals?.total_value ?? 0),
-    lowCount: Number(inventory?.totals?.low_count ?? 0),
-    outCount: Number(inventory?.totals?.out_count ?? 0),
-  }), [pnl, inventory]);
+  const kpis = useMemo(
+    () => ({
+      revenue: Number(pnl?.totals?.revenue ?? 0),
+      expenses: Number(pnl?.totals?.expenses ?? 0),
+      net: Number(pnl?.totals?.net_profit ?? 0),
+      invValue: Number(inventory?.totals?.total_value ?? 0),
+      lowCount: Number(inventory?.totals?.low_count ?? 0),
+      outCount: Number(inventory?.totals?.out_count ?? 0),
+    }),
+    [pnl, inventory]
+  );
 
   const areaPoints = useMemo(() => {
     const rM = new Map((pnl?.points ?? []).map((p: any) => [p.period, Number(p.revenue ?? 0)]));
     const eM = new Map((expData?.trend ?? []).map((t: any) => [t.period, Number(t.total ?? 0)]));
     return Array.from(new Set([...rM.keys(), ...eM.keys()]))
       .sort()
-      .map((period) => ({ period, revenue: rM.get(period) ?? 0, expenses: eM.get(period) ?? 0 }));
+      .map((period) => ({
+        period,
+        revenue: rM.get(period) ?? 0,
+        expenses: eM.get(period) ?? 0,
+      }));
   }, [pnl, expData]);
 
   const revSpark = useMemo(
     () => (pnl?.points ?? []).slice(-10).map((p: any) => Number(p.revenue ?? 0)),
     [pnl]
   );
+
   const expSpark = useMemo(
     () => (expData?.trend ?? []).slice(-10).map((t: any) => Number(t.total ?? 0)),
     [expData]
@@ -747,6 +937,7 @@ export default function DashboardPage() {
   const alertRows = useMemo(() => {
     const rank = (r: InventoryValuationRow) =>
       r.status === "out" ? 0 : r.status === "critical" ? 1 : 2;
+
     return (inventory?.rows ?? [])
       .filter((r) => r.status !== "ok")
       .sort((a, b) => rank(a) - rank(b))
@@ -763,6 +954,7 @@ export default function DashboardPage() {
       at: s.created_at,
       href: `/sales/${s.id}`,
     }));
+
     const expenses: ActivityItem[] = recentExpenses.map((e) => ({
       id: `expense-${e.id}`,
       type: "expense",
@@ -772,18 +964,23 @@ export default function DashboardPage() {
       at: e.created_at,
       href: "/expenses",
     }));
+
     return [...sales, ...expenses]
       .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())
       .slice(0, 8);
   }, [recentSales, recentExpenses]);
 
-  /* ── Loading state ── */
   if (!orgId && !err) {
     return (
       <div className="flex h-64 items-center justify-center">
         <div className="flex items-center gap-3 text-slate-400">
-          <svg className="h-6 w-6 animate-spin text-amber-400" viewBox="0 0 24 24"
-            fill="none" stroke="currentColor" strokeWidth="2.5">
+          <svg
+            className="h-6 w-6 animate-spin text-amber-400"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+          >
             <circle cx="12" cy="12" r="10" strokeOpacity="0.2" />
             <path d="M12 2a10 10 0 0110 10" />
           </svg>
@@ -793,11 +990,9 @@ export default function DashboardPage() {
     );
   }
 
-  /* ── Render ── */
   return (
     <>
-      {/* Shimmer animation keyframes */}
-      <style>{`
+      <style jsx global>{`
         @keyframes shimmer {
           0% { background-position: -200% 0; }
           100% { background-position: 200% 0; }
@@ -806,44 +1001,96 @@ export default function DashboardPage() {
           from { opacity: 0; transform: translateY(6px); }
           to { opacity: 1; transform: translateY(0); }
         }
-        .fade-in { animation: fadeIn 0.3s ease forwards; }
+
+        .fade-in {
+          animation: fadeIn 0.3s ease forwards;
+        }
+
+        .rdp-mykaya {
+          --rdp-cell-size: 36px;
+          margin: 0;
+        }
+
+        .rdp-mykaya .rdp-button_previous,
+        .rdp-mykaya .rdp-button_next {
+          color: inherit;
+        }
+
+        .rdp-mykaya .rdp-chevron {
+          fill: currentColor;
+        }
+
+        .rdp-mykaya .rdp-range_start .rdp-day_button,
+        .rdp-mykaya .rdp-range_end .rdp-day_button,
+        .rdp-mykaya .rdp-selected .rdp-day_button {
+          background: #f59e0b;
+          color: white;
+          border-radius: 12px;
+        }
+
+        .rdp-mykaya .rdp-range_middle .rdp-day_button {
+          background: #fef3c7;
+          color: #92400e;
+          border-radius: 0;
+        }
+
+        .rdp-mykaya .rdp-day_button {
+          width: 36px;
+          height: 36px;
+          font-weight: 600;
+          border-radius: 12px;
+          transition: all 0.15s ease;
+        }
+
+        .rdp-mykaya .rdp-today .rdp-day_button {
+          border: 1px solid #fcd34d;
+        }
+
+        .rdp-mykaya .rdp-disabled .rdp-day_button {
+          opacity: 0.35;
+        }
       `}</style>
 
       <div className="flex flex-col gap-5">
-
-        {/* Error banner */}
         {err && (
-          <div className="flex items-center gap-3 rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700 fade-in">
+          <div className="fade-in flex items-center gap-3 rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700">
             <span className="text-base">⚠️</span>
             <span className="flex-1 font-semibold">{err}</span>
-            <button onClick={() => setErr("")} className="text-red-400 hover:text-red-600 text-lg leading-none font-bold">×</button>
+            <button
+              onClick={() => setErr("")}
+              className="text-lg font-bold leading-none text-red-400 hover:text-red-600"
+            >
+              ×
+            </button>
           </div>
         )}
 
-        {/* ── Header ── */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Dashboard</h1>
+            <h1 className="text-3xl font-extrabold tracking-tight text-slate-900">Dashboard</h1>
             <p className="mt-1 text-sm font-medium text-slate-400">
               {range.label} · {fmtRangeLabel(range.from, range.to)}
               {lastRefreshed && (
                 <span className="ml-2 text-slate-300">
-                  · Updated {lastRefreshed.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
+                  · Updated{" "}
+                  {lastRefreshed.toLocaleTimeString("en-GB", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
                 </span>
               )}
             </p>
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap">
-            {/* Range selector */}
-            <div className="flex items-center rounded-xl border border-slate-200 bg-slate-50 p-1 gap-0.5">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-0.5 rounded-xl border border-slate-200 bg-slate-50 p-1">
               {(["today", "7d", "30d", "month"] as RangePreset[]).map((p) => (
                 <button
                   key={p}
                   onClick={() => setPreset(p)}
                   className={`rounded-lg px-3.5 py-2 text-xs font-bold transition-all duration-150 ${
                     preset === p
-                      ? "bg-white border border-slate-200 shadow-sm text-slate-900"
+                      ? "border border-slate-200 bg-white text-slate-900 shadow-sm"
                       : "text-slate-500 hover:text-slate-700"
                   }`}
                 >
@@ -852,7 +1099,6 @@ export default function DashboardPage() {
               ))}
             </div>
 
-            {/* Custom date range button */}
             <div className="relative">
               <button
                 onClick={() => setShowDatePicker((v) => !v)}
@@ -863,7 +1109,9 @@ export default function DashboardPage() {
                 }`}
               >
                 <span>📅</span>
-                {preset === "custom" ? fmtRangeLabel(customFrom, customTo) : "Custom range"}
+                {preset === "custom" && customFrom && customTo
+                  ? fmtRangeLabel(customFrom, customTo)
+                  : "Pick dates"}
               </button>
 
               {showDatePicker && (
@@ -880,15 +1128,17 @@ export default function DashboardPage() {
               )}
             </div>
 
-            {/* Refresh */}
             {/* <button
               onClick={() => loadAll(true)}
               disabled={loading || refreshing}
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-50 transition-all duration-150"
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-slate-600 transition-all duration-150 hover:bg-slate-50 disabled:opacity-50"
             >
               <svg
                 className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`}
-                viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
               >
                 {refreshing ? (
                   <>
@@ -896,7 +1146,10 @@ export default function DashboardPage() {
                     <path d="M12 2a10 10 0 0110 10" />
                   </>
                 ) : (
-                  <path d="M4 4v6h6M20 20v-6h-6M4 10A9 9 0 0114 4.5M20 14a9 9 0 01-10 5.5" strokeLinecap="round" />
+                  <path
+                    d="M4 4v6h6M20 20v-6h-6M4 10A9 9 0 0114 4.5M20 14a9 9 0 01-10 5.5"
+                    strokeLinecap="round"
+                  />
                 )}
               </svg>
               {refreshing ? "Refreshing…" : "Refresh"}
@@ -904,69 +1157,100 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* ── 6 KPI cards ── */}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
           <KpiCard
-            label="Revenue" rawValue={kpis.revenue} icon="📈"
-            loading={loading} spark={revSpark} sparkColor="#f59e0b"
+            label="Revenue"
+            rawValue={kpis.revenue}
+            icon="📈"
+            loading={loading}
+            spark={revSpark}
+            sparkColor="#f59e0b"
             sub="Sales collected"
           />
           <KpiCard
-            label="Net profit" rawValue={kpis.net} icon="💰"
+            label="Net profit"
+            rawValue={kpis.net}
+            icon="💰"
             variant={kpis.net < 0 ? "danger" : "success"}
             loading={loading}
             sub={kpis.net < 0 ? "Loss this period" : "Profit this period"}
           />
           <KpiCard
-            label="Expenses" rawValue={kpis.expenses} icon="💸"
-            variant="warning" loading={loading}
-            spark={expSpark} sparkColor="#f97316"
+            label="Expenses"
+            rawValue={kpis.expenses}
+            icon="💸"
+            variant="warning"
+            loading={loading}
+            spark={expSpark}
+            sparkColor="#f97316"
             sub="Operating spend"
           />
           <KpiCard
-            label="Inventory value" rawValue={kpis.invValue} icon="📦"
-            loading={loading} sub="Qty × cost price"
+            label="Inventory value"
+            rawValue={kpis.invValue}
+            icon="📦"
+            loading={loading}
+            sub="Qty × cost price"
           />
           <KpiCard
-            label="Low / critical" rawValue={kpis.lowCount} icon="📉"
+            label="Low / critical"
+            rawValue={kpis.lowCount}
+            icon="📉"
             variant={kpis.lowCount > 0 ? "warning" : "neutral"}
-            loading={loading} isCurrency={false} sub="Need monitoring"
+            loading={loading}
+            isCurrency={false}
+            sub="Need monitoring"
           />
           <KpiCard
-            label="Out of stock" rawValue={kpis.outCount} icon="🚫"
+            label="Out of stock"
+            rawValue={kpis.outCount}
+            icon="🚫"
             variant={kpis.outCount > 0 ? "danger" : "neutral"}
-            loading={loading} isCurrency={false} sub="Need action now"
+            loading={loading}
+            isCurrency={false}
+            sub="Need action now"
           />
         </div>
 
-        {/* ── Main row: chart + alerts ── */}
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1fr_340px]">
-
-          {/* Revenue vs Expenses chart */}
           <Card
             title="Revenue vs Expenses"
             sub={`${range.label} · hover the chart for daily breakdown`}
             action={
-              <Link href="/reports" className="text-xs font-bold text-amber-500 hover:text-amber-600 transition-colors">
+              <Link
+                href="/reports"
+                className="text-xs font-bold text-amber-500 transition-colors hover:text-amber-600"
+              >
                 Full P&L →
               </Link>
             }
           >
-            {/* Legend */}
-            <div className="flex items-center gap-6 px-6 pt-5 pb-2">
+            <div className="flex items-center gap-6 px-6 pb-2 pt-5">
               <span className="flex items-center gap-2 text-xs font-bold text-slate-600">
                 <span className="h-3 w-3 rounded-sm bg-amber-400" />
                 Revenue
               </span>
               <span className="flex items-center gap-2 text-xs font-bold text-slate-600">
-                <span className="h-3 w-3 rounded-sm bg-red-400 opacity-70" style={{
-                  backgroundImage: "repeating-linear-gradient(90deg, #f87171 0, #f87171 4px, transparent 4px, transparent 7px)"
-                }} />
+                <span
+                  className="h-3 w-3 rounded-sm bg-red-400 opacity-70"
+                  style={{
+                    backgroundImage:
+                      "repeating-linear-gradient(90deg, #f87171 0, #f87171 4px, transparent 4px, transparent 7px)",
+                  }}
+                />
                 Expenses
               </span>
               {!loading && areaPoints.length > 0 && (
-                <span className={`flex items-center gap-2 text-xs font-bold ${kpis.net >= 0 ? "text-emerald-600" : "text-red-500"}`}>
-                  <span className={`h-3 w-3 rounded-sm ${kpis.net >= 0 ? "bg-emerald-400" : "bg-red-400"}`} />
+                <span
+                  className={`flex items-center gap-2 text-xs font-bold ${
+                    kpis.net >= 0 ? "text-emerald-600" : "text-red-500"
+                  }`}
+                >
+                  <span
+                    className={`h-3 w-3 rounded-sm ${
+                      kpis.net >= 0 ? "bg-emerald-400" : "bg-red-400"
+                    }`}
+                  />
                   Net: {fmtMoney(kpis.net)}
                 </span>
               )}
@@ -976,9 +1260,8 @@ export default function DashboardPage() {
               <AreaChart points={areaPoints} loading={loading} height={220} />
             </div>
 
-            {/* Summary footer */}
             {!loading && areaPoints.length > 0 && (
-              <div className="border-t border-slate-100 grid grid-cols-3 divide-x divide-slate-100">
+              <div className="grid grid-cols-3 divide-x divide-slate-100 border-t border-slate-100">
                 {[
                   { label: "Total Revenue", value: fmtMoney(kpis.revenue), color: "#0f172a" },
                   { label: "Total Expenses", value: fmtMoney(kpis.expenses), color: "#0f172a" },
@@ -989,26 +1272,32 @@ export default function DashboardPage() {
                   },
                 ].map(({ label, value, color }) => (
                   <div key={label} className="px-6 py-4">
-                    <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">{label}</div>
-                    <div className="font-extrabold text-base mt-1" style={{ color }}>{value}</div>
+                    <div className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                      {label}
+                    </div>
+                    <div className="mt-1 text-base font-extrabold" style={{ color }}>
+                      {value}
+                    </div>
                   </div>
                 ))}
               </div>
             )}
           </Card>
 
-          {/* Stock alerts */}
           <Card
             title="Needs Attention"
             sub="Low, critical & out-of-stock items"
             action={
-              <Link href="/inventory" className="text-xs font-bold text-amber-500 hover:text-amber-600 transition-colors">
+              <Link
+                href="/inventory"
+                className="text-xs font-bold text-amber-500 transition-colors hover:text-amber-600"
+              >
                 Manage →
               </Link>
             }
           >
             {loading ? (
-              <div className="p-5 flex flex-col gap-4">
+              <div className="flex flex-col gap-4 p-5">
                 {[1, 2, 3].map((i) => (
                   <div key={i} className="flex flex-col gap-2">
                     <Skeleton w="65%" h={16} />
@@ -1018,33 +1307,42 @@ export default function DashboardPage() {
               </div>
             ) : alertRows.length === 0 ? (
               <div className="py-16 text-center">
-                <div className="text-4xl mb-3">✅</div>
+                <div className="mb-3 text-4xl">✅</div>
                 <p className="text-sm font-bold text-slate-600">All stocked up</p>
-                <p className="text-xs text-slate-400 mt-1">No urgent stock alerts</p>
+                <p className="mt-1 text-xs text-slate-400">No urgent stock alerts</p>
               </div>
             ) : (
               <div className="divide-y divide-slate-100">
                 {alertRows.map((r) => (
                   <div
                     key={r.product_id}
-                    className="flex items-start justify-between gap-3 px-5 py-4 hover:bg-slate-50 transition-colors duration-150"
+                    className="flex items-start justify-between gap-3 px-5 py-4 transition-colors duration-150 hover:bg-slate-50"
                   >
                     <div className="min-w-0">
-                      <div className="text-sm font-bold text-slate-900 truncate">{r.name}</div>
-                      <div className="text-xs text-slate-400 mt-1 font-medium">
-                        On hand: <span className="font-extrabold text-slate-700">{r.qty_on_hand}</span>
+                      <div className="truncate text-sm font-bold text-slate-900">{r.name}</div>
+                      <div className="mt-1 text-xs font-medium text-slate-400">
+                        On hand:{" "}
+                        <span className="font-extrabold text-slate-700">{r.qty_on_hand}</span>
                         <span className="mx-1.5 text-slate-200">·</span>
-                        Reorder at: <span className="font-extrabold text-slate-700">{r.reorder_level}</span>
+                        Reorder at:{" "}
+                        <span className="font-extrabold text-slate-700">{r.reorder_level}</span>
                       </div>
                       {r.category && (
-                        <div className="text-xs text-slate-400 mt-0.5">{r.category}{r.sku ? ` · SKU ${r.sku}` : ""}</div>
+                        <div className="mt-0.5 text-xs text-slate-400">
+                          {r.category}
+                          {r.sku ? ` · SKU ${r.sku}` : ""}
+                        </div>
                       )}
                     </div>
                     <StockBadge status={r.status} />
                   </div>
                 ))}
-                <div className="px-5 py-3.5 text-center bg-slate-50">
-                  <Link href="/inventory?filter=low" className="text-xs font-bold text-amber-500 hover:text-amber-600 transition-colors">
+
+                <div className="bg-slate-50 px-5 py-3.5 text-center">
+                  <Link
+                    href="/inventory?filter=low"
+                    className="text-xs font-bold text-amber-500 transition-colors hover:text-amber-600"
+                  >
                     View all alerts →
                   </Link>
                 </div>
@@ -1053,23 +1351,32 @@ export default function DashboardPage() {
           </Card>
         </div>
 
-        {/* ── Activity feed ── */}
         <Card
           title="Recent Activity"
           sub="Sales and expenses — newest first"
           action={
             <div className="flex items-center gap-4">
-              <Link href="/sales" className="text-xs font-bold text-amber-500 hover:text-amber-600 transition-colors">Sales →</Link>
-              <Link href="/expenses" className="text-xs font-bold text-amber-500 hover:text-amber-600 transition-colors">Expenses →</Link>
+              <Link
+                href="/sales"
+                className="text-xs font-bold text-amber-500 transition-colors hover:text-amber-600"
+              >
+                Sales →
+              </Link>
+              <Link
+                href="/expenses"
+                className="text-xs font-bold text-amber-500 transition-colors hover:text-amber-600"
+              >
+                Expenses →
+              </Link>
             </div>
           }
         >
           {loading ? (
-            <div className="p-5 flex flex-col gap-4">
+            <div className="flex flex-col gap-4 p-5">
               {[1, 2, 3, 4].map((i) => (
                 <div key={i} className="flex items-center gap-3">
                   <Skeleton w={36} h={36} radius={10} />
-                  <div className="flex-1 flex flex-col gap-2">
+                  <div className="flex flex-1 flex-col gap-2">
                     <Skeleton w="55%" h={14} />
                     <Skeleton w="35%" h={11} />
                   </div>
@@ -1092,31 +1399,39 @@ export default function DashboardPage() {
                   }`}
                   style={{ gridTemplateColumns: "40px 1fr auto" }}
                 >
-                  <div className={`grid h-10 w-10 place-items-center rounded-xl text-base shrink-0 ${
-                    a.type === "sale" ? "bg-amber-100" : "bg-slate-100"
-                  }`}>
+                  <div
+                    className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl text-base ${
+                      a.type === "sale" ? "bg-amber-100" : "bg-slate-100"
+                    }`}
+                  >
                     {a.type === "sale" ? "🧾" : "💸"}
                   </div>
 
                   <div className="min-w-0">
-                    <div className="text-sm font-bold text-slate-900 truncate">{a.title}</div>
-                    <div className="text-xs font-medium text-slate-400 truncate mt-0.5">{a.sub}</div>
+                    <div className="truncate text-sm font-bold text-slate-900">{a.title}</div>
+                    <div className="mt-0.5 truncate text-xs font-medium text-slate-400">
+                      {a.sub}
+                    </div>
                   </div>
 
-                  <div className="text-right shrink-0">
-                    <div className={`text-sm font-extrabold ${
-                      a.type === "sale" ? "text-slate-900" : "text-red-500"
-                    }`}>
-                      {a.type === "expense" ? "−" : "+"}{fmtMoney(a.amount)}
+                  <div className="shrink-0 text-right">
+                    <div
+                      className={`text-sm font-extrabold ${
+                        a.type === "sale" ? "text-slate-900" : "text-red-500"
+                      }`}
+                    >
+                      {a.type === "expense" ? "−" : "+"}
+                      {fmtMoney(a.amount)}
                     </div>
-                    <div className="text-xs font-medium text-slate-400 mt-0.5">{fmtDateTime(a.at)}</div>
+                    <div className="mt-0.5 text-xs font-medium text-slate-400">
+                      {fmtDateTime(a.at)}
+                    </div>
                   </div>
                 </Link>
               ))}
             </div>
           )}
         </Card>
-
       </div>
     </>
   );
