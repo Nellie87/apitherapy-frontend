@@ -17,7 +17,14 @@ import {
 /* ─────────────────────────────────────────────
    Types
 ───────────────────────────────────────────── */
-type RangePreset = "today" | "7d" | "30d" | "month" | "custom";
+type RangePreset =
+  | "today"
+  | "yesterday"
+  | "7d"
+  | "30d"
+  | "month"
+  | "lastMonth"
+  | "custom";
 
 type RecentSale = {
   id: string;
@@ -50,8 +57,86 @@ type ActivityItem = {
 ───────────────────────────────────────────── */
 const iso = (d: Date) => d.toISOString().slice(0, 10);
 
+const dateToLocalIso = (date: Date) => {
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, "0");
+  const day = `${date.getDate()}`.padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const localIsoToDate = (value?: string) => {
+  if (!value) return undefined;
+  const [y, m, d] = value.split("-").map(Number);
+  return new Date(y, m - 1, d);
+};
+
 const startOfMonth = (d = new Date()) =>
-  new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1));
+  new Date(d.getFullYear(), d.getMonth(), 1);
+
+const endOfMonth = (d = new Date()) =>
+  new Date(d.getFullYear(), d.getMonth() + 1, 0);
+
+const startOfLastMonth = (d = new Date()) =>
+  new Date(d.getFullYear(), d.getMonth() - 1, 1);
+
+const endOfLastMonth = (d = new Date()) =>
+  new Date(d.getFullYear(), d.getMonth(), 0);
+
+const getPresetRange = (preset: Exclude<RangePreset, "custom">) => {
+  const today = new Date();
+  const from = new Date(today);
+  const to = new Date(today);
+
+  if (preset === "today") {
+    return {
+      from: dateToLocalIso(today),
+      to: dateToLocalIso(today),
+      label: "Today",
+    };
+  }
+
+  if (preset === "yesterday") {
+    from.setDate(today.getDate() - 1);
+    to.setDate(today.getDate() - 1);
+    return {
+      from: dateToLocalIso(from),
+      to: dateToLocalIso(to),
+      label: "Yesterday",
+    };
+  }
+
+  if (preset === "7d") {
+    from.setDate(today.getDate() - 6);
+    return {
+      from: dateToLocalIso(from),
+      to: dateToLocalIso(today),
+      label: "Last 7 Days",
+    };
+  }
+
+  if (preset === "30d") {
+    from.setDate(today.getDate() - 29);
+    return {
+      from: dateToLocalIso(from),
+      to: dateToLocalIso(today),
+      label: "Last 30 Days",
+    };
+  }
+
+  if (preset === "month") {
+    return {
+      from: dateToLocalIso(startOfMonth(today)),
+      to: dateToLocalIso(today),
+      label: "This Month",
+    };
+  }
+
+  return {
+    from: dateToLocalIso(startOfLastMonth(today)),
+    to: dateToLocalIso(endOfLastMonth(today)),
+    label: "Last Month",
+  };
+};
 
 const fmtMoney = (v: number) =>
   `Ksh ${Number(v || 0).toLocaleString("en-KE", { maximumFractionDigits: 0 })}`;
@@ -91,25 +176,49 @@ const fmtRangeLabel = (from: string, to: string) => {
   try {
     const f = new Date(`${from}T00:00:00`);
     const t = new Date(`${to}T00:00:00`);
-    const fs = f.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
-    const ts = t.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
-    return `${fs} — ${ts}`;
+
+    const sameYear = f.getFullYear() === t.getFullYear();
+    const sameMonth = sameYear && f.getMonth() === t.getMonth();
+    const sameDay = sameMonth && f.getDate() === t.getDate();
+
+    if (sameDay) {
+      return f.toLocaleDateString("en-GB", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      });
+    }
+
+    if (sameYear) {
+      if (sameMonth) {
+        return `${f.getDate()}-${t.getDate()} ${t.toLocaleDateString("en-GB", {
+          month: "short",
+          year: "numeric",
+        })}`;
+      }
+
+      return `${f.toLocaleDateString("en-GB", {
+        day: "numeric",
+        month: "short",
+      })} - ${t.toLocaleDateString("en-GB", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      })}`;
+    }
+
+    return `${f.toLocaleDateString("en-GB", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    })} - ${t.toLocaleDateString("en-GB", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    })}`;
   } catch {
-    return `${from} — ${to}`;
+    return `${from} - ${to}`;
   }
-};
-
-const dateToLocalIso = (date: Date) => {
-  const year = date.getFullYear();
-  const month = `${date.getMonth() + 1}`.padStart(2, "0");
-  const day = `${date.getDate()}`.padStart(2, "0");
-  return `${year}-${month}-${day}`;
-};
-
-const localIsoToDate = (value?: string) => {
-  if (!value) return undefined;
-  const [y, m, d] = value.split("-").map(Number);
-  return new Date(y, m - 1, d);
 };
 
 /* ─────────────────────────────────────────────
@@ -178,7 +287,7 @@ function Sparkline({
         strokeWidth="2"
         strokeLinejoin="round"
         strokeLinecap="round"
-        opacity="0.7"
+        opacity="0.75"
       />
       <circle cx={lastPt[0]} cy={lastPt[1]} r="3" fill={color} />
     </svg>
@@ -186,7 +295,7 @@ function Sparkline({
 }
 
 /* ─────────────────────────────────────────────
-   Skeleton loader
+   Skeleton
 ───────────────────────────────────────────── */
 function Skeleton({
   w = "100%",
@@ -208,6 +317,39 @@ function Skeleton({
         animation: "shimmer 1.4s infinite",
       }}
     />
+  );
+}
+
+/* ─────────────────────────────────────────────
+   Quick actions
+───────────────────────────────────────────── */
+function QuickActions() {
+  const actions = [
+    { href: "/dashboard/sales/new", icon: "🧾", label: "New Sale", primary: true },
+    { href: "/dashboard/expenses", icon: "💸", label: "Add Expense" },
+    { href: "/dashboard/inventory", icon: "📦", label: "Inventory" },
+    { href: "/dashboard/reports", icon: "📊", label: "Reports" },
+    { href: "/dashboard/reports/sales", icon: "📈", label: "Sales Report" },
+    { href: "/dashboard/reports/expenses-pnl", icon: "📉", label: "Expenses P&L" },
+  ];
+
+  return (
+    <div className="flex flex-wrap gap-2">
+      {actions.map((a) => (
+        <Link
+          key={a.href}
+          href={a.href}
+          className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md ${
+            a.primary
+              ? "bg-amber-500 text-white hover:bg-amber-600 shadow-sm"
+              : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-300"
+          }`}
+        >
+          <span>{a.icon}</span>
+          {a.label}
+        </Link>
+      ))}
+    </div>
   );
 }
 
@@ -349,148 +491,204 @@ function Card({
 }
 
 /* ─────────────────────────────────────────────
-   Date Range Picker (react-day-picker)
+   Screenshot-style date picker
 ───────────────────────────────────────────── */
-function DateRangePicker({
-  from,
-  to,
-  onChange,
+function SummaryDateRangePicker({
+  valuePreset,
+  valueFrom,
+  valueTo,
+  onApply,
   onClose,
 }: {
-  from: string;
-  to: string;
-  onChange: (from: string, to: string) => void;
+  valuePreset: RangePreset;
+  valueFrom: string;
+  valueTo: string;
+  onApply: (preset: RangePreset, from: string, to: string) => void;
   onClose: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
 
-  const [range, setRange] = useState<DateRange | undefined>({
-    from: localIsoToDate(from),
-    to: localIsoToDate(to),
+  const [tempPreset, setTempPreset] = useState<RangePreset>(valuePreset);
+  const [tempRange, setTempRange] = useState<DateRange | undefined>({
+    from: localIsoToDate(valueFrom),
+    to: localIsoToDate(valueTo),
   });
 
+  const presetItems: { id: RangePreset; label: string }[] = [
+    { id: "today", label: "Today" },
+    { id: "yesterday", label: "Yesterday" },
+    { id: "7d", label: "Last 7 Days" },
+    { id: "30d", label: "Last 30 Days" },
+    { id: "month", label: "This Month" },
+    { id: "lastMonth", label: "Last Month" },
+    { id: "custom", label: "Custom Range" },
+  ];
+
   useEffect(() => {
-    setRange({
-      from: localIsoToDate(from),
-      to: localIsoToDate(to),
+    setTempPreset(valuePreset);
+    setTempRange({
+      from: localIsoToDate(valueFrom),
+      to: localIsoToDate(valueTo),
     });
-  }, [from, to]);
+  }, [valuePreset, valueFrom, valueTo]);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) onClose();
     };
-
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, [onClose]);
 
-  const quickPick = (days: number) => {
-    const t = new Date();
-    const f = new Date(t);
-    f.setDate(t.getDate() - days + 1);
+  const applyPresetToTemp = (preset: Exclude<RangePreset, "custom">) => {
+    const next = getPresetRange(preset);
+    setTempPreset(preset);
+    setTempRange({
+      from: localIsoToDate(next.from),
+      to: localIsoToDate(next.to),
+    });
+  };
 
-    const nextFrom = dateToLocalIso(f);
-    const nextTo = dateToLocalIso(t);
+  const handlePresetClick = (preset: RangePreset) => {
+    if (preset === "custom") {
+      setTempPreset("custom");
+      return;
+    }
+    applyPresetToTemp(preset);
+  };
 
-    setRange({ from: f, to: t });
-    onChange(nextFrom, nextTo);
+  const handleApply = () => {
+    if (!tempRange?.from) return;
+
+    const nextFrom = dateToLocalIso(tempRange.from);
+    const nextTo = dateToLocalIso(tempRange.to ?? tempRange.from);
+
+    onApply(tempPreset, nextFrom, nextTo);
     onClose();
   };
+
+  const handleCancel = () => {
+    setTempPreset(valuePreset);
+    setTempRange({
+      from: localIsoToDate(valueFrom),
+      to: localIsoToDate(valueTo),
+    });
+    onClose();
+  };
+
+  const footerLabel =
+    tempRange?.from && tempRange?.to
+      ? `${dateToLocalIso(tempRange.from)} - ${dateToLocalIso(tempRange.to)}`
+      : tempRange?.from
+      ? `${dateToLocalIso(tempRange.from)} - ${dateToLocalIso(tempRange.from)}`
+      : "Select range";
 
   return (
     <div
       ref={ref}
-      className="absolute right-0 top-full z-50 mt-2 rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl"
-      style={{ boxShadow: "0 20px 60px -10px rgba(0,0,0,0.18)" }}
+      className="absolute right-0 top-full z-50 mt-2 overflow-hidden rounded-md border border-slate-300 bg-white shadow-2xl"
+      style={{ width: 660, boxShadow: "0 20px 50px rgba(15, 23, 42, 0.18)" }}
     >
-      <div className="mb-3">
-        <div className="text-sm font-bold text-slate-800">Choose date range</div>
-        <p className="mt-1 text-xs font-medium text-slate-400">
-          Pick a start date, then an end date
-        </p>
+      <div className="flex">
+        <div className="w-36 border-r border-slate-200 bg-slate-50">
+          {presetItems.map((item) => {
+            const active = tempPreset === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => handlePresetClick(item.id)}
+                className={`flex w-full items-center px-4 py-3 text-left text-sm transition ${
+                  active
+                    ? "bg-sky-600 font-semibold text-white"
+                    : "text-slate-700 hover:bg-slate-100"
+                }`}
+              >
+                {item.label}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="flex-1 bg-white p-4">
+          <DayPicker
+            mode="range"
+            selected={tempRange}
+            onSelect={(nextRange) => {
+              setTempPreset("custom");
+
+              if (!nextRange?.from) {
+                setTempRange(undefined);
+                return;
+              }
+
+              if (nextRange.from && !nextRange.to) {
+                setTempRange({ from: nextRange.from, to: undefined });
+                return;
+              }
+
+              setTempRange(nextRange);
+            }}
+            numberOfMonths={2}
+            defaultMonth={tempRange?.from ?? new Date()}
+            month={tempRange?.from ?? new Date()}
+            showOutsideDays
+            disabled={{ after: new Date() }}
+            className="rdp-summary"
+            classNames={{
+              months: "flex flex-col gap-8 sm:flex-row",
+              month: "space-y-3",
+              caption: "relative flex items-center justify-center",
+              caption_label: "text-base font-semibold text-slate-800",
+              nav: "flex items-center gap-2",
+              nav_button:
+                "h-8 w-8 rounded-md text-slate-700 hover:bg-slate-100 transition",
+              table: "w-full border-collapse",
+              head_row: "flex",
+              head_cell:
+                "w-10 text-center text-xs font-semibold text-slate-700",
+              row: "mt-1 flex w-full",
+              cell: "relative h-10 w-10 p-0 text-center text-sm",
+              day: "h-10 w-10 rounded-none text-sm font-medium text-slate-800 hover:bg-sky-50",
+              day_selected: "bg-sky-600 text-white hover:bg-sky-600",
+              day_today: "text-slate-900 font-bold",
+              day_outside: "text-slate-300",
+              day_disabled: "text-slate-300 opacity-40",
+              day_range_middle:
+                "bg-sky-100 text-slate-900 rounded-none hover:bg-sky-100",
+              day_range_start:
+                "bg-sky-600 text-white rounded-none hover:bg-sky-600",
+              day_range_end:
+                "bg-sky-600 text-white rounded-none hover:bg-sky-600",
+            }}
+          />
+        </div>
       </div>
 
-      <div className="mb-4 grid grid-cols-2 gap-2">
-        {[
-          { label: "Last 7 days", days: 7 },
-          { label: "Last 14 days", days: 14 },
-          { label: "Last 30 days", days: 30 },
-          { label: "Last 60 days", days: 60 },
-          { label: "Last 90 days", days: 90 },
-          { label: "Last 6 months", days: 180 },
-        ].map(({ label, days }) => (
+      <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50 px-4 py-2.5">
+        <div className="text-sm text-slate-700">{footerLabel}</div>
+
+        <div className="flex items-center gap-2">
           <button
-            key={days}
-            onClick={() => quickPick(days)}
-            className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 transition hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700"
+            onClick={handleCancel}
+            className="rounded-md border border-slate-300 bg-white px-4 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
           >
-            {label}
+            Cancel
           </button>
-        ))}
-      </div>
-
-      <div className="rounded-2xl border border-slate-100 bg-slate-50/70 p-3">
-        <DayPicker
-          mode="range"
-          selected={range}
-          defaultMonth={range?.from}
-          month={range?.from}
-          onMonthChange={(month) => {
-            setRange((prev) => ({
-              from: prev?.from && prev.from.getMonth() === month.getMonth() && prev.from.getFullYear() === month.getFullYear()
-                ? prev.from
-                : prev?.from,
-              to: prev?.to,
-            }));
-          }}
-          numberOfMonths={2}
-          disabled={{ after: new Date() }}
-          showOutsideDays
-          onSelect={(nextRange) => {
-            setRange(nextRange);
-
-            if (nextRange?.from && nextRange?.to) {
-              onChange(dateToLocalIso(nextRange.from), dateToLocalIso(nextRange.to));
-              onClose();
-            }
-          }}
-          className="rdp-mykaya"
-          classNames={{
-            months: "flex flex-col gap-4 sm:flex-row sm:gap-6",
-            month: "space-y-3",
-            caption: "flex items-center justify-center pt-1 relative",
-            caption_label: "text-sm font-bold text-slate-800",
-            nav: "flex items-center gap-1",
-            nav_button:
-              "h-8 w-8 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-amber-50 hover:border-amber-300 hover:text-amber-700 transition",
-            table: "w-full border-collapse",
-            head_row: "flex",
-            head_cell:
-              "w-9 text-[11px] font-bold uppercase text-slate-400",
-            row: "flex w-full mt-1.5",
-            cell: "relative h-9 w-9 text-center text-sm p-0",
-            day: "h-9 w-9 rounded-xl text-sm font-semibold text-slate-700 hover:bg-amber-50 hover:text-amber-700 transition",
-            day_selected:
-              "bg-amber-500 text-white hover:bg-amber-500 hover:text-white",
-            day_today: "border border-amber-300 text-amber-700",
-            day_outside: "text-slate-300 opacity-60",
-            day_disabled: "text-slate-300 opacity-40",
-            day_range_middle:
-              "bg-amber-100 text-amber-800 rounded-none hover:bg-amber-100",
-            day_range_start:
-              "bg-amber-500 text-white rounded-xl hover:bg-amber-500 hover:text-white",
-            day_range_end:
-              "bg-amber-500 text-white rounded-xl hover:bg-amber-500 hover:text-white",
-          }}
-        />
+          <button
+            onClick={handleApply}
+            disabled={!tempRange?.from}
+            className="rounded-md bg-sky-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-sky-700 disabled:opacity-50"
+          >
+            Apply
+          </button>
+        </div>
       </div>
     </div>
   );
 }
 
 /* ─────────────────────────────────────────────
-   Revenue vs Expenses area chart
+   Area chart
 ───────────────────────────────────────────── */
 function AreaChart({
   points,
@@ -603,15 +801,15 @@ function AreaChart({
         onMouseLeave={() => setHover(null)}
       >
         <defs>
-          <linearGradient id="gr-rev" x1="0" y1="0" x2="0" y2="1">
+          <linearGradient id="gr-rev-summary" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="#f59e0b" stopOpacity="0.3" />
             <stop offset="100%" stopColor="#f59e0b" stopOpacity="0.02" />
           </linearGradient>
-          <linearGradient id="gr-exp" x1="0" y1="0" x2="0" y2="1">
+          <linearGradient id="gr-exp-summary" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="#ef4444" stopOpacity="0.2" />
             <stop offset="100%" stopColor="#ef4444" stopOpacity="0.02" />
           </linearGradient>
-          <filter id="shadow-dot">
+          <filter id="shadow-dot-summary">
             <feDropShadow dx="0" dy="1" stdDeviation="2" floodOpacity="0.3" />
           </filter>
         </defs>
@@ -651,8 +849,8 @@ function AreaChart({
           />
         )}
 
-        <path d={areaPath("expenses")} fill="url(#gr-exp)" />
-        <path d={areaPath("revenue")} fill="url(#gr-rev)" />
+        <path d={areaPath("expenses")} fill="url(#gr-exp-summary)" />
+        <path d={areaPath("revenue")} fill="url(#gr-rev-summary)" />
 
         <path
           d={linePath("expenses")}
@@ -681,7 +879,7 @@ function AreaChart({
               fill="#fff"
               stroke="#f59e0b"
               strokeWidth="2.5"
-              filter="url(#shadow-dot)"
+              filter="url(#shadow-dot-summary)"
             />
           ) : null
         )}
@@ -694,7 +892,7 @@ function AreaChart({
             fill="#fff"
             stroke="#ef4444"
             strokeWidth="2.5"
-            filter="url(#shadow-dot)"
+            filter="url(#shadow-dot-summary)"
           />
         )}
 
@@ -788,10 +986,12 @@ function StockBadge({ status }: { status: InventoryValuationRow["status"] }) {
    Main Page
 ───────────────────────────────────────────── */
 export default function DashboardPage() {
+  const initialToday = getPresetRange("today");
+
   const [orgId, setOrgId] = useState<string | null>(null);
-  const [preset, setPreset] = useState<RangePreset>("7d");
-  const [customFrom, setCustomFrom] = useState("");
-  const [customTo, setCustomTo] = useState("");
+  const [preset, setPreset] = useState<RangePreset>("today");
+  const [customFrom, setCustomFrom] = useState(initialToday.from);
+  const [customTo, setCustomTo] = useState(initialToday.to);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -805,32 +1005,15 @@ export default function DashboardPage() {
   const [recentExpenses, setRecentExpenses] = useState<RecentExpense[]>([]);
 
   const range = useMemo(() => {
-    const to = new Date();
-    const from = new Date(to);
-
-    if (preset === "custom" && customFrom && customTo) {
+    if (preset === "custom") {
       return {
         from: customFrom,
         to: customTo,
-        label: "Custom range",
+        label: "Custom Range",
       };
     }
 
-    if (preset === "today") {
-      return { from: iso(to), to: iso(to), label: "Today" };
-    }
-
-    if (preset === "7d") {
-      from.setDate(to.getDate() - 6);
-      return { from: iso(from), to: iso(to), label: "Last 7 days" };
-    }
-
-    if (preset === "30d") {
-      from.setDate(to.getDate() - 29);
-      return { from: iso(from), to: iso(to), label: "Last 30 days" };
-    }
-
-    return { from: iso(startOfMonth(to)), to: iso(to), label: "This month" };
+    return getPresetRange(preset);
   }, [preset, customFrom, customTo]);
 
   useEffect(() => {
@@ -952,7 +1135,7 @@ export default function DashboardPage() {
       sub: s.customer_name ?? "Walk-in customer",
       amount: Number(s.total ?? 0),
       at: s.created_at,
-      href: `/sales/${s.id}`,
+      href: `/dashboard/sales/${s.id}`,
     }));
 
     const expenses: ActivityItem[] = recentExpenses.map((e) => ({
@@ -962,7 +1145,7 @@ export default function DashboardPage() {
       sub: `Expense · ${fmtDateOnly(e.expense_date)}`,
       amount: Number(e.amount ?? 0),
       at: e.created_at,
-      href: "/expenses",
+      href: "/dashboard/expenses",
     }));
 
     return [...sales, ...expenses]
@@ -1006,47 +1189,43 @@ export default function DashboardPage() {
           animation: fadeIn 0.3s ease forwards;
         }
 
-        .rdp-mykaya {
-          --rdp-cell-size: 36px;
+        .rdp-summary {
           margin: 0;
         }
 
-        .rdp-mykaya .rdp-button_previous,
-        .rdp-mykaya .rdp-button_next {
+        .rdp-summary .rdp-button_previous,
+        .rdp-summary .rdp-button_next {
           color: inherit;
         }
 
-        .rdp-mykaya .rdp-chevron {
+        .rdp-summary .rdp-chevron {
           fill: currentColor;
         }
 
-        .rdp-mykaya .rdp-range_start .rdp-day_button,
-        .rdp-mykaya .rdp-range_end .rdp-day_button,
-        .rdp-mykaya .rdp-selected .rdp-day_button {
-          background: #f59e0b;
-          color: white;
-          border-radius: 12px;
-        }
-
-        .rdp-mykaya .rdp-range_middle .rdp-day_button {
-          background: #fef3c7;
-          color: #92400e;
+        .rdp-summary .rdp-day_button {
+          width: 40px;
+          height: 40px;
           border-radius: 0;
+          font-weight: 500;
         }
 
-        .rdp-mykaya .rdp-day_button {
-          width: 36px;
-          height: 36px;
-          font-weight: 600;
-          border-radius: 12px;
-          transition: all 0.15s ease;
+        .rdp-summary .rdp-range_start .rdp-day_button,
+        .rdp-summary .rdp-range_end .rdp-day_button,
+        .rdp-summary .rdp-selected .rdp-day_button {
+          background: #1d8ed8;
+          color: white;
         }
 
-        .rdp-mykaya .rdp-today .rdp-day_button {
-          border: 1px solid #fcd34d;
+        .rdp-summary .rdp-range_middle .rdp-day_button {
+          background: #dbeafe;
+          color: #0f172a;
         }
 
-        .rdp-mykaya .rdp-disabled .rdp-day_button {
+        .rdp-summary .rdp-today .rdp-day_button {
+          border: 1px solid #cbd5e1;
+        }
+
+        .rdp-summary .rdp-disabled .rdp-day_button {
           opacity: 0.35;
         }
       `}</style>
@@ -1065,7 +1244,7 @@ export default function DashboardPage() {
           </div>
         )}
 
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
           <div>
             <h1 className="text-3xl font-extrabold tracking-tight text-slate-900">Dashboard</h1>
             <p className="mt-1 text-sm font-medium text-slate-400">
@@ -1083,58 +1262,37 @@ export default function DashboardPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center gap-0.5 rounded-xl border border-slate-200 bg-slate-50 p-1">
-              {(["today", "7d", "30d", "month"] as RangePreset[]).map((p) => (
-                <button
-                  key={p}
-                  onClick={() => setPreset(p)}
-                  className={`rounded-lg px-3.5 py-2 text-xs font-bold transition-all duration-150 ${
-                    preset === p
-                      ? "border border-slate-200 bg-white text-slate-900 shadow-sm"
-                      : "text-slate-500 hover:text-slate-700"
-                  }`}
-                >
-                  {p === "today" ? "Today" : p === "7d" ? "7D" : p === "30d" ? "30D" : "Month"}
-                </button>
-              ))}
-            </div>
-
             <div className="relative">
               <button
                 onClick={() => setShowDatePicker((v) => !v)}
-                className={`inline-flex items-center gap-2 rounded-xl border px-3.5 py-2 text-xs font-bold transition-all duration-150 ${
-                  preset === "custom"
-                    ? "border-amber-400 bg-amber-50 text-amber-700 shadow-sm"
-                    : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
-                }`}
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
               >
                 <span>📅</span>
-                {preset === "custom" && customFrom && customTo
-                  ? fmtRangeLabel(customFrom, customTo)
-                  : "Pick dates"}
+                <span>{fmtRangeLabel(range.from, range.to)}</span>
               </button>
 
               {showDatePicker && (
-                <DateRangePicker
-                  from={customFrom || range.from}
-                  to={customTo || range.to}
-                  onChange={(f, t) => {
-                    setCustomFrom(f);
-                    setCustomTo(t);
-                    setPreset("custom");
+                <SummaryDateRangePicker
+                  valuePreset={preset}
+                  valueFrom={range.from}
+                  valueTo={range.to}
+                  onApply={(nextPreset, from, to) => {
+                    setCustomFrom(from);
+                    setCustomTo(to);
+                    setPreset(nextPreset);
                   }}
                   onClose={() => setShowDatePicker(false)}
                 />
               )}
             </div>
 
-            {/* <button
+            <button
               onClick={() => loadAll(true)}
               disabled={loading || refreshing}
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-slate-600 transition-all duration-150 hover:bg-slate-50 disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
             >
               <svg
-                className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`}
+                className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`}
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
@@ -1153,9 +1311,11 @@ export default function DashboardPage() {
                 )}
               </svg>
               {refreshing ? "Refreshing…" : "Refresh"}
-            </button> */}
+            </button>
           </div>
         </div>
+
+        <QuickActions />
 
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
           <KpiCard
@@ -1215,10 +1375,10 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1fr_340px]">
           <Card
             title="Revenue vs Expenses"
-            sub={`${range.label} · hover the chart for daily breakdown`}
+            sub={`${range.label} · hover the chart for breakdown`}
             action={
               <Link
-                href="/reports"
+                href="/dashboard/reports/expenses-pnl"
                 className="text-xs font-bold text-amber-500 transition-colors hover:text-amber-600"
               >
                 Full P&L →
@@ -1289,7 +1449,7 @@ export default function DashboardPage() {
             sub="Low, critical & out-of-stock items"
             action={
               <Link
-                href="/inventory"
+                href="/dashboard/inventory"
                 className="text-xs font-bold text-amber-500 transition-colors hover:text-amber-600"
               >
                 Manage →
@@ -1340,7 +1500,7 @@ export default function DashboardPage() {
 
                 <div className="bg-slate-50 px-5 py-3.5 text-center">
                   <Link
-                    href="/inventory?filter=low"
+                    href="/dashboard/inventory?filter=low"
                     className="text-xs font-bold text-amber-500 transition-colors hover:text-amber-600"
                   >
                     View all alerts →
@@ -1357,13 +1517,13 @@ export default function DashboardPage() {
           action={
             <div className="flex items-center gap-4">
               <Link
-                href="/sales"
+                href="/dashboard/sales"
                 className="text-xs font-bold text-amber-500 transition-colors hover:text-amber-600"
               >
                 Sales →
               </Link>
               <Link
-                href="/expenses"
+                href="/dashboard/expenses"
                 className="text-xs font-bold text-amber-500 transition-colors hover:text-amber-600"
               >
                 Expenses →
