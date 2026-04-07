@@ -35,22 +35,26 @@ export default function DashboardShell({
         @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600;700&display=swap');
 
         :root {
-          --sidebar-bg:       #1A1A24;
-          --sidebar-border:   rgba(255,255,255,0.07);
-          --sidebar-text:     #C8C8D8;
-          --sidebar-text-dim: #6E6E82;
-          --sidebar-hover-bg: rgba(255, 255, 255, 0.06);
-          --sidebar-active-bg:#2A2A3A;
-          --sidebar-active-text: #FFFFFF;
+          --sidebar-bg:         #1A1A24;
+          --sidebar-border:     rgba(255,255,255,0.07);
+          --sidebar-text:       #C8C8D8;
+          --sidebar-text-dim:   #6E6E82;
+          --sidebar-hover-bg:   rgba(255, 255, 255, 0.06);
+          --sidebar-active-bg:  #2A2A3A;
+          --sidebar-active-text:#FFFFFF;
 
-          --accent:           #F5C518;
+          --accent:             #F5C518;
 
-          --main-bg:          #F4F5F7;
-          --card-bg:          #FFFFFF;
-          --card-border:      #E4E6EB;
-          --card-shadow:      0 1px 3px rgba(0,0,0,0.08), 0 4px 16px rgba(0,0,0,0.05);
+          --main-bg:            #F4F5F7;
+          --surface-bg:         #FFFFFF;
+          --surface-border:     #E4E6EB;
+          --surface-shadow:     0 1px 3px rgba(0,0,0,0.08), 0 4px 16px rgba(0,0,0,0.05);
 
-          --text-secondary:   #4A4A5A;
+          --topbar-bg:          rgba(255,255,255,0.72);
+          --topbar-border:      #E4E6EB;
+
+          --text-primary:       #17171F;
+          --text-secondary:     #4A4A5A;
 
           font-family: 'DM Sans', system-ui, sans-serif;
         }
@@ -84,7 +88,7 @@ export default function DashboardShell({
         }
 
         .nav-link.active::before {
-          content: '';
+          content: "";
           position: absolute;
           left: 0;
           top: 20%;
@@ -108,8 +112,12 @@ export default function DashboardShell({
           align-items: center;
           justify-content: space-between;
           padding: 0 28px;
-          background: var(--card-bg);
-          border-bottom: 1px solid var(--card-border);
+          background: var(--topbar-bg);
+          border-bottom: 1px solid var(--topbar-border);
+          backdrop-filter: blur(10px);
+          position: sticky;
+          top: 0;
+          z-index: 30;
         }
 
         .nav-divider {
@@ -132,14 +140,27 @@ export default function DashboardShell({
           color: #FF8A8A !important;
         }
 
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+        ::-webkit-scrollbar {
+          width: 6px;
+          height: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+          background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+          background: rgba(255,255,255,0.1);
+          border-radius: 3px;
+        }
       `}</style>
 
       <div
-        className="min-h-screen flex"
-        style={{ background: "var(--main-bg)", fontFamily: "'DM Sans', sans-serif" }}
+        className="flex min-h-screen"
+        style={{
+          background: "var(--main-bg)",
+          fontFamily: "'DM Sans', sans-serif",
+        }}
       >
         <aside
           className="hidden lg:flex flex-col flex-shrink-0"
@@ -169,13 +190,20 @@ export default function DashboardShell({
               >
                 🐝
               </div>
+
               <div>
                 <div
                   className="font-display"
-                  style={{ color: "#FFFFFF", fontSize: 18, lineHeight: 1.2, letterSpacing: "-0.3px" }}
+                  style={{
+                    color: "#FFFFFF",
+                    fontSize: 18,
+                    lineHeight: 1.2,
+                    letterSpacing: "-0.3px",
+                  }}
                 >
                   Pollinators
                 </div>
+
                 <div
                   style={{
                     color: "var(--sidebar-text-dim)",
@@ -260,10 +288,24 @@ export default function DashboardShell({
                 padding: "10px 12px",
               }}
             >
-              <div style={{ color: "#F5C518", fontSize: 11, fontWeight: 700, letterSpacing: "0.5px" }}>
+              <div
+                style={{
+                  color: "#F5C518",
+                  fontSize: 11,
+                  fontWeight: 700,
+                  letterSpacing: "0.5px",
+                }}
+              >
                 SEASON 2025
               </div>
-              <div style={{ color: "var(--sidebar-text)", fontSize: 12, marginTop: 3 }}>
+
+              <div
+                style={{
+                  color: "var(--sidebar-text)",
+                  fontSize: 12,
+                  marginTop: 3,
+                }}
+              >
                 Harvest active
               </div>
             </div>
@@ -312,9 +354,15 @@ export default function DashboardShell({
           </div>
         </div>
 
-        <main className="flex-1 min-w-0" style={{ paddingTop: "0" }}>
+        <main className="flex-1 min-w-0">
           <div className="topbar">
-            <div style={{ color: "var(--text-secondary)", fontSize: 13, fontWeight: 500 }}>
+            <div
+              style={{
+                color: "var(--text-secondary)",
+                fontSize: 13,
+                fontWeight: 500,
+              }}
+            >
               {new Date().toLocaleDateString("en-GB", {
                 weekday: "long",
                 day: "numeric",
@@ -324,19 +372,8 @@ export default function DashboardShell({
             </div>
           </div>
 
-          <div className="lg:p-8 p-4 pt-4 lg:mt-0 mt-14">
-            <div
-              style={{
-                background: "var(--card-bg)",
-                borderRadius: 16,
-                border: "1px solid var(--card-border)",
-                boxShadow: "var(--card-shadow)",
-                minHeight: "calc(100vh - 130px)",
-                overflow: "hidden",
-              }}
-            >
-              <div style={{ padding: "28px 32px" }}>{children}</div>
-            </div>
+          <div className="p-4 pt-4 lg:p-8 lg:pt-6 mt-14 lg:mt-0">
+            {children}
           </div>
         </main>
       </div>

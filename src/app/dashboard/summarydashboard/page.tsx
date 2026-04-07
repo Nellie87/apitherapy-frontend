@@ -1512,86 +1512,91 @@ export default function DashboardPage() {
         </div>
 
         <Card
-          title="Recent Activity"
-          sub="Sales and expenses — newest first"
-          action={
-            <div className="flex items-center gap-4">
-              <Link
-                href="/dashboard/sales"
-                className="text-xs font-bold text-amber-500 transition-colors hover:text-amber-600"
-              >
-                Sales →
-              </Link>
-              <Link
-                href="/dashboard/expenses"
-                className="text-xs font-bold text-amber-500 transition-colors hover:text-amber-600"
-              >
-                Expenses →
-              </Link>
+  title="Recent Activity"
+  sub="Sales and expenses — newest first"
+  action={
+    <div className="flex items-center gap-4">
+      <Link
+        href="/dashboard/sales"
+        className="text-xs font-bold text-amber-500 transition-colors hover:text-amber-600"
+      >
+        Sales →
+      </Link>
+      <Link
+        href="/dashboard/expenses"
+        className="text-xs font-bold text-amber-500 transition-colors hover:text-amber-600"
+      >
+        Expenses →
+      </Link>
+    </div>
+  }
+>
+  {loading ? (
+    <div className="flex flex-col gap-4 p-5">
+      {[1, 2, 3, 4].map((i) => (
+        <div key={i} className="flex items-center gap-3">
+          <Skeleton w={36} h={36} radius={10} />
+          <div className="flex flex-1 flex-col gap-2">
+            <Skeleton w="55%" h={14} />
+            <Skeleton w="35%" h={11} />
+          </div>
+          <Skeleton w={80} h={20} />
+        </div>
+      ))}
+    </div>
+  ) : activity.length === 0 ? (
+    <div className="py-14 text-center text-sm font-semibold text-slate-400">
+      No recent activity.
+    </div>
+  ) : (
+    <div className="divide-y divide-slate-100">
+      {[...activity]
+        .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())
+        .slice(0, 10)
+        .map((a) => (
+          <Link
+            key={a.id}
+            href={a.href}
+            className={`grid items-center gap-4 px-6 py-4 transition-colors duration-150 ${
+              a.type === "sale" ? "hover:bg-amber-50" : "hover:bg-slate-50"
+            }`}
+            style={{ gridTemplateColumns: "40px 1fr auto" }}
+          >
+            <div
+              className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl text-base ${
+                a.type === "sale" ? "bg-amber-100" : "bg-slate-100"
+              }`}
+            >
+              {a.type === "sale" ? "🧾" : "💸"}
             </div>
-          }
-        >
-          {loading ? (
-            <div className="flex flex-col gap-4 p-5">
-              {[1, 2, 3, 4].map((i) => (
-                <div key={i} className="flex items-center gap-3">
-                  <Skeleton w={36} h={36} radius={10} />
-                  <div className="flex flex-1 flex-col gap-2">
-                    <Skeleton w="55%" h={14} />
-                    <Skeleton w="35%" h={11} />
-                  </div>
-                  <Skeleton w={80} h={20} />
-                </div>
-              ))}
-            </div>
-          ) : activity.length === 0 ? (
-            <div className="py-14 text-center text-sm font-semibold text-slate-400">
-              No recent activity.
-            </div>
-          ) : (
-            <div className="divide-y divide-slate-100">
-              {activity.map((a) => (
-                <Link
-                  key={a.id}
-                  href={a.href}
-                  className={`grid items-center gap-4 px-6 py-4 transition-colors duration-150 ${
-                    a.type === "sale" ? "hover:bg-amber-50" : "hover:bg-slate-50"
-                  }`}
-                  style={{ gridTemplateColumns: "40px 1fr auto" }}
-                >
-                  <div
-                    className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl text-base ${
-                      a.type === "sale" ? "bg-amber-100" : "bg-slate-100"
-                    }`}
-                  >
-                    {a.type === "sale" ? "🧾" : "💸"}
-                  </div>
 
-                  <div className="min-w-0">
-                    <div className="truncate text-sm font-bold text-slate-900">{a.title}</div>
-                    <div className="mt-0.5 truncate text-xs font-medium text-slate-400">
-                      {a.sub}
-                    </div>
-                  </div>
-
-                  <div className="shrink-0 text-right">
-                    <div
-                      className={`text-sm font-extrabold ${
-                        a.type === "sale" ? "text-slate-900" : "text-red-500"
-                      }`}
-                    >
-                      {a.type === "expense" ? "−" : "+"}
-                      {fmtMoney(a.amount)}
-                    </div>
-                    <div className="mt-0.5 text-xs font-medium text-slate-400">
-                      {fmtDateTime(a.at)}
-                    </div>
-                  </div>
-                </Link>
-              ))}
+            <div className="min-w-0">
+              <div className="truncate text-sm font-bold text-slate-900">
+                {a.title}
+              </div>
+              <div className="mt-0.5 truncate text-xs font-medium text-slate-400">
+                {a.sub}
+              </div>
             </div>
-          )}
-        </Card>
+
+            <div className="shrink-0 text-right">
+              <div
+                className={`text-sm font-extrabold ${
+                  a.type === "sale" ? "text-slate-900" : "text-red-500"
+                }`}
+              >
+                {a.type === "expense" ? "−" : "+"}
+                {fmtMoney(a.amount)}
+              </div>
+              <div className="mt-0.5 text-xs font-medium text-slate-400">
+                {fmtDateTime(a.at)}
+              </div>
+            </div>
+          </Link>
+        ))}
+    </div>
+  )}
+</Card>
       </div>
     </>
   );
