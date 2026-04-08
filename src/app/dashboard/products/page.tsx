@@ -2,14 +2,20 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { bootstrapOrg } from "@/lib/org/bootstrapOrg";
-import { createClient } from "@/lib/supabase/client";
 import {
   listProducts,
   createProduct,
   archiveProduct,
   restoreProduct,
 } from "@/lib/api/products";
-import { listUnitMeasures, listUnitSizes } from "@/lib/api/lookups";
+import {
+  listUnitMeasures,
+  listUnitSizes,
+  listCategories,
+  createCategory,
+  createUnitSize,
+} from "@/lib/api/lookups";
+import { createClient } from "@/lib/supabase/client";
 
 import * as S from "./page.styles";
 
@@ -17,7 +23,13 @@ import * as S from "./page.styles";
    Types
 ───────────────────────────────────────────── */
 type UnitKind = "mass" | "volume" | "count";
-type MeasureLookup = { id: string; name: string; allowed_kinds: UnitKind[] };
+
+type MeasureLookup = {
+  id: string;
+  name: string;
+  allowed_kinds: UnitKind[];
+};
+
 type SizeLookup = {
   id: string;
   label: string;
@@ -27,10 +39,17 @@ type SizeLookup = {
   count?: number | null;
 };
 
+type CategoryLookup = {
+  id: string;
+  name: string;
+};
+
 type Product = {
   id: string;
   name?: string;
-  category?: string | null;
+  sku?: string | null;
+  category_id?: string | null;
+  category?: { id?: string; name?: string } | null;
   barcode?: string | null;
   supplier?: string | null;
   notes?: string | null;
@@ -40,13 +59,14 @@ type Product = {
   unit_size_id?: string | null;
   unit_measure?: { id?: string; name?: string } | null;
   unit_size?: { id?: string; label?: string; kind?: UnitKind } | null;
-  sell_status?: "to_be_sold" | "not_to_be_sold" | string;
+  is_sellable?: boolean;
   active?: boolean;
 };
 
 type FormData = {
   name: string;
-  category: string;
+  sku: string;
+  categoryId: string;
   barcode: string;
   supplier: string;
   notes: string;
@@ -54,7 +74,7 @@ type FormData = {
   sellPrice: string;
   unitMeasureId: string;
   unitSizeId: string;
-  sellStatus: "to_be_sold" | "not_to_be_sold";
+  isSellable: boolean;
 };
 
 /* ─────────────────────────────────────────────
@@ -62,7 +82,8 @@ type FormData = {
 ───────────────────────────────────────────── */
 const BLANK_FORM: FormData = {
   name: "",
-  category: "",
+  sku: "",
+  categoryId: "",
   barcode: "",
   supplier: "",
   notes: "",
@@ -70,7 +91,7 @@ const BLANK_FORM: FormData = {
   sellPrice: "0",
   unitMeasureId: "",
   unitSizeId: "",
-  sellStatus: "to_be_sold",
+  isSellable: true,
 };
 
 function fmt(v: number | string | null | undefined) {
@@ -91,18 +112,27 @@ function margin(
   return ((s - c) / s) * 100;
 }
 
-const CATEGORIES = [
-  "Raw Honey",
-  "Processed Honey",
-  "Beeswax",
-  "Propolis",
-  "Royal Jelly",
-  "Pollen",
-  "Apitherapy",
-  "Equipment",
-  "Packaging",
-  "Other",
-];
+function getCategoryName(p: Product) {
+  return p.category?.name ?? "";
+}
+
+function getPackagingLabel(p: Product) {
+  const measure = p.unit_measure?.name?.trim();
+  const size = p.unit_size?.label?.trim();
+  if (measure && size) return `${measure} • ${size}`;
+  if (measure) return measure;
+  if (size) return size;
+  return "";
+}
+
+function inferSizeKindFromMeasure(
+  measureId: string,
+  measures: MeasureLookup[]
+): UnitKind | null {
+  const measure = measures.find((m) => m.id === measureId);
+  if (!measure || !measure.allowed_kinds?.length) return null;
+  return measure.allowed_kinds[0] ?? null;
+}
 
 /* ─────────────────────────────────────────────
    Icons
@@ -337,9 +367,8 @@ function MarginBadge({ pct }: { pct: number | null }) {
   );
 }
 
-function SellBadge({ status }: { status?: string }) {
-  const active = status !== "not_to_be_sold";
-  return active ? (
+function SellBadge({ isSellable }: { isSellable?: boolean }) {
+  return isSellable !== false ? (
     <span className="inline-flex items-center gap-1.5 rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-semibold text-green-700">
       <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
       For sale
@@ -347,7 +376,7 @@ function SellBadge({ status }: { status?: string }) {
   ) : (
     <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-500">
       <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
-      Inactive
+      Not for sale
     </span>
   );
 }
@@ -360,6 +389,63 @@ function ArchiveBadge({ active }: { active?: boolean }) {
       <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
       Archived
     </span>
+  );
+}
+
+/* ─────────────────────────────────────────────
+   Confirmation Modal
+───────────────────────────────────────────── */
+function ConfirmModal({
+  open,
+  title,
+  message,
+  confirmText,
+  confirmVariant = "primary",
+  onCancel,
+  onConfirm,
+  loading,
+}: {
+  open: boolean;
+  title: string;
+  message: React.ReactNode;
+  confirmText: string;
+  confirmVariant?: "primary" | "danger";
+  onCancel: () => void;
+  onConfirm: () => void;
+  loading?: boolean;
+}) {
+  if (!open) return null;
+
+  const btnClass =
+    confirmVariant === "danger"
+      ? "flex-1 rounded-xl bg-red-500 py-2.5 text-sm font-semibold text-white hover:bg-red-600 disabled:opacity-50 transition"
+      : "flex-1 rounded-xl bg-amber-500 py-2.5 text-sm font-semibold text-white hover:bg-amber-600 disabled:opacity-50 transition";
+
+  return (
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+      onClick={onCancel}
+    >
+      <div
+        className="w-full max-w-md rounded-2xl bg-white shadow-2xl p-6"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="text-lg font-bold text-slate-900">{title}</div>
+        <div className="mt-2 text-sm text-slate-600">{message}</div>
+
+        <div className="mt-6 flex gap-3">
+          <button
+            onClick={onCancel}
+            className="flex-1 rounded-xl border border-slate-200 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition"
+          >
+            Cancel
+          </button>
+          <button onClick={onConfirm} disabled={loading} className={btnClass}>
+            {loading ? "Please wait…" : confirmText}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -402,6 +488,11 @@ function ArchiveModal({
 
         <div className="rounded-xl bg-slate-50 border border-slate-200 px-4 py-3 mb-5 text-sm font-semibold text-slate-800">
           {product.name}
+          {(product.sku || product.barcode) && (
+            <div className="mt-1 text-xs font-normal text-slate-500">
+              {product.sku ? `SKU ${product.sku}` : `Barcode ${product.barcode}`}
+            </div>
+          )}
         </div>
 
         <div className="flex gap-3">
@@ -449,7 +540,11 @@ function ProductForm({
   form,
   setForm,
   measures,
+  categories,
   filteredSizes,
+  supplierOptions,
+  onOpenCategoryModal,
+  onOpenCustomSizeModal,
   onSubmit,
   onCancel,
   saving,
@@ -458,7 +553,11 @@ function ProductForm({
   form: FormData;
   setForm: React.Dispatch<React.SetStateAction<FormData>>;
   measures: MeasureLookup[];
+  categories: CategoryLookup[];
   filteredSizes: SizeLookup[];
+  supplierOptions: string[];
+  onOpenCategoryModal: () => void;
+  onOpenCustomSizeModal: () => void;
   onSubmit: (e: React.FormEvent) => void;
   onCancel: () => void;
   saving: boolean;
@@ -471,7 +570,7 @@ function ProductForm({
         HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
       >
     ) =>
-      setForm((prev) => ({ ...prev, [k]: e.target.value }));
+      setForm((prev) => ({ ...prev, [k]: e.target.value as never }));
 
   const marginPct = margin(form.costPrice, form.sellPrice);
 
@@ -482,28 +581,48 @@ function ProductForm({
           <Label required>Product name</Label>
           <input
             className={S.inputCls}
-            placeholder="e.g. Raw Honey 500g"
+            placeholder="e.g. Raw Honey 500ml Bottle"
             value={form.name}
             onChange={set("name")}
             required
           />
         </div>
         <div>
-          <Label>Category</Label>
+          <Label>SKU</Label>
+          <input
+            className={S.inputCls}
+            placeholder="e.g. HON-BOT-500"
+            value={form.sku}
+            onChange={set("sku")}
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3 items-end">
+        <div>
+          <Label required>Category</Label>
           <select
             className={S.selectCls}
-            value={form.category}
-            onChange={set("category")}
+            value={form.categoryId}
+            onChange={set("categoryId")}
             style={S.selectChevronStyle}
+            required
           >
             <option value="">— Select —</option>
-            {CATEGORIES.map((c) => (
-              <option key={c} value={c}>
-                {c}
+            {categories.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
               </option>
             ))}
           </select>
         </div>
+        <button
+          type="button"
+          onClick={onOpenCategoryModal}
+          className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition"
+        >
+          + New category
+        </button>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -514,7 +633,13 @@ function ProductForm({
             placeholder="Supplier name"
             value={form.supplier}
             onChange={set("supplier")}
+            list="supplier-options"
           />
+          <datalist id="supplier-options">
+            {supplierOptions.map((supplier) => (
+              <option key={supplier} value={supplier} />
+            ))}
+          </datalist>
         </div>
         <div>
           <Label>Barcode</Label>
@@ -540,7 +665,7 @@ function ProductForm({
           />
         </div>
         <div>
-          <Label>Sell price (Ksh)</Label>
+          <Label required={form.isSellable}>Sell price (Ksh)</Label>
           <input
             className={S.inputCls}
             type="number"
@@ -572,14 +697,15 @@ function ProductForm({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-3 items-end">
         <div>
-          <Label>Unit of measure</Label>
+          <Label required>Packaging type</Label>
           <select
             className={S.selectCls}
             style={S.selectChevronStyle}
             value={form.unitMeasureId}
             onChange={set("unitMeasureId")}
+            required
           >
             {measures.map((m) => (
               <option key={m.id} value={m.id}>
@@ -588,17 +714,19 @@ function ProductForm({
             ))}
           </select>
         </div>
+
         <div>
-          <Label>Unit size</Label>
+          <Label required>Pack size</Label>
           <select
             className={S.selectCls}
             style={S.selectChevronStyle}
             value={form.unitSizeId}
             onChange={set("unitSizeId")}
             disabled={!filteredSizes.length}
+            required
           >
             {!filteredSizes.length ? (
-              <option value="">Select measure first</option>
+              <option value="">Select packaging type first</option>
             ) : (
               filteredSizes.map((s) => (
                 <option key={s.id} value={s.id}>
@@ -608,18 +736,32 @@ function ProductForm({
             )}
           </select>
         </div>
-        <div>
-          <Label>Sell status</Label>
-          <select
-            className={S.selectCls}
-            style={S.selectChevronStyle}
-            value={form.sellStatus}
-            onChange={set("sellStatus") as any}
-          >
-            <option value="to_be_sold">For sale</option>
-            <option value="not_to_be_sold">Not for sale</option>
-          </select>
-        </div>
+
+        <button
+          type="button"
+          onClick={onOpenCustomSizeModal}
+          className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition"
+        >
+          + Custom size
+        </button>
+      </div>
+
+      <div>
+        <Label>Sellable</Label>
+        <select
+          className={S.selectCls}
+          style={S.selectChevronStyle}
+          value={form.isSellable ? "yes" : "no"}
+          onChange={(e) =>
+            setForm((prev) => ({
+              ...prev,
+              isSellable: e.target.value === "yes",
+            }))
+          }
+        >
+          <option value="yes">Yes</option>
+          <option value="no">No</option>
+        </select>
       </div>
 
       <div>
@@ -718,12 +860,11 @@ export default function ProductsPage() {
 
   const [measures, setMeasures] = useState<MeasureLookup[]>([]);
   const [sizes, setSizes] = useState<SizeLookup[]>([]);
+  const [categories, setCategories] = useState<CategoryLookup[]>([]);
 
   const [search, setSearch] = useState("");
   const [filterCat, setFilterCat] = useState("");
-  const [filterStatus, setFilterStatus] = useState<
-    "" | "to_be_sold" | "not_to_be_sold"
-  >("");
+  const [filterStatus, setFilterStatus] = useState<"" | "sellable" | "not_sellable">("");
   const [showArchived, setShowArchived] = useState(false);
 
   const [showAddModal, setShowAddModal] = useState(false);
@@ -735,8 +876,30 @@ export default function ProductsPage() {
   const [addForm, setAddForm] = useState<FormData>({ ...BLANK_FORM });
   const [editForm, setEditForm] = useState<FormData>({ ...BLANK_FORM });
 
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [creatingCategory, setCreatingCategory] = useState(false);
+
+  const [showCustomSizeModal, setShowCustomSizeModal] = useState(false);
+  const [customSizeValue, setCustomSizeValue] = useState("");
+  const [creatingSize, setCreatingSize] = useState(false);
+
+  const [pendingAddConfirmation, setPendingAddConfirmation] = useState(false);
+
   async function refresh(o: string) {
     setItems(await listProducts(o, !showArchived));
+  }
+
+  async function reloadCategories(o: string) {
+    const cats = await listCategories(o);
+    setCategories(cats as CategoryLookup[]);
+    return cats as CategoryLookup[];
+  }
+
+  async function reloadSizes(o: string) {
+    const usizes = await listUnitSizes(o);
+    setSizes(usizes as SizeLookup[]);
+    return usizes as SizeLookup[];
   }
 
   useEffect(() => {
@@ -745,13 +908,15 @@ export default function ProductsPage() {
         const o = await bootstrapOrg();
         setOrgId(o);
 
-        const [uoms, usizes] = await Promise.all([
+        const [uoms, usizes, cats] = await Promise.all([
           listUnitMeasures(o),
           listUnitSizes(o),
+          listCategories(o),
         ]);
 
         setMeasures(uoms as MeasureLookup[]);
         setSizes(usizes as SizeLookup[]);
+        setCategories(cats as CategoryLookup[]);
 
         const firstId = uoms?.[0]?.id ?? "";
         const firstAllowed = (uoms?.[0] as MeasureLookup)?.allowed_kinds ?? [];
@@ -803,24 +968,43 @@ export default function ProductsPage() {
   }, [editFilteredSizes, editForm.unitSizeId]);
 
   const allCategories = useMemo(() => {
+    const fromDb = categories.map((c) => c.name);
     const fromData = Array.from(
-      new Set(items.map((p) => p.category).filter(Boolean))
+      new Set(items.map((p) => getCategoryName(p)).filter(Boolean))
     ) as string[];
-    return Array.from(new Set([...CATEGORIES, ...fromData])).sort();
+    return Array.from(new Set([...fromDb, ...fromData])).sort();
+  }, [categories, items]);
+
+  const supplierOptions = useMemo(() => {
+    return Array.from(
+      new Set(
+        items
+          .map((p) => (p.supplier ?? "").trim())
+          .filter((v) => v.length > 0)
+      )
+    ).sort((a, b) => a.localeCompare(b));
   }, [items]);
 
   const filtered = useMemo(() => {
     const t = search.trim().toLowerCase();
+
     return items.filter((p) => {
+      const categoryName = getCategoryName(p).toLowerCase();
+      const sku = (p.sku ?? "").toLowerCase();
+
       const matchText =
         !t ||
         (p.name ?? "").toLowerCase().includes(t) ||
+        sku.includes(t) ||
         (p.barcode ?? "").toLowerCase().includes(t) ||
         (p.supplier ?? "").toLowerCase().includes(t) ||
-        (p.category ?? "").toLowerCase().includes(t);
+        categoryName.includes(t);
 
-      const matchCat = !filterCat || p.category === filterCat;
-      const matchStatus = !filterStatus || p.sell_status === filterStatus;
+      const matchCat = !filterCat || getCategoryName(p) === filterCat;
+      const matchStatus =
+        !filterStatus ||
+        (filterStatus === "sellable" && p.is_sellable !== false) ||
+        (filterStatus === "not_sellable" && p.is_sellable === false);
 
       return matchText && matchCat && matchStatus;
     });
@@ -828,7 +1012,7 @@ export default function ProductsPage() {
 
   const kpis = useMemo(() => {
     const total = items.length;
-    const activeSellable = items.filter((p) => p.sell_status !== "not_to_be_sold").length;
+    const activeSellable = items.filter((p) => p.is_sellable !== false).length;
     const archived = items.filter((p) => p.active === false).length;
     const margins = items
       .map((p) => margin(p.cost_price, p.unit_price))
@@ -836,23 +1020,44 @@ export default function ProductsPage() {
     const avgMargin = margins.length
       ? margins.reduce((a, b) => a + b, 0) / margins.length
       : 0;
-    const categories = new Set(items.map((p) => p.category).filter(Boolean)).size;
+    const categoriesCount = new Set(
+      items.map((p) => getCategoryName(p)).filter(Boolean)
+    ).size;
 
-    return { total, activeSellable, archived, avgMargin, categories };
+    return {
+      total,
+      activeSellable,
+      archived,
+      avgMargin,
+      categories: categoriesCount,
+    };
   }, [items]);
 
-  async function handleAdd(e: React.FormEvent) {
-    e.preventDefault();
+  function validateForm(form: FormData) {
+    if (!form.name.trim()) return "Product name is required";
+    if (!form.categoryId) return "Category is required";
+    if (!form.unitMeasureId) return "Packaging type is required";
+    if (!form.unitSizeId) return "Pack size is required";
+    if (form.isSellable && Number(form.sellPrice || 0) <= 0) {
+      return "Sell price is required for sellable products";
+    }
+    return "";
+  }
+
+  async function performCreateProduct() {
     if (!orgId) return;
 
     setSaving(true);
     setErr("");
 
     try {
-      if (!addForm.name.trim()) throw new Error("Product name is required");
+      const validationError = validateForm(addForm);
+      if (validationError) throw new Error(validationError);
 
-      const created = await createProduct(orgId, {
+      await createProduct(orgId, {
         name: addForm.name.trim(),
+        sku: addForm.sku.trim() || undefined,
+        category_id: addForm.categoryId || null,
         barcode: addForm.barcode.trim() || undefined,
         supplier: addForm.supplier.trim() || undefined,
         notes: addForm.notes.trim() || undefined,
@@ -860,23 +1065,17 @@ export default function ProductsPage() {
         unit_price: Number(addForm.sellPrice || 0),
         unit_measure_id: addForm.unitMeasureId || null,
         unit_size_id: addForm.unitSizeId || null,
-        sell_status: addForm.sellStatus,
+        is_sellable: addForm.isSellable,
       });
-
-      if (addForm.category && created?.id) {
-        const supabase = createClient();
-        await supabase
-          .from("products")
-          .update({ category: addForm.category })
-          .eq("id", created.id);
-      }
 
       setAddForm({
         ...BLANK_FORM,
         unitMeasureId: addForm.unitMeasureId,
         unitSizeId: addForm.unitSizeId,
       });
+
       setShowAddModal(false);
+      setPendingAddConfirmation(false);
       await refresh(orgId);
       setToast({ message: "Product added successfully", type: "success" });
     } catch (e: any) {
@@ -887,9 +1086,27 @@ export default function ProductsPage() {
     }
   }
 
+  function handleAdd(e: React.FormEvent) {
+    e.preventDefault();
+    const validationError = validateForm(addForm);
+
+    if (validationError) {
+      setErr(validationError);
+      return;
+    }
+
+    setPendingAddConfirmation(true);
+  }
+
   async function handleEdit(e: React.FormEvent) {
     e.preventDefault();
     if (!orgId || !editProduct) return;
+
+    const validationError = validateForm(editForm);
+    if (validationError) {
+      setErr(validationError);
+      return;
+    }
 
     setSaving(true);
     setErr("");
@@ -900,7 +1117,8 @@ export default function ProductsPage() {
         .from("products")
         .update({
           name: editForm.name.trim(),
-          category: editForm.category || null,
+          sku: editForm.sku.trim() || null,
+          category_id: editForm.categoryId || null,
           barcode: editForm.barcode.trim() || null,
           supplier: editForm.supplier.trim() || null,
           notes: editForm.notes.trim() || null,
@@ -908,7 +1126,7 @@ export default function ProductsPage() {
           unit_price: Number(editForm.sellPrice || 0),
           unit_measure_id: editForm.unitMeasureId || null,
           unit_size_id: editForm.unitSizeId || null,
-          sell_status: editForm.sellStatus,
+          is_sellable: editForm.isSellable,
         })
         .eq("org_id", orgId)
         .eq("id", editProduct.id);
@@ -956,10 +1174,80 @@ export default function ProductsPage() {
     }
   }
 
+  async function handleCreateCategory() {
+    if (!orgId) return;
+
+    setCreatingCategory(true);
+    setErr("");
+
+    try {
+      const created = await createCategory(orgId, newCategoryName);
+      const cats = await reloadCategories(orgId);
+
+      setAddForm((prev) =>
+        showAddModal
+          ? { ...prev, categoryId: created.id }
+          : prev
+      );
+      setEditForm((prev) =>
+        editProduct
+          ? { ...prev, categoryId: created.id }
+          : prev
+      );
+
+      setNewCategoryName("");
+      setShowCategoryModal(false);
+      setCategories(cats);
+      setToast({ message: "Category added successfully", type: "success" });
+    } catch (e: any) {
+      setErr(e.message ?? String(e));
+      setToast({ message: "Failed to add category", type: "error" });
+    } finally {
+      setCreatingCategory(false);
+    }
+  }
+
+  async function handleCreateCustomSize() {
+    if (!orgId) return;
+
+    const activeForm = editProduct ? editForm : addForm;
+    const kind = inferSizeKindFromMeasure(activeForm.unitMeasureId, measures);
+
+    if (!kind) {
+      setErr("Select a packaging type first");
+      return;
+    }
+
+    setCreatingSize(true);
+    setErr("");
+
+    try {
+      const created = await createUnitSize(orgId, kind, Number(customSizeValue));
+      const allSizes = await reloadSizes(orgId);
+
+      if (editProduct) {
+        setEditForm((prev) => ({ ...prev, unitSizeId: created.id }));
+      } else {
+        setAddForm((prev) => ({ ...prev, unitSizeId: created.id }));
+      }
+
+      setSizes(allSizes);
+      setCustomSizeValue("");
+      setShowCustomSizeModal(false);
+      setToast({ message: "Custom size added successfully", type: "success" });
+    } catch (e: any) {
+      setErr(e.message ?? String(e));
+      setToast({ message: "Failed to add custom size", type: "error" });
+    } finally {
+      setCreatingSize(false);
+    }
+  }
+
   function openEdit(p: Product) {
     setEditForm({
       name: p.name ?? "",
-      category: p.category ?? "",
+      sku: p.sku ?? "",
+      categoryId: p.category_id ?? p.category?.id ?? "",
       barcode: p.barcode ?? "",
       supplier: p.supplier ?? "",
       notes: p.notes ?? "",
@@ -967,7 +1255,7 @@ export default function ProductsPage() {
       sellPrice: String(p.unit_price ?? "0"),
       unitMeasureId: p.unit_measure_id ?? measures[0]?.id ?? "",
       unitSizeId: p.unit_size_id ?? "",
-      sellStatus: (p.sell_status as any) ?? "to_be_sold",
+      isSellable: p.is_sellable ?? true,
     });
     setEditProduct(p);
   }
@@ -980,8 +1268,7 @@ export default function ProductsPage() {
 
   const hasFilters = !!(search || filterCat || filterStatus);
 
-  const TABLE_COLS =
-    "2fr 1fr 1fr 1fr 0.8fr 0.8fr 0.7fr 1.2fr 88px";
+  const TABLE_COLS = "2fr 1fr 1fr 1fr 0.8fr 0.8fr 0.7fr 1.2fr 88px";
   const HEADERS = [
     "Product",
     "Category",
@@ -1014,6 +1301,12 @@ export default function ProductsPage() {
     );
   }
 
+  const activeFormForSize = editProduct ? editForm : addForm;
+  const activeCustomSizeKind = inferSizeKindFromMeasure(
+    activeFormForSize.unitMeasureId,
+    measures
+  );
+
   return (
     <div className="flex flex-col gap-6">
       {toast && (
@@ -1043,7 +1336,7 @@ export default function ProductsPage() {
             Product Catalog
           </h1>
           <p className="mt-0.5 text-sm text-slate-500">
-            Manage products, pricing, units and availability
+            Manage products, pricing, packaging and availability
           </p>
         </div>
         <button className={S.btnPrimary} onClick={() => setShowAddModal(true)}>
@@ -1134,11 +1427,13 @@ export default function ProductsPage() {
           className="rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-700 focus:border-amber-500 focus:ring-2 focus:ring-amber-100 outline-none transition cursor-pointer"
           style={S.selectChevronStyle}
           value={filterStatus}
-          onChange={(e) => setFilterStatus(e.target.value as any)}
+          onChange={(e) =>
+            setFilterStatus(e.target.value as "" | "sellable" | "not_sellable")
+          }
         >
           <option value="">All statuses</option>
-          <option value="to_be_sold">For sale</option>
-          <option value="not_to_be_sold">Inactive</option>
+          <option value="sellable">For sale</option>
+          <option value="not_sellable">Not for sale</option>
         </select>
 
         {hasFilters && (
@@ -1195,6 +1490,8 @@ export default function ProductsPage() {
           ) : (
             filtered.map((p) => {
               const mgn = margin(p.cost_price, p.unit_price);
+              const categoryName = getCategoryName(p);
+              const packagingLabel = getPackagingLabel(p);
 
               return (
                 <div
@@ -1209,17 +1506,15 @@ export default function ProductsPage() {
                       <div className="font-semibold text-slate-900 truncate">
                         {p.name || "Unnamed"}
                       </div>
-                      {p.notes && (
-                        <div className="text-xs text-slate-400 truncate mt-0.5">
-                          {p.notes}
-                        </div>
-                      )}
+                      <div className="text-xs text-slate-400 truncate mt-0.5">
+                        {packagingLabel || p.sku || p.notes || "—"}
+                      </div>
                     </div>
 
                     <div>
-                      {p.category ? (
+                      {categoryName ? (
                         <span className="inline-block rounded-lg bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700 truncate max-w-full">
-                          {p.category}
+                          {categoryName}
                         </span>
                       ) : (
                         <span className="text-slate-300">—</span>
@@ -1231,7 +1526,7 @@ export default function ProductsPage() {
                     </div>
 
                     <div className="font-mono text-xs text-slate-500 truncate">
-                      {p.barcode || <span className="text-slate-300">—</span>}
+                      {p.barcode || p.sku || <span className="text-slate-300">—</span>}
                     </div>
 
                     <div className="text-right text-slate-700">
@@ -1247,7 +1542,7 @@ export default function ProductsPage() {
                     </div>
 
                     <div className="flex items-center gap-2 flex-wrap">
-                      <SellBadge status={p.sell_status} />
+                      <SellBadge isSellable={p.is_sellable} />
                       <ArchiveBadge active={p.active} />
                     </div>
 
@@ -1286,14 +1581,19 @@ export default function ProductsPage() {
                         <div className="font-semibold text-slate-900 truncate">
                           {p.name || "Unnamed"}
                         </div>
-                        {p.category && (
+                        {categoryName && (
                           <span className="mt-1 inline-block rounded-lg bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">
-                            {p.category}
+                            {categoryName}
                           </span>
+                        )}
+                        {(packagingLabel || p.sku) && (
+                          <div className="text-xs text-slate-400 mt-1">
+                            {packagingLabel || p.sku}
+                          </div>
                         )}
                       </div>
                       <div className="flex items-center gap-2 flex-wrap justify-end">
-                        <SellBadge status={p.sell_status} />
+                        <SellBadge isSellable={p.is_sellable} />
                         <ArchiveBadge active={p.active} />
                       </div>
                     </div>
@@ -1325,9 +1625,10 @@ export default function ProductsPage() {
                       </div>
                     </div>
 
-                    {(p.supplier || p.barcode) && (
+                    {(p.supplier || p.barcode || p.sku) && (
                       <div className="text-xs text-slate-500 flex flex-wrap gap-x-4 gap-y-0.5">
                         {p.supplier && <span>Supplier: {p.supplier}</span>}
+                        {p.sku && <span className="font-mono">SKU: {p.sku}</span>}
                         {p.barcode && (
                           <span className="font-mono">Barcode: {p.barcode}</span>
                         )}
@@ -1401,7 +1702,11 @@ export default function ProductsPage() {
             form={addForm}
             setForm={setAddForm}
             measures={measures}
+            categories={categories}
             filteredSizes={addFilteredSizes}
+            supplierOptions={supplierOptions}
+            onOpenCategoryModal={() => setShowCategoryModal(true)}
+            onOpenCustomSizeModal={() => setShowCustomSizeModal(true)}
             onSubmit={handleAdd}
             onCancel={() => setShowAddModal(false)}
             saving={saving}
@@ -1423,7 +1728,11 @@ export default function ProductsPage() {
             form={editForm}
             setForm={setEditForm}
             measures={measures}
+            categories={categories}
             filteredSizes={editFilteredSizes}
+            supplierOptions={supplierOptions}
+            onOpenCategoryModal={() => setShowCategoryModal(true)}
+            onOpenCustomSizeModal={() => setShowCustomSizeModal(true)}
             onSubmit={handleEdit}
             onCancel={() => setEditProduct(null)}
             saving={saving}
@@ -1440,6 +1749,161 @@ export default function ProductsPage() {
           loading={deleting}
         />
       )}
+
+     {showCategoryModal && (
+  <Modal
+    title="Add category"
+    sub="Create a new category for this organization"
+    icon={<IconPlus />}
+    iconBg="#dbeafe"
+    iconColor="#1e40af"
+    onClose={() => setShowCategoryModal(false)}
+  >
+    <div className="space-y-4">
+      <div>
+        <Label required>Category name</Label>
+        <input
+          className={S.inputCls}
+          placeholder="e.g. Raw Honey"
+          value={newCategoryName}
+          onChange={(e) => setNewCategoryName(e.target.value)}
+        />
+      </div>
+
+      <div className="flex justify-end gap-3 pt-2 border-t border-slate-100">
+        <button
+          type="button"
+          onClick={() => setShowCategoryModal(false)}
+          className={S.btnGhost}
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={handleCreateCategory}
+          disabled={creatingCategory || !newCategoryName.trim()}
+          className={S.btnPrimary}
+        >
+          {creatingCategory ? "Creating…" : "Create category"}
+        </button>
+      </div>
+    </div>
+  </Modal>
+)}
+
+{showCustomSizeModal && (
+  <Modal
+    title="Add custom size"
+    sub={
+      activeCustomSizeKind
+        ? `Create a custom ${activeCustomSizeKind} size`
+        : "Select a packaging type first"
+    }
+    icon={<IconPlus />}
+    iconBg="#dcfce7"
+    iconColor="#166534"
+    onClose={() => setShowCustomSizeModal(false)}
+  >
+    <div className="space-y-4">
+      <div>
+        <Label required>
+          Value{" "}
+          {activeCustomSizeKind === "mass"
+            ? "(grams)"
+            : activeCustomSizeKind === "volume"
+            ? "(ml)"
+            : activeCustomSizeKind === "count"
+            ? "(pieces)"
+            : ""}
+        </Label>
+        <input
+          className={S.inputCls}
+          type="number"
+          min="1"
+          step="1"
+          placeholder={
+            activeCustomSizeKind === "mass"
+              ? "e.g. 350"
+              : activeCustomSizeKind === "volume"
+              ? "e.g. 300"
+              : "e.g. 24"
+          }
+          value={customSizeValue}
+          onChange={(e) => setCustomSizeValue(e.target.value)}
+          disabled={!activeCustomSizeKind}
+        />
+      </div>
+
+      {activeCustomSizeKind && customSizeValue && Number(customSizeValue) > 0 && (
+        <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+          New size label:{" "}
+          <span className="font-semibold text-slate-900">
+            {activeCustomSizeKind === "mass"
+              ? `${Math.round(Number(customSizeValue))}g`
+              : activeCustomSizeKind === "volume"
+              ? `${Math.round(Number(customSizeValue))}ml`
+              : `${Math.round(Number(customSizeValue))}pcs`}
+          </span>
+        </div>
+      )}
+
+      <div className="flex justify-end gap-3 pt-2 border-t border-slate-100">
+        <button
+          type="button"
+          onClick={() => setShowCustomSizeModal(false)}
+          className={S.btnGhost}
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={handleCreateCustomSize}
+          disabled={
+            creatingSize ||
+            !activeCustomSizeKind ||
+            !customSizeValue ||
+            Number(customSizeValue) <= 0
+          }
+          className={S.btnPrimary}
+        >
+          {creatingSize ? "Creating…" : "Create size"}
+        </button>
+      </div>
+    </div>
+  </Modal>
+)}
+
+      <ConfirmModal
+        open={pendingAddConfirmation}
+        title="Add this product?"
+        message={
+          <div className="space-y-1">
+            <div>
+              <span className="font-semibold text-slate-900">
+                {addForm.name || "Unnamed product"}
+              </span>
+            </div>
+            <div>
+              Category:{" "}
+              <span className="font-medium text-slate-800">
+                {categories.find((c) => c.id === addForm.categoryId)?.name || "—"}
+              </span>
+            </div>
+            <div>
+              Packaging:{" "}
+              <span className="font-medium text-slate-800">
+                {measures.find((m) => m.id === addForm.unitMeasureId)?.name || "—"}
+                {" • "}
+                {sizes.find((s) => s.id === addForm.unitSizeId)?.label || "—"}
+              </span>
+            </div>
+          </div>
+        }
+        confirmText="Yes, add product"
+        onCancel={() => setPendingAddConfirmation(false)}
+        onConfirm={performCreateProduct}
+        loading={saving}
+      />
     </div>
   );
 }
