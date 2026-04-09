@@ -6,20 +6,25 @@ import { createClient } from "@/lib/supabase/client";
 ───────────────────────────────────────────── */
 export async function listProducts(orgId: string, activeOnly = true) {
   const supabase = createClient();
+
   let query = supabase
     .from("products")
     .select(`
       id,
       org_id,
       name,
+      sku,
+      category_id,
       barcode,
-      supplier,
       notes,
       cost_price,
       unit_price,
-      sell_status,
+      is_sellable,
       active,
       created_at,
+      supplier_id,
+      category:categories ( id, name ),
+      supplier:suppliers ( id, name, contact_person, phone, email, notes, active ),
       unit_measure:unit_measures ( id, name ),
       unit_size:unit_sizes ( id, label, kind )
     `)
@@ -31,15 +36,16 @@ export async function listProducts(orgId: string, activeOnly = true) {
   }
 
   const { data, error } = await query;
-
   if (error) throw new Error(error.message);
 
-  // Supabase returns FK joins as arrays — flatten to single object | null
   return (data ?? []).map((row: any) => ({
     ...row,
     active: Boolean(row.active),
+    is_sellable: row.is_sellable !== false,
     cost_price: Number(row.cost_price ?? 0),
     unit_price: Number(row.unit_price ?? 0),
+    category: Array.isArray(row.category) ? (row.category[0] ?? null) : row.category,
+    supplier: Array.isArray(row.supplier) ? (row.supplier[0] ?? null) : row.supplier,
     unit_measure: Array.isArray(row.unit_measure)
       ? (row.unit_measure[0] ?? null)
       : row.unit_measure,
@@ -56,17 +62,20 @@ export async function createProduct(
   orgId: string,
   payload: {
     name: string;
+    sku?: string;
+    category_id?: string | null;
     barcode?: string;
+    supplier_id?: string | null;
+    notes?: string;
     unit_price: number;
     cost_price?: number;
-    supplier?: string;
-    notes?: string;
     unit_measure_id?: string | null;
     unit_size_id?: string | null;
-    sell_status?: "to_be_sold" | "not_to_be_sold";
+    is_sellable?: boolean;
   }
 ) {
   const supabase = createClient();
+
   const { data, error } = await supabase
     .from("products")
     .insert([
@@ -81,7 +90,6 @@ export async function createProduct(
 
   if (error) throw new Error(error.message);
 
-  // auto-create inventory row
   const { error: invErr } = await supabase.from("inventory").insert([
     {
       org_id: orgId,
@@ -129,6 +137,7 @@ export async function restoreProduct(orgId: string, id: string) {
 ───────────────────────────────────────────── */
 export async function deleteProductForever(orgId: string, id: string) {
   const supabase = createClient();
+
   const { count, error: countErr } = await supabase
     .from("sale_items")
     .select("id", { count: "exact", head: true })
@@ -138,7 +147,9 @@ export async function deleteProductForever(orgId: string, id: string) {
   if (countErr) throw new Error(countErr.message);
 
   if ((count ?? 0) > 0) {
-    throw new Error("This product has sales history and cannot be deleted permanently. Archive it instead.");
+    throw new Error(
+      "This product has sales history and cannot be deleted permanently. Archive it instead."
+    );
   }
 
   const { error } = await supabase
