@@ -12,6 +12,7 @@ const navItems = [
   { href: "/dashboard/sales", label: "Sales", icon: "◉" },
   { href: "/dashboard/reports", label: "Reports", icon: "◧" },
   { href: "/dashboard/expenses", label: "Expenses", icon: "◧" },
+  { href: "/dashboard/suppliers", label: "Suppliers", icon: "◈" }
 ];
 
 export default function DashboardShell({

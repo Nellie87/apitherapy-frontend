@@ -510,6 +510,7 @@ function QuickActions() {
     { href: "/dashboard/reports",            icon: "📊", label: "Reports",         primary: false },
     { href: "/dashboard/reports/sales",      icon: "📈", label: "Sales Report",    primary: false },
     { href: "/dashboard/reports/expenses-pnl", icon: "📉", label: "Expenses P&L", primary: false },
+    
   ];
   return (
     <div className="flex flex-wrap gap-2">

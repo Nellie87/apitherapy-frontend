@@ -36,6 +36,7 @@ export async function listCategories(orgId: string) {
   return data ?? [];
 }
 
+
 export async function createCategory(orgId: string, name: string) {
   const supabase = createClient();
   const cleanName = name.trim();
@@ -159,6 +160,7 @@ export async function createSupplier(
     contact_person?: string;
     phone?: string;
     email?: string;
+    what_they_supply?: string;
     notes?: string;
   }
 ) {
