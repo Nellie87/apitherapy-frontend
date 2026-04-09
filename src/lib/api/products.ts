@@ -14,16 +14,17 @@ export async function listProducts(orgId: string, activeOnly = true) {
       org_id,
       name,
       sku,
+      category_id,
       barcode,
-      supplier,
       notes,
       cost_price,
       unit_price,
-      category_id,
       is_sellable,
       active,
       created_at,
+      supplier_id,
       category:categories ( id, name ),
+      supplier:suppliers ( id, name, contact_person, phone, email, notes, active ),
       unit_measure:unit_measures ( id, name ),
       unit_size:unit_sizes ( id, label, kind )
     `)
@@ -35,19 +36,16 @@ export async function listProducts(orgId: string, activeOnly = true) {
   }
 
   const { data, error } = await query;
-
   if (error) throw new Error(error.message);
 
-  // Supabase FK joins may come back as arrays — flatten safely
   return (data ?? []).map((row: any) => ({
     ...row,
     active: Boolean(row.active),
     is_sellable: row.is_sellable !== false,
     cost_price: Number(row.cost_price ?? 0),
     unit_price: Number(row.unit_price ?? 0),
-    category: Array.isArray(row.category)
-      ? (row.category[0] ?? null)
-      : row.category,
+    category: Array.isArray(row.category) ? (row.category[0] ?? null) : row.category,
+    supplier: Array.isArray(row.supplier) ? (row.supplier[0] ?? null) : row.supplier,
     unit_measure: Array.isArray(row.unit_measure)
       ? (row.unit_measure[0] ?? null)
       : row.unit_measure,
@@ -65,12 +63,12 @@ export async function createProduct(
   payload: {
     name: string;
     sku?: string;
-    barcode?: string;
-    supplier?: string;
-    notes?: string;
-    cost_price?: number;
-    unit_price: number;
     category_id?: string | null;
+    barcode?: string;
+    supplier_id?: string | null;
+    notes?: string;
+    unit_price: number;
+    cost_price?: number;
     unit_measure_id?: string | null;
     unit_size_id?: string | null;
     is_sellable?: boolean;
@@ -78,51 +76,26 @@ export async function createProduct(
 ) {
   const supabase = createClient();
 
-  const insertPayload = {
-    org_id: orgId,
-    active: true,
-    name: payload.name,
-    sku: payload.sku?.trim() || null,
-    barcode: payload.barcode?.trim() || null,
-    supplier: payload.supplier?.trim() || null,
-    notes: payload.notes?.trim() || null,
-    cost_price: Number(payload.cost_price ?? 0),
-    unit_price: Number(payload.unit_price ?? 0),
-    category_id: payload.category_id ?? null,
-    unit_measure_id: payload.unit_measure_id ?? null,
-    unit_size_id: payload.unit_size_id ?? null,
-    is_sellable: payload.is_sellable ?? true,
-  };
-
   const { data, error } = await supabase
     .from("products")
-    .insert([insertPayload])
-    .select(`
-      id,
-      org_id,
-      name,
-      sku,
-      barcode,
-      supplier,
-      notes,
-      cost_price,
-      unit_price,
-      category_id,
-      is_sellable,
-      active,
-      created_at
-    `)
+    .insert([
+      {
+        org_id: orgId,
+        active: true,
+        ...payload,
+      },
+    ])
+    .select()
     .single();
 
   if (error) throw new Error(error.message);
 
-  // Auto-create inventory row
   const { error: invErr } = await supabase.from("inventory").insert([
     {
       org_id: orgId,
       product_id: data.id,
       qty_on_hand: 0,
-      reorder_level: 0,
+      reorder_level: 5,
     },
   ]);
 
@@ -136,7 +109,6 @@ export async function createProduct(
 ───────────────────────────────────────────── */
 export async function archiveProduct(orgId: string, id: string) {
   const supabase = createClient();
-
   const { error } = await supabase
     .from("products")
     .update({ active: false })
@@ -151,7 +123,6 @@ export async function archiveProduct(orgId: string, id: string) {
 ───────────────────────────────────────────── */
 export async function restoreProduct(orgId: string, id: string) {
   const supabase = createClient();
-
   const { error } = await supabase
     .from("products")
     .update({ active: true })

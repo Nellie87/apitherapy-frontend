@@ -14,6 +14,8 @@ import {
   listCategories,
   createCategory,
   createUnitSize,
+  listSuppliers,
+  createSupplier,
 } from "@/lib/api/lookups";
 import { createClient } from "@/lib/supabase/client";
 
@@ -44,6 +46,16 @@ type CategoryLookup = {
   name: string;
 };
 
+type SupplierLookup = {
+  id: string;
+  name: string;
+  contact_person?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  notes?: string | null;
+  active?: boolean;
+};
+
 type Product = {
   id: string;
   name?: string;
@@ -51,7 +63,16 @@ type Product = {
   category_id?: string | null;
   category?: { id?: string; name?: string } | null;
   barcode?: string | null;
-  supplier?: string | null;
+  supplier_id?: string | null;
+  supplier?: {
+    id?: string;
+    name?: string;
+    contact_person?: string | null;
+    phone?: string | null;
+    email?: string | null;
+    notes?: string | null;
+    active?: boolean;
+  } | null;
   notes?: string | null;
   cost_price?: number | string | null;
   unit_price?: number | string | null;
@@ -68,7 +89,7 @@ type FormData = {
   sku: string;
   categoryId: string;
   barcode: string;
-  supplier: string;
+  supplierId: string;
   notes: string;
   costPrice: string;
   sellPrice: string;
@@ -87,7 +108,7 @@ const BLANK_FORM: FormData = {
   sku: "",
   categoryId: "",
   barcode: "",
-  supplier: "",
+  supplierId: "",
   notes: "",
   costPrice: "0",
   sellPrice: "0",
@@ -715,6 +736,147 @@ function InlineCustomSizeCreator({
 }
 
 /* ─────────────────────────────────────────────
+   Inline Supplier Creator
+───────────────────────────────────────────── */
+function InlineSupplierCreator({
+  orgId,
+  onCreated,
+}: {
+  orgId: string;
+  onCreated: (id: string, name: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [contactPerson, setContactPerson] = useState("");
+  const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
+  const [notes, setNotes] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (open) setTimeout(() => inputRef.current?.focus(), 50);
+  }, [open]);
+
+  async function handleCreate() {
+    if (!name.trim()) return;
+
+    setSaving(true);
+    setError("");
+
+    try {
+      const created = await createSupplier(orgId, {
+        name: name.trim(),
+        contact_person: contactPerson,
+        phone,
+        email,
+        notes,
+      });
+
+      onCreated(created.id, created.name ?? name.trim());
+
+      setName("");
+      setContactPerson("");
+      setPhone("");
+      setEmail("");
+      setNotes("");
+      setOpen(false);
+    } catch (e: any) {
+      setError(e.message ?? "Failed to create supplier");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="mt-1">
+      {!open ? (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="flex items-center gap-1.5 text-xs font-semibold text-amber-600 hover:text-amber-700 transition"
+        >
+          <IconPlus />
+          Add new supplier
+        </button>
+      ) : (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 space-y-2">
+          <div className="text-xs font-semibold text-amber-800 mb-1">
+            New supplier
+          </div>
+
+          <input
+            ref={inputRef}
+            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 placeholder-slate-400 focus:border-amber-400 focus:ring-2 focus:ring-amber-100 outline-none"
+            placeholder="Supplier name *"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+
+          <input
+            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 placeholder-slate-400 focus:border-amber-400 focus:ring-2 focus:ring-amber-100 outline-none"
+            placeholder="Contact person"
+            value={contactPerson}
+            onChange={(e) => setContactPerson(e.target.value)}
+          />
+
+          <input
+            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 placeholder-slate-400 focus:border-amber-400 focus:ring-2 focus:ring-amber-100 outline-none"
+            placeholder="Phone"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+          />
+
+          <input
+            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 placeholder-slate-400 focus:border-amber-400 focus:ring-2 focus:ring-amber-100 outline-none"
+            placeholder="Email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+
+          <textarea
+            rows={2}
+            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 placeholder-slate-400 focus:border-amber-400 focus:ring-2 focus:ring-amber-100 outline-none resize-none"
+            placeholder="Notes"
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+          />
+
+          {error && <p className="text-xs text-red-500">{error}</p>}
+
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={handleCreate}
+              disabled={saving || !name.trim()}
+              className="rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-600 disabled:opacity-50 transition"
+            >
+              {saving ? "Creating…" : "Create"}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                setName("");
+                setContactPerson("");
+                setPhone("");
+                setEmail("");
+                setNotes("");
+                setError("");
+              }}
+              className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────
    Archive Confirmation Modal
 ───────────────────────────────────────────── */
 function ArchiveModal({
@@ -821,8 +983,7 @@ function ConfirmSaveModal({
     { label: "Category", value: cat?.name || "—" },
     {
       label: "Packaging",
-      value:
-        [measure?.name, size?.label].filter(Boolean).join(" • ") || "—",
+      value: [measure?.name, size?.label].filter(Boolean).join(" • ") || "—",
     },
     { label: "Cost", value: fmt(form.costPrice) },
     { label: "Sell price", value: fmt(form.sellPrice) },
@@ -924,7 +1085,9 @@ function Modal({
             </div>
             <div>
               <div className="text-base font-bold text-slate-900">{title}</div>
-              {sub && <div className="text-xs text-slate-500 mt-0.5">{sub}</div>}
+              {sub && (
+                <div className="text-xs text-slate-500 mt-0.5">{sub}</div>
+              )}
             </div>
           </div>
           <button
@@ -949,10 +1112,11 @@ function ProductForm({
   measures,
   categories,
   filteredSizes,
-  supplierOptions,
+  suppliers,
   orgId,
   onCategoryCreated,
   onSizeCreated,
+  onSupplierCreated,
   onSubmit,
   onCancel,
   saving,
@@ -963,10 +1127,11 @@ function ProductForm({
   measures: MeasureLookup[];
   categories: CategoryLookup[];
   filteredSizes: SizeLookup[];
-  supplierOptions: string[];
+  suppliers: SupplierLookup[];
   orgId: string;
   onCategoryCreated: (id: string, name: string) => void;
   onSizeCreated: (id: string, label: string) => void;
+  onSupplierCreated: (id: string, name: string) => void;
   onSubmit: (e: React.FormEvent) => void;
   onCancel: () => void;
   saving: boolean;
@@ -987,7 +1152,13 @@ function ProductForm({
         HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
       >
     ) => {
-      setForm((prev) => ({ ...prev, [k]: e.target.value as never }));
+      const value =
+        e.target instanceof HTMLInputElement &&
+        e.target.type === "checkbox"
+          ? String(e.target.checked)
+          : e.target.value;
+
+      setForm((prev) => ({ ...prev, [k]: value as never }));
       setTouched((t) => ({ ...t, [k]: true }));
     };
 
@@ -998,7 +1169,6 @@ function ProductForm({
     errors[k] && (touched[k] || submitAttempted) ? errors[k] : undefined;
 
   const marginPct = margin(form.costPrice, form.sellPrice);
-
   const activeKind = inferSizeKindFromMeasure(form.unitMeasureId, measures);
 
   function handleSubmit(e: React.FormEvent) {
@@ -1080,20 +1250,27 @@ function ProductForm({
             <FieldError message={showErr("categoryId")} />
             <InlineCategoryCreator orgId={orgId} onCreated={onCategoryCreated} />
           </div>
+
           <div>
             <Label>Supplier</Label>
-            <input
-              className={S.inputCls}
-              placeholder="Supplier name"
-              value={form.supplier}
-              onChange={set("supplier")}
-              list="supplier-options"
-            />
-            <datalist id="supplier-options">
-              {supplierOptions.map((s) => (
-                <option key={s} value={s} />
+            <select
+              className={S.selectCls}
+              style={S.selectChevronStyle}
+              value={form.supplierId}
+              onChange={set("supplierId")}
+            >
+              <option value="">— Select supplier —</option>
+              {suppliers.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
               ))}
-            </datalist>
+            </select>
+
+            <InlineSupplierCreator
+              orgId={orgId}
+              onCreated={onSupplierCreated}
+            />
           </div>
         </div>
       </FormSection>
@@ -1122,6 +1299,7 @@ function ProductForm({
             </select>
             <FieldError message={showErr("unitMeasureId")} />
           </div>
+
           <div>
             <Label required>Pack size</Label>
             <select
@@ -1139,11 +1317,14 @@ function ProductForm({
               {!filteredSizes.length ? (
                 <option value="">Select packaging type first</option>
               ) : (
-                filteredSizes.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.label}
-                  </option>
-                ))
+                <>
+                  <option value="">— Select size —</option>
+                  {filteredSizes.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.label}
+                    </option>
+                  ))}
+                </>
               )}
             </select>
             <FieldError message={showErr("unitSizeId")} />
@@ -1187,6 +1368,7 @@ function ProductForm({
               onChange={set("costPrice")}
             />
           </div>
+
           <div>
             <Label required={form.isSellable}>Sell price (Ksh)</Label>
             <input
@@ -1204,6 +1386,7 @@ function ProductForm({
             />
             <FieldError message={showErr("sellPrice")} />
           </div>
+
           <div>
             <Label>Margin</Label>
             <div className="flex h-[42px] items-center rounded-xl border border-slate-200 bg-slate-50 px-3.5 text-base font-bold">
@@ -1242,7 +1425,11 @@ function ProductForm({
           Cancel
         </button>
         <button type="submit" disabled={saving} className={S.btnPrimary}>
-          {saving ? "Saving…" : mode === "add" ? "Review & add" : "Review & save"}
+          {saving
+            ? "Saving…"
+            : mode === "add"
+            ? "Review & add"
+            : "Review & save"}
         </button>
       </div>
     </form>
@@ -1352,6 +1539,7 @@ export default function ProductsPage() {
   const [measures, setMeasures] = useState<MeasureLookup[]>([]);
   const [sizes, setSizes] = useState<SizeLookup[]>([]);
   const [categories, setCategories] = useState<CategoryLookup[]>([]);
+  const [suppliers, setSuppliers] = useState<SupplierLookup[]>([]);
 
   const [search, setSearch] = useState("");
   const [filterCat, setFilterCat] = useState("");
@@ -1383,6 +1571,12 @@ export default function ProductsPage() {
     return cats as CategoryLookup[];
   }
 
+  async function reloadSuppliers(o: string) {
+    const sups = await listSuppliers(o);
+    setSuppliers(sups as SupplierLookup[]);
+    return sups as SupplierLookup[];
+  }
+
   async function reloadSizes(o: string) {
     const usizes = await listUnitSizes(o);
     setSizes(usizes as SizeLookup[]);
@@ -1395,15 +1589,17 @@ export default function ProductsPage() {
         const o = await bootstrapOrg();
         setOrgId(o);
 
-        const [uoms, usizes, cats] = await Promise.all([
+        const [uoms, usizes, cats, sups] = await Promise.all([
           listUnitMeasures(o),
           listUnitSizes(o),
           listCategories(o),
+          listSuppliers(o),
         ]);
 
         setMeasures(uoms as MeasureLookup[]);
         setSizes(usizes as SizeLookup[]);
         setCategories(cats as CategoryLookup[]);
+        setSuppliers(sups as SupplierLookup[]);
 
         const firstId = uoms?.[0]?.id ?? "";
         const firstAllowed = (uoms?.[0] as MeasureLookup)?.allowed_kinds ?? [];
@@ -1465,33 +1661,28 @@ export default function ProductsPage() {
       .sort((a, b) => a.localeCompare(b));
   }, [categories]);
 
-  const supplierOptions = useMemo(() => {
-    return Array.from(
-      new Set(
-        items
-          .map((p) => (p.supplier ?? "").trim())
-          .filter((v) => v.length > 0)
-      )
-    ).sort((a, b) => a.localeCompare(b));
-  }, [items]);
-
   const filtered = useMemo(() => {
     const t = search.trim().toLowerCase();
+
     return items.filter((p) => {
       const catName = getCategoryName(p).toLowerCase();
       const sku = (p.sku ?? "").toLowerCase();
+      const supplierName = (p.supplier?.name ?? "").toLowerCase();
+
       const matchText =
         !t ||
         (p.name ?? "").toLowerCase().includes(t) ||
         sku.includes(t) ||
         (p.barcode ?? "").toLowerCase().includes(t) ||
-        (p.supplier ?? "").toLowerCase().includes(t) ||
+        supplierName.includes(t) ||
         catName.includes(t);
+
       const matchCat = !filterCat || getCategoryName(p) === filterCat;
       const matchStatus =
         !filterStatus ||
         (filterStatus === "sellable" && p.is_sellable !== false) ||
         (filterStatus === "not_sellable" && p.is_sellable === false);
+
       return matchText && matchCat && matchStatus;
     });
   }, [items, search, filterCat, filterStatus]);
@@ -1522,6 +1713,7 @@ export default function ProductsPage() {
     const categoriesCount = new Set(
       items.map((p) => getCategoryName(p)).filter(Boolean)
     ).size;
+
     return {
       total,
       activeSellable,
@@ -1545,6 +1737,22 @@ export default function ProductsPage() {
     );
     setEditForm((f) => ({ ...f, categoryId: id }));
     setToast({ message: `Category "${name}" created`, type: "success" });
+  }
+
+  function handleAddSupplierCreated(id: string, name: string) {
+    setSuppliers((prev) =>
+      [...prev, { id, name }].sort((a, b) => a.name.localeCompare(b.name))
+    );
+    setAddForm((f) => ({ ...f, supplierId: id }));
+    setToast({ message: `Supplier "${name}" created`, type: "success" });
+  }
+
+  function handleEditSupplierCreated(id: string, name: string) {
+    setSuppliers((prev) =>
+      [...prev, { id, name }].sort((a, b) => a.name.localeCompare(b.name))
+    );
+    setEditForm((f) => ({ ...f, supplierId: id }));
+    setToast({ message: `Supplier "${name}" created`, type: "success" });
   }
 
   function handleAddSizeCreated(id: string, label: string) {
@@ -1574,13 +1782,16 @@ export default function ProductsPage() {
     if (!orgId) return;
     setSaving(true);
     setErr("");
+
     try {
+      const productName = addForm.name.trim();
+
       await createProduct(orgId, {
-        name: addForm.name.trim(),
+        name: productName,
         sku: addForm.sku.trim() || undefined,
         category_id: addForm.categoryId || null,
         barcode: addForm.barcode.trim() || undefined,
-        supplier: addForm.supplier.trim() || undefined,
+        supplier_id: addForm.supplierId || null,
         notes: addForm.notes.trim() || undefined,
         cost_price: Number(addForm.costPrice || 0),
         unit_price: Number(addForm.sellPrice || 0),
@@ -1597,8 +1808,9 @@ export default function ProductsPage() {
       setShowAddModal(false);
       setPendingAddConfirm(false);
       await refresh(orgId);
+
       setToast({
-        message: `"${addForm.name}" added successfully`,
+        message: `"${productName}" added successfully`,
         type: "success",
       });
     } catch (e: any) {
@@ -1621,16 +1833,19 @@ export default function ProductsPage() {
     if (!orgId || !editProduct) return;
     setSaving(true);
     setErr("");
+
     try {
+      const updatedName = editForm.name.trim();
       const supabase = createClient();
+
       const { error } = await supabase
         .from("products")
         .update({
-          name: editForm.name.trim(),
+          name: updatedName,
           sku: editForm.sku.trim() || null,
           category_id: editForm.categoryId || null,
           barcode: editForm.barcode.trim() || null,
-          supplier: editForm.supplier.trim() || null,
+          supplier_id: editForm.supplierId || null,
           notes: editForm.notes.trim() || null,
           cost_price: Number(editForm.costPrice || 0),
           unit_price: Number(editForm.sellPrice || 0),
@@ -1646,7 +1861,8 @@ export default function ProductsPage() {
       setEditProduct(null);
       setPendingEditConfirm(false);
       await refresh(orgId);
-      setToast({ message: `"${editForm.name}" updated`, type: "success" });
+
+      setToast({ message: `"${updatedName}" updated`, type: "success" });
     } catch (e: any) {
       setErr(e.message ?? String(e));
       setToast({ message: "Failed to update product", type: "error" });
@@ -1659,11 +1875,14 @@ export default function ProductsPage() {
   async function handleArchive() {
     if (!orgId || !deletingProduct?.id) return;
     setDeleting(true);
+
     try {
+      const productName = deletingProduct.name;
       await archiveProduct(orgId, deletingProduct.id);
       await refresh(orgId);
+
       setToast({
-        message: `"${deletingProduct.name}" archived`,
+        message: productName ? `"${productName}" archived` : "Product archived",
         type: "success",
       });
     } catch (e: any) {
@@ -1677,6 +1896,7 @@ export default function ProductsPage() {
 
   async function handleRestore(id: string, name?: string) {
     if (!orgId) return;
+
     try {
       await restoreProduct(orgId, id);
       await refresh(orgId);
@@ -1696,7 +1916,7 @@ export default function ProductsPage() {
       sku: p.sku ?? "",
       categoryId: p.category_id ?? p.category?.id ?? "",
       barcode: p.barcode ?? "",
-      supplier: p.supplier ?? "",
+      supplierId: p.supplier_id ?? p.supplier?.id ?? "",
       notes: p.notes ?? "",
       costPrice: String(p.cost_price ?? "0"),
       sellPrice: String(p.unit_price ?? "0"),
@@ -1962,11 +2182,15 @@ export default function ProductsPage() {
                     </div>
 
                     <div className="truncate text-sm text-slate-700">
-                      {p.supplier || <span className="text-slate-300">—</span>}
+                      {p.supplier?.name || (
+                        <span className="text-slate-300">—</span>
+                      )}
                     </div>
 
                     <div className="truncate font-mono text-xs text-slate-500">
-                      {p.barcode || p.sku || <span className="text-slate-300">—</span>}
+                      {p.barcode || p.sku || (
+                        <span className="text-slate-300">—</span>
+                      )}
                     </div>
 
                     <div className="text-right text-slate-700">
@@ -1994,6 +2218,7 @@ export default function ProductsPage() {
                       >
                         <IconEdit />
                       </button>
+
                       {p.active === false ? (
                         <button
                           onClick={() => handleRestore(p.id, p.name)}
@@ -2063,9 +2288,11 @@ export default function ProductsPage() {
                       </div>
                     </div>
 
-                    {(p.supplier || p.barcode || p.sku) && (
+                    {(p.supplier?.name || p.barcode || p.sku) && (
                       <div className="text-xs text-slate-500 flex flex-wrap gap-x-4 gap-y-0.5">
-                        {p.supplier && <span>Supplier: {p.supplier}</span>}
+                        {p.supplier?.name && (
+                          <span>Supplier: {p.supplier.name}</span>
+                        )}
                         {p.sku && <span className="font-mono">SKU: {p.sku}</span>}
                         {p.barcode && (
                           <span className="font-mono">Barcode: {p.barcode}</span>
@@ -2080,6 +2307,7 @@ export default function ProductsPage() {
                       >
                         <IconEdit /> Edit
                       </button>
+
                       {p.active === false ? (
                         <button
                           onClick={() => handleRestore(p.id, p.name)}
@@ -2112,7 +2340,7 @@ export default function ProductsPage() {
         />
       </div>
 
-      {showAddModal && (
+      {showAddModal && orgId && (
         <Modal
           title="Add product"
           sub="Fill in the details below"
@@ -2127,10 +2355,11 @@ export default function ProductsPage() {
             measures={measures}
             categories={categories}
             filteredSizes={addFilteredSizes}
-            supplierOptions={supplierOptions}
-            orgId={orgId!}
+            suppliers={suppliers}
+            orgId={orgId}
             onCategoryCreated={handleAddCategoryCreated}
             onSizeCreated={handleAddSizeCreated}
+            onSupplierCreated={handleAddSupplierCreated}
             onSubmit={handleAdd}
             onCancel={() => setShowAddModal(false)}
             saving={saving}
@@ -2139,7 +2368,7 @@ export default function ProductsPage() {
         </Modal>
       )}
 
-      {editProduct && (
+      {editProduct && orgId && (
         <Modal
           title="Edit product"
           sub={editProduct.name}
@@ -2154,10 +2383,11 @@ export default function ProductsPage() {
             measures={measures}
             categories={categories}
             filteredSizes={editFilteredSizes}
-            supplierOptions={supplierOptions}
-            orgId={orgId!}
+            suppliers={suppliers}
+            orgId={orgId}
             onCategoryCreated={handleEditCategoryCreated}
             onSizeCreated={handleEditSizeCreated}
+            onSupplierCreated={handleEditSupplierCreated}
             onSubmit={handleEdit}
             onCancel={() => setEditProduct(null)}
             saving={saving}
