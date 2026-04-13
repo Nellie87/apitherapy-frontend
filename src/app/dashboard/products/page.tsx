@@ -10,10 +10,8 @@ import {
 } from "@/lib/api/products";
 import {
   listUnitMeasures,
-  listUnitSizes,
   listCategories,
   createCategory,
-  createUnitSize,
   listSuppliers,
 } from "@/lib/api/lookups";
 import { createClient } from "@/lib/supabase/client";
@@ -24,20 +22,12 @@ import * as S from "./page.styles";
    Types
 ───────────────────────────────────────────── */
 type UnitKind = "mass" | "volume" | "count";
+type QuantityUnit = "g" | "kg" | "ml" | "L" | "pc";
 
 type MeasureLookup = {
   id: string;
   name: string;
   allowed_kinds: UnitKind[];
-};
-
-type SizeLookup = {
-  id: string;
-  label: string;
-  kind: UnitKind;
-  grams?: number | null;
-  ml?: number | null;
-  count?: number | null;
 };
 
 type CategoryLookup = {
@@ -63,22 +53,22 @@ type Product = {
   category?: { id?: string; name?: string } | null;
   barcode?: string | null;
   supplier_id?: string | null;
-  supplier?: {
-    id?: string;
-    name?: string;
-    contact_person?: string | null;
-    phone?: string | null;
-    email?: string | null;
-    notes?: string | null;
-    active?: boolean;
-  } | null;
+supplier?: {
+  id?: string;
+  name?: string;
+  contact_person?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  notes?: string | null;
+  active?: boolean | null;
+} | null;
   notes?: string | null;
   cost_price?: number | string | null;
   unit_price?: number | string | null;
+  quantity_value?: number | string | null;
+  quantity_unit?: QuantityUnit | null;
   unit_measure_id?: string | null;
-  unit_size_id?: string | null;
   unit_measure?: { id?: string; name?: string } | null;
-  unit_size?: { id?: string; label?: string; kind?: UnitKind } | null;
   is_sellable?: boolean;
   active?: boolean;
 };
@@ -92,8 +82,9 @@ type FormData = {
   notes: string;
   costPrice: string;
   sellPrice: string;
+  quantityValue: string;
+  quantityUnit: QuantityUnit | "";
   unitMeasureId: string;
-  unitSizeId: string;
   isSellable: boolean;
 };
 
@@ -111,12 +102,19 @@ const BLANK_FORM: FormData = {
   notes: "",
   costPrice: "0",
   sellPrice: "0",
+  quantityValue: "",
+  quantityUnit: "",
   unitMeasureId: "",
-  unitSizeId: "",
   isSellable: true,
 };
 
 const PAGE_SIZE = 5;
+
+const UNIT_OPTIONS_BY_KIND: Record<UnitKind, QuantityUnit[]> = {
+  mass: ["g", "kg"],
+  volume: ["ml", "L"],
+  count: ["pc"],
+};
 
 /* ─────────────────────────────────────────────
    Helpers
@@ -143,33 +141,69 @@ function getCategoryName(p: Product) {
   return p.category?.name ?? "";
 }
 
-function getPackagingLabel(p: Product) {
-  const measure = p.unit_measure?.name?.trim();
-  const size = p.unit_size?.label?.trim();
-  if (measure && size) return `${measure} • ${size}`;
-  if (measure) return measure;
-  if (size) return size;
-  return "";
-}
-
-function inferSizeKindFromMeasure(
+function getAllowedQuantityUnits(
   measureId: string,
   measures: MeasureLookup[]
-): UnitKind | null {
+): QuantityUnit[] {
   const measure = measures.find((m) => m.id === measureId);
-  if (!measure || !measure.allowed_kinds?.length) return null;
-  return measure.allowed_kinds[0] ?? null;
+  if (!measure?.allowed_kinds?.length) return [];
+
+  const units = new Set<QuantityUnit>();
+  for (const kind of measure.allowed_kinds) {
+    UNIT_OPTIONS_BY_KIND[kind].forEach((u) => units.add(u));
+  }
+  return Array.from(units);
+}
+
+function formatQuantity(
+  value?: number | string | null,
+  unit?: QuantityUnit | string | null
+) {
+  if (value === null || value === undefined || value === "") return "";
+  if (!unit) return "";
+
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "";
+
+  const formatted = Number.isInteger(n)
+    ? String(n)
+    : n.toLocaleString("en-KE", {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 3,
+      });
+
+  return `${formatted} ${unit}`;
+}
+
+function formatProductDisplayName(product: {
+  name?: string | null;
+  quantity_value?: number | string | null;
+  quantity_unit?: QuantityUnit | string | null;
+}) {
+  const base = (product.name ?? "").trim();
+  const qty = formatQuantity(product.quantity_value, product.quantity_unit);
+
+  if (!base) return qty || "Unnamed product";
+  if (!qty) return base;
+  return `${base} ${qty}`;
 }
 
 function validateForm(form: FormData): FormErrors {
   const errors: FormErrors = {};
+
   if (!form.name.trim()) errors.name = "Product name is required";
   if (!form.categoryId) errors.categoryId = "Category is required";
-  if (!form.unitMeasureId) errors.unitMeasureId = "Packaging type is required";
-  if (!form.unitSizeId) errors.unitSizeId = "Pack size is required";
+  if (!form.unitMeasureId) errors.unitMeasureId = "Container / form is required";
+  if (!form.quantityValue || Number(form.quantityValue) <= 0) {
+    errors.quantityValue = "Quantity is required";
+  }
+  if (!form.quantityUnit) {
+    errors.quantityUnit = "Unit is required";
+  }
   if (form.isSellable && Number(form.sellPrice || 0) <= 0) {
     errors.sellPrice = "Sell price is required for sellable products";
   }
+
   return errors;
 }
 
@@ -609,139 +643,6 @@ function InlineCategoryCreator({
 }
 
 /* ─────────────────────────────────────────────
-   Inline Custom Size Creator
-───────────────────────────────────────────── */
-function InlineCustomSizeCreator({
-  orgId,
-  kind,
-  onCreated,
-}: {
-  orgId: string;
-  kind: UnitKind | null;
-  onCreated: (id: string, label: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const [value, setValue] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (open) setTimeout(() => inputRef.current?.focus(), 50);
-  }, [open]);
-
-  const unitLabel =
-    kind === "mass"
-      ? "grams"
-      : kind === "volume"
-      ? "ml"
-      : kind === "count"
-      ? "pieces"
-      : "";
-
-  const preview =
-    kind && value && Number(value) > 0
-      ? kind === "mass"
-        ? `${Math.round(Number(value))}g`
-        : kind === "volume"
-        ? `${Math.round(Number(value))}ml`
-        : `${Math.round(Number(value))}pcs`
-      : null;
-
-  async function handleCreate() {
-    if (!kind || !value || Number(value) <= 0) return;
-    setSaving(true);
-    setError("");
-    try {
-      const created = await createUnitSize(orgId, kind, Number(value));
-      onCreated(created.id, created.label ?? preview ?? value);
-      setValue("");
-      setOpen(false);
-    } catch (e: any) {
-      setError(e.message ?? "Failed to create size");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <div className="mt-1">
-      {!open ? (
-        <button
-          type="button"
-          onClick={() => {
-            if (kind) setOpen(true);
-          }}
-          disabled={!kind}
-          className="flex items-center gap-1.5 text-xs font-semibold text-amber-600 hover:text-amber-700 disabled:opacity-40 disabled:cursor-not-allowed transition"
-        >
-          <IconPlus />
-          Add custom size
-        </button>
-      ) : (
-        <div className="rounded-xl border border-green-200 bg-green-50 p-3 space-y-2">
-          <div className="text-xs font-semibold text-green-800">
-            Custom size {unitLabel ? `(${unitLabel})` : ""}
-          </div>
-          <div className="flex items-center gap-2">
-            <input
-              ref={inputRef}
-              type="number"
-              min="1"
-              step="1"
-              className="flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 placeholder-slate-400 focus:border-green-400 focus:ring-2 focus:ring-green-100 outline-none"
-              placeholder={
-                kind === "mass"
-                  ? "e.g. 350"
-                  : kind === "volume"
-                  ? "e.g. 300"
-                  : "e.g. 24"
-              }
-              value={value}
-              onChange={(e) => setValue(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  handleCreate();
-                }
-                if (e.key === "Escape") setOpen(false);
-              }}
-            />
-            {preview && (
-              <span className="text-xs font-bold text-green-700 whitespace-nowrap">
-                → {preview}
-              </span>
-            )}
-          </div>
-          {error && <p className="text-xs text-red-500">{error}</p>}
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={handleCreate}
-              disabled={saving || !value || Number(value) <= 0}
-              className="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-700 disabled:opacity-50 transition"
-            >
-              {saving ? "Creating…" : "Create"}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setOpen(false);
-                setValue("");
-                setError("");
-              }}
-              className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* ─────────────────────────────────────────────
    Archive Confirmation Modal
 ───────────────────────────────────────────── */
 function ArchiveModal({
@@ -781,7 +682,7 @@ function ArchiveModal({
 
         <div className="rounded-xl bg-slate-50 border border-slate-200 px-4 py-3 mb-5">
           <div className="text-sm font-semibold text-slate-900">
-            {product.name}
+            {formatProductDisplayName(product)}
           </div>
           {(product.sku || product.barcode) && (
             <div className="mt-1 text-xs text-slate-500 font-mono">
@@ -821,7 +722,6 @@ function ConfirmSaveModal({
   form,
   categories,
   measures,
-  sizes,
   loading,
   onConfirm,
   onCancel,
@@ -831,7 +731,6 @@ function ConfirmSaveModal({
   form: FormData;
   categories: CategoryLookup[];
   measures: MeasureLookup[];
-  sizes: SizeLookup[];
   loading: boolean;
   onConfirm: () => void;
   onCancel: () => void;
@@ -840,15 +739,23 @@ function ConfirmSaveModal({
 
   const cat = categories.find((c) => c.id === form.categoryId);
   const measure = measures.find((m) => m.id === form.unitMeasureId);
-  const size = sizes.find((s) => s.id === form.unitSizeId);
 
   const rows = [
-    { label: "Name", value: form.name || "—" },
+    {
+      label: "Product",
+      value:
+        formatProductDisplayName({
+          name: form.name,
+          quantity_value: form.quantityValue,
+          quantity_unit: form.quantityUnit,
+        }) || "—",
+    },
     { label: "SKU", value: form.sku || "—" },
     { label: "Category", value: cat?.name || "—" },
+    { label: "Container / form", value: measure?.name || "—" },
     {
-      label: "Packaging",
-      value: [measure?.name, size?.label].filter(Boolean).join(" • ") || "—",
+      label: "Quantity",
+      value: formatQuantity(form.quantityValue, form.quantityUnit) || "—",
     },
     { label: "Cost", value: fmt(form.costPrice) },
     { label: "Sell price", value: fmt(form.sellPrice) },
@@ -976,12 +883,9 @@ function ProductForm({
   setForm,
   measures,
   categories,
-  filteredSizes,
   suppliers,
   orgId,
   onCategoryCreated,
-  onSizeCreated,
-  onSupplierCreated,
   onSubmit,
   onCancel,
   saving,
@@ -991,12 +895,9 @@ function ProductForm({
   setForm: React.Dispatch<React.SetStateAction<FormData>>;
   measures: MeasureLookup[];
   categories: CategoryLookup[];
-  filteredSizes: SizeLookup[];
   suppliers: SupplierLookup[];
   orgId: string;
   onCategoryCreated: (id: string, name: string) => void;
-  onSizeCreated: (id: string, label: string) => void;
-  onSupplierCreated: (id: string, name: string) => void;
   onSubmit: (e: React.FormEvent) => void;
   onCancel: () => void;
   saving: boolean;
@@ -1029,7 +930,20 @@ function ProductForm({
     errors[k] && (touched[k] || submitAttempted) ? errors[k] : undefined;
 
   const marginPct = margin(form.costPrice, form.sellPrice);
-  const activeKind = inferSizeKindFromMeasure(form.unitMeasureId, measures);
+  const allowedUnits = useMemo(
+    () => getAllowedQuantityUnits(form.unitMeasureId, measures),
+    [form.unitMeasureId, measures]
+  );
+
+  useEffect(() => {
+    if (!allowedUnits.length) return;
+    if (!form.quantityUnit || !allowedUnits.includes(form.quantityUnit as QuantityUnit)) {
+      setForm((prev) => ({
+        ...prev,
+        quantityUnit: allowedUnits[0],
+      }));
+    }
+  }, [allowedUnits, form.quantityUnit, setForm]);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -1057,7 +971,7 @@ function ProductForm({
                   ? "border-red-400 focus:border-red-400 focus:ring-red-100"
                   : ""
               }`}
-              placeholder="e.g. Raw Honey 500ml Bottle"
+              placeholder="e.g. Granola or Raw Honey"
               value={form.name}
               onChange={set("name")}
               onBlur={() => touch("name")}
@@ -1068,7 +982,7 @@ function ProductForm({
             <Label>SKU</Label>
             <input
               className={S.inputCls}
-              placeholder="e.g. HON-BOT-500"
+              placeholder="e.g. GRA-200"
               value={form.sku}
               onChange={set("sku")}
             />
@@ -1130,10 +1044,10 @@ function ProductForm({
         </div>
       </FormSection>
 
-      <FormSection title="Packaging">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <FormSection title="Product structure">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
-            <Label required>Packaging type</Label>
+            <Label required>Container / form</Label>
             <select
               className={`${S.selectCls} ${
                 showErr("unitMeasureId")
@@ -1145,7 +1059,7 @@ function ProductForm({
               onChange={set("unitMeasureId")}
               onBlur={() => touch("unitMeasureId")}
             >
-              <option value="">— Select type —</option>
+              <option value="">— Select form —</option>
               {measures.map((m) => (
                 <option key={m.id} value={m.id}>
                   {m.name}
@@ -1156,38 +1070,65 @@ function ProductForm({
           </div>
 
           <div>
-            <Label required>Pack size</Label>
+            <Label required>Quantity</Label>
+            <input
+              className={`${S.inputCls} ${
+                showErr("quantityValue")
+                  ? "border-red-400 focus:border-red-400 focus:ring-red-100"
+                  : ""
+              }`}
+              type="number"
+              min="0"
+              step="0.001"
+              placeholder="e.g. 200"
+              value={form.quantityValue}
+              onChange={set("quantityValue")}
+              onBlur={() => touch("quantityValue")}
+            />
+            <FieldError message={showErr("quantityValue")} />
+          </div>
+
+          <div>
+            <Label required>Unit</Label>
             <select
               className={`${S.selectCls} ${
-                showErr("unitSizeId")
+                showErr("quantityUnit")
                   ? "border-red-400 focus:border-red-400 focus:ring-red-100"
                   : ""
               }`}
               style={S.selectChevronStyle}
-              value={form.unitSizeId}
-              onChange={set("unitSizeId")}
-              onBlur={() => touch("unitSizeId")}
-              disabled={!filteredSizes.length}
+              value={form.quantityUnit}
+              onChange={set("quantityUnit")}
+              onBlur={() => touch("quantityUnit")}
+              disabled={!allowedUnits.length}
             >
-              {!filteredSizes.length ? (
-                <option value="">Select packaging type first</option>
+              {!allowedUnits.length ? (
+                <option value="">Select form first</option>
               ) : (
                 <>
-                  <option value="">— Select size —</option>
-                  {filteredSizes.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.label}
+                  <option value="">— Select unit —</option>
+                  {allowedUnits.map((u) => (
+                    <option key={u} value={u}>
+                      {u}
                     </option>
                   ))}
                 </>
               )}
             </select>
-            <FieldError message={showErr("unitSizeId")} />
-            <InlineCustomSizeCreator
-              orgId={orgId}
-              kind={activeKind}
-              onCreated={onSizeCreated}
-            />
+            <FieldError message={showErr("quantityUnit")} />
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm">
+          <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-amber-700">
+            Preview
+          </div>
+          <div className="mt-1 text-slate-900 font-semibold">
+            {formatProductDisplayName({
+              name: form.name,
+              quantity_value: form.quantityValue,
+              quantity_unit: form.quantityUnit,
+            })}
           </div>
         </div>
       </FormSection>
@@ -1392,7 +1333,6 @@ export default function ProductsPage() {
   } | null>(null);
 
   const [measures, setMeasures] = useState<MeasureLookup[]>([]);
-  const [sizes, setSizes] = useState<SizeLookup[]>([]);
   const [categories, setCategories] = useState<CategoryLookup[]>([]);
   const [suppliers, setSuppliers] = useState<SupplierLookup[]>([]);
 
@@ -1420,40 +1360,30 @@ export default function ProductsPage() {
     setItems(await listProducts(o, !showArchived));
   }
 
-  async function reloadSizes(o: string) {
-    const usizes = await listUnitSizes(o);
-    setSizes(usizes as SizeLookup[]);
-    return usizes as SizeLookup[];
-  }
-
   useEffect(() => {
     (async () => {
       try {
         const o = await bootstrapOrg();
         setOrgId(o);
 
-        const [uoms, usizes, cats, sups] = await Promise.all([
+        const [uoms, cats, sups] = await Promise.all([
           listUnitMeasures(o),
-          listUnitSizes(o),
           listCategories(o),
           listSuppliers(o),
         ]);
 
-        setMeasures(uoms as MeasureLookup[]);
-        setSizes(usizes as SizeLookup[]);
+        const typedMeasures = uoms as MeasureLookup[];
+        setMeasures(typedMeasures);
         setCategories(cats as CategoryLookup[]);
         setSuppliers(sups as SupplierLookup[]);
 
-        const firstId = uoms?.[0]?.id ?? "";
-        const firstAllowed = (uoms?.[0] as MeasureLookup)?.allowed_kinds ?? [];
-        const firstSizeId =
-          (usizes as SizeLookup[]).find((s) => firstAllowed.includes(s.kind))
-            ?.id ?? "";
+        const firstId = typedMeasures?.[0]?.id ?? "";
+        const firstAllowedUnit = getAllowedQuantityUnits(firstId, typedMeasures)[0] ?? "";
 
         setAddForm((f) => ({
           ...f,
           unitMeasureId: firstId,
-          unitSizeId: firstSizeId,
+          quantityUnit: firstAllowedUnit,
         }));
 
         await refresh(o);
@@ -1467,36 +1397,6 @@ export default function ProductsPage() {
     setPage(1);
   }, [search, filterCat, filterStatus, showArchived]);
 
-  const addFilteredSizes = useMemo(() => {
-    const m = measures.find((m) => m.id === addForm.unitMeasureId);
-    if (!m) return sizes;
-    return sizes.filter((s) => m.allowed_kinds.includes(s.kind));
-  }, [sizes, measures, addForm.unitMeasureId]);
-
-  const editFilteredSizes = useMemo(() => {
-    const m = measures.find((m) => m.id === editForm.unitMeasureId);
-    if (!m) return sizes;
-    return sizes.filter((s) => m.allowed_kinds.includes(s.kind));
-  }, [sizes, measures, editForm.unitMeasureId]);
-
-  useEffect(() => {
-    if (
-      addFilteredSizes.length &&
-      !addFilteredSizes.find((s) => s.id === addForm.unitSizeId)
-    ) {
-      setAddForm((f) => ({ ...f, unitSizeId: addFilteredSizes[0].id }));
-    }
-  }, [addFilteredSizes, addForm.unitSizeId]);
-
-  useEffect(() => {
-    if (
-      editFilteredSizes.length &&
-      !editFilteredSizes.find((s) => s.id === editForm.unitSizeId)
-    ) {
-      setEditForm((f) => ({ ...f, unitSizeId: editFilteredSizes[0].id }));
-    }
-  }, [editFilteredSizes, editForm.unitSizeId]);
-
   const allCategories = useMemo(() => {
     return categories
       .map((c) => c.name)
@@ -1508,13 +1408,16 @@ export default function ProductsPage() {
     const t = search.trim().toLowerCase();
 
     return items.filter((p) => {
+      const displayName = formatProductDisplayName(p).toLowerCase();
       const catName = getCategoryName(p).toLowerCase();
       const sku = (p.sku ?? "").toLowerCase();
       const supplierName = (p.supplier?.name ?? "").toLowerCase();
+      const qty = formatQuantity(p.quantity_value, p.quantity_unit).toLowerCase();
 
       const matchText =
         !t ||
-        (p.name ?? "").toLowerCase().includes(t) ||
+        displayName.includes(t) ||
+        qty.includes(t) ||
         sku.includes(t) ||
         (p.barcode ?? "").toLowerCase().includes(t) ||
         supplierName.includes(t) ||
@@ -1582,22 +1485,6 @@ export default function ProductsPage() {
     setToast({ message: `Category "${name}" created`, type: "success" });
   }
 
-  function handleAddSizeCreated(id: string, label: string) {
-    if (!orgId) return;
-    reloadSizes(orgId).then(() => {
-      setAddForm((f) => ({ ...f, unitSizeId: id }));
-    });
-    setToast({ message: `Size "${label}" created`, type: "success" });
-  }
-
-  function handleEditSizeCreated(id: string, label: string) {
-    if (!orgId) return;
-    reloadSizes(orgId).then(() => {
-      setEditForm((f) => ({ ...f, unitSizeId: id }));
-    });
-    setToast({ message: `Size "${label}" created`, type: "success" });
-  }
-
   function handleAdd(e: React.FormEvent) {
     e.preventDefault();
     const errors = validateForm(addForm);
@@ -1611,10 +1498,14 @@ export default function ProductsPage() {
     setErr("");
 
     try {
-      const productName = addForm.name.trim();
+      const productDisplay = formatProductDisplayName({
+        name: addForm.name.trim(),
+        quantity_value: addForm.quantityValue,
+        quantity_unit: addForm.quantityUnit,
+      });
 
       await createProduct(orgId, {
-        name: productName,
+        name: addForm.name.trim(),
         sku: addForm.sku.trim() || undefined,
         category_id: addForm.categoryId || null,
         barcode: addForm.barcode.trim() || undefined,
@@ -1622,22 +1513,25 @@ export default function ProductsPage() {
         notes: addForm.notes.trim() || undefined,
         cost_price: Number(addForm.costPrice || 0),
         unit_price: Number(addForm.sellPrice || 0),
+        quantity_value: Number(addForm.quantityValue),
+        quantity_unit: addForm.quantityUnit || null,
         unit_measure_id: addForm.unitMeasureId || null,
-        unit_size_id: addForm.unitSizeId || null,
         is_sellable: addForm.isSellable,
       });
+
+      const allowedUnits = getAllowedQuantityUnits(addForm.unitMeasureId, measures);
 
       setAddForm({
         ...BLANK_FORM,
         unitMeasureId: addForm.unitMeasureId,
-        unitSizeId: addForm.unitSizeId,
+        quantityUnit: allowedUnits[0] ?? "",
       });
       setShowAddModal(false);
       setPendingAddConfirm(false);
       await refresh(orgId);
 
       setToast({
-        message: `"${productName}" added successfully`,
+        message: `"${productDisplay}" added successfully`,
         type: "success",
       });
     } catch (e: any) {
@@ -1662,13 +1556,18 @@ export default function ProductsPage() {
     setErr("");
 
     try {
-      const updatedName = editForm.name.trim();
+      const updatedDisplay = formatProductDisplayName({
+        name: editForm.name.trim(),
+        quantity_value: editForm.quantityValue,
+        quantity_unit: editForm.quantityUnit,
+      });
+
       const supabase = createClient();
 
       const { error } = await supabase
         .from("products")
         .update({
-          name: updatedName,
+          name: editForm.name.trim(),
           sku: editForm.sku.trim() || null,
           category_id: editForm.categoryId || null,
           barcode: editForm.barcode.trim() || null,
@@ -1676,8 +1575,9 @@ export default function ProductsPage() {
           notes: editForm.notes.trim() || null,
           cost_price: Number(editForm.costPrice || 0),
           unit_price: Number(editForm.sellPrice || 0),
+          quantity_value: Number(editForm.quantityValue),
+          quantity_unit: editForm.quantityUnit || null,
           unit_measure_id: editForm.unitMeasureId || null,
-          unit_size_id: editForm.unitSizeId || null,
           is_sellable: editForm.isSellable,
         })
         .eq("org_id", orgId)
@@ -1689,7 +1589,7 @@ export default function ProductsPage() {
       setPendingEditConfirm(false);
       await refresh(orgId);
 
-      setToast({ message: `"${updatedName}" updated`, type: "success" });
+      setToast({ message: `"${updatedDisplay}" updated`, type: "success" });
     } catch (e: any) {
       setErr(e.message ?? String(e));
       setToast({ message: "Failed to update product", type: "error" });
@@ -1704,7 +1604,7 @@ export default function ProductsPage() {
     setDeleting(true);
 
     try {
-      const productName = deletingProduct.name;
+      const productName = formatProductDisplayName(deletingProduct);
       await archiveProduct(orgId, deletingProduct.id);
       await refresh(orgId);
 
@@ -1721,14 +1621,16 @@ export default function ProductsPage() {
     }
   }
 
-  async function handleRestore(id: string, name?: string) {
+  async function handleRestore(id: string, product?: Product) {
     if (!orgId) return;
 
     try {
       await restoreProduct(orgId, id);
       await refresh(orgId);
       setToast({
-        message: name ? `"${name}" restored` : "Product restored",
+        message: product
+          ? `"${formatProductDisplayName(product)}" restored`
+          : "Product restored",
         type: "success",
       });
     } catch (e: any) {
@@ -1738,6 +1640,11 @@ export default function ProductsPage() {
   }
 
   function openEdit(p: Product) {
+    const allowedUnits = getAllowedQuantityUnits(
+      p.unit_measure_id ?? measures[0]?.id ?? "",
+      measures
+    );
+
     setEditForm({
       name: p.name ?? "",
       sku: p.sku ?? "",
@@ -1747,8 +1654,15 @@ export default function ProductsPage() {
       notes: p.notes ?? "",
       costPrice: String(p.cost_price ?? "0"),
       sellPrice: String(p.unit_price ?? "0"),
+      quantityValue:
+        p.quantity_value !== null && p.quantity_value !== undefined
+          ? String(p.quantity_value)
+          : "",
+      quantityUnit:
+        (p.quantity_unit as QuantityUnit | null) ??
+        allowedUnits[0] ??
+        "",
       unitMeasureId: p.unit_measure_id ?? measures[0]?.id ?? "",
-      unitSizeId: p.unit_size_id ?? "",
       isSellable: p.is_sellable ?? true,
     });
     setEditProduct(p);
@@ -1762,7 +1676,8 @@ export default function ProductsPage() {
 
   const hasFilters = !!(search || filterCat || filterStatus);
 
-const TABLE_COLS = S.tableGridCols;  const HEADERS = [
+  const TABLE_COLS = S.tableGridCols;
+  const HEADERS = [
     "Product",
     "Category",
     "Supplier",
@@ -1826,7 +1741,7 @@ const TABLE_COLS = S.tableGridCols;  const HEADERS = [
             Product Catalog
           </h1>
           <p className="mt-1 text-sm text-slate-500">
-            Manage products, pricing, packaging and availability
+            Manage products, sizes, pricing and availability
           </p>
         </div>
 
@@ -1992,7 +1907,7 @@ const TABLE_COLS = S.tableGridCols;  const HEADERS = [
               paginated.map((p) => {
                 const mgn = margin(p.cost_price, p.unit_price);
                 const categoryName = getCategoryName(p);
-                const packagingLabel = getPackagingLabel(p);
+                const displayName = formatProductDisplayName(p);
 
                 return (
                   <div
@@ -2005,10 +1920,10 @@ const TABLE_COLS = S.tableGridCols;  const HEADERS = [
                     >
                       <div className="min-w-0 space-y-1">
                         <div className="font-semibold text-slate-900 truncate text-[15px]">
-                          {p.name || "Unnamed"}
+                          {displayName}
                         </div>
                         <div className="text-xs text-slate-500 truncate">
-                          {packagingLabel || "—"}
+                          {p.unit_measure?.name || "—"}
                         </div>
                         {p.sku && (
                           <div className="text-[11px] font-mono text-slate-400 truncate">
@@ -2061,7 +1976,7 @@ const TABLE_COLS = S.tableGridCols;  const HEADERS = [
 
                         {p.active === false ? (
                           <button
-                            onClick={() => handleRestore(p.id, p.name)}
+                            onClick={() => handleRestore(p.id, p)}
                             className="rounded-xl border border-green-200 bg-green-50 px-3.5 h-9 text-xs font-semibold text-green-700 hover:bg-green-100 transition opacity-0 group-hover:opacity-100"
                           >
                             Restore
@@ -2082,16 +1997,16 @@ const TABLE_COLS = S.tableGridCols;  const HEADERS = [
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
                           <div className="font-semibold text-slate-900 truncate">
-                            {p.name || "Unnamed"}
+                            {displayName}
                           </div>
                           {categoryName && (
                             <div className="mt-0.5 text-xs text-slate-500">
                               {categoryName}
                             </div>
                           )}
-                          {(packagingLabel || p.sku) && (
+                          {(p.unit_measure?.name || p.sku) && (
                             <div className="text-xs text-slate-400 mt-1">
-                              {packagingLabel || p.sku}
+                              {p.unit_measure?.name || p.sku}
                             </div>
                           )}
                         </div>
@@ -2150,7 +2065,7 @@ const TABLE_COLS = S.tableGridCols;  const HEADERS = [
 
                         {p.active === false ? (
                           <button
-                            onClick={() => handleRestore(p.id, p.name)}
+                            onClick={() => handleRestore(p.id, p)}
                             className="flex-1 flex items-center justify-center gap-2 rounded-2xl border border-green-200 bg-green-50 py-2.5 text-xs font-semibold text-green-700 hover:bg-green-100 transition"
                           >
                             Restore
@@ -2195,12 +2110,9 @@ const TABLE_COLS = S.tableGridCols;  const HEADERS = [
             setForm={setAddForm}
             measures={measures}
             categories={categories}
-            filteredSizes={addFilteredSizes}
             suppliers={suppliers}
             orgId={orgId}
             onCategoryCreated={handleAddCategoryCreated}
-            onSizeCreated={handleAddSizeCreated}
-            onSupplierCreated={() => {}}
             onSubmit={handleAdd}
             onCancel={() => setShowAddModal(false)}
             saving={saving}
@@ -2212,7 +2124,7 @@ const TABLE_COLS = S.tableGridCols;  const HEADERS = [
       {editProduct && orgId && (
         <Modal
           title="Edit product"
-          sub={editProduct.name}
+          sub={formatProductDisplayName(editProduct)}
           icon={<IconEdit />}
           iconBg="#dbeafe"
           iconColor="#1e40af"
@@ -2223,12 +2135,9 @@ const TABLE_COLS = S.tableGridCols;  const HEADERS = [
             setForm={setEditForm}
             measures={measures}
             categories={categories}
-            filteredSizes={editFilteredSizes}
             suppliers={suppliers}
             orgId={orgId}
             onCategoryCreated={handleEditCategoryCreated}
-            onSizeCreated={handleEditSizeCreated}
-            onSupplierCreated={() => {}}
             onSubmit={handleEdit}
             onCancel={() => setEditProduct(null)}
             saving={saving}
@@ -2252,7 +2161,6 @@ const TABLE_COLS = S.tableGridCols;  const HEADERS = [
         form={addForm}
         categories={categories}
         measures={measures}
-        sizes={sizes}
         loading={saving}
         onConfirm={performAdd}
         onCancel={() => setPendingAddConfirm(false)}
@@ -2264,7 +2172,6 @@ const TABLE_COLS = S.tableGridCols;  const HEADERS = [
         form={editForm}
         categories={categories}
         measures={measures}
-        sizes={sizes}
         loading={saving}
         onConfirm={performEdit}
         onCancel={() => setPendingEditConfirm(false)}
