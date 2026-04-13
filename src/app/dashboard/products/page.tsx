@@ -15,7 +15,6 @@ import {
   createCategory,
   createUnitSize,
   listSuppliers,
-  createSupplier,
 } from "@/lib/api/lookups";
 import { createClient } from "@/lib/supabase/client";
 
@@ -117,7 +116,7 @@ const BLANK_FORM: FormData = {
   isSellable: true,
 };
 
-const PAGE_SIZE = 15;
+const PAGE_SIZE = 5;
 
 /* ─────────────────────────────────────────────
    Helpers
@@ -314,7 +313,7 @@ function Toast({
 
   return (
     <div
-      className={`fixed bottom-5 right-5 z-50 flex items-center gap-3 rounded-xl px-5 py-3.5 shadow-xl text-white text-sm font-semibold transition-all duration-300 ${
+      className={`fixed bottom-5 right-5 z-50 flex items-center gap-3 rounded-2xl px-5 py-3.5 shadow-xl text-white text-sm font-semibold transition-all duration-300 ${
         type === "success" ? "bg-green-600" : "bg-red-600"
       }`}
     >
@@ -350,62 +349,69 @@ function KpiCard({
 }) {
   const cfg = {
     neutral: {
-      border: "#e2e8f0",
-      iconBg: "#f8fafc",
-      iconColor: "#475569",
-      val: "#0f172a",
-      sub: "#64748b",
+      border: "#F1E4BF",
+      iconBg: "#FFF9E7",
+      iconColor: "#8A6A00",
+      val: "#2A2112",
+      sub: "#9A7A18",
+      shadow: "0 10px 25px rgba(245,197,24,0.06)",
     },
     success: {
-      border: "#bbf7d0",
-      iconBg: "#dcfce7",
+      border: "#CBE9D2",
+      iconBg: "#EAF8EE",
       iconColor: "#166534",
       val: "#166534",
-      sub: "#16a34a",
+      sub: "#2C8F4B",
+      shadow: "0 10px 25px rgba(34,197,94,0.08)",
     },
     warning: {
-      border: "#fde68a",
-      iconBg: "#fef3c7",
-      iconColor: "#92400e",
-      val: "#92400e",
-      sub: "#d97706",
+      border: "#F4D98C",
+      iconBg: "#FFF6D9",
+      iconColor: "#9A5B00",
+      val: "#8B5A00",
+      sub: "#C17A00",
+      shadow: "0 10px 25px rgba(245,158,11,0.08)",
     },
     info: {
-      border: "#bfdbfe",
-      iconBg: "#dbeafe",
-      iconColor: "#1e40af",
-      val: "#1e40af",
-      sub: "#3b82f6",
+      border: "#E7D8A7",
+      iconBg: "#FFF7D6",
+      iconColor: "#7A6300",
+      val: "#7A6300",
+      sub: "#A28300",
+      shadow: "0 10px 25px rgba(245,197,24,0.08)",
     },
   }[variant];
 
   return (
     <div
-      className="rounded-2xl p-4 bg-white transition hover:shadow-md"
-      style={{ border: `1.5px solid ${cfg.border}` }}
+      className="rounded-[22px] p-4 bg-white transition hover:-translate-y-0.5"
+      style={{
+        border: `1.5px solid ${cfg.border}`,
+        boxShadow: cfg.shadow,
+      }}
     >
       <div className="flex items-center gap-3 mb-3">
         <div
-          className="grid h-10 w-10 shrink-0 place-items-center rounded-xl text-lg"
+          className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl text-lg"
           style={{ background: cfg.iconBg, color: cfg.iconColor }}
         >
           {icon}
         </div>
       </div>
       <div
-        className="text-[11px] font-semibold uppercase tracking-wider mb-1"
+        className="text-[11px] font-semibold uppercase tracking-[0.18em] mb-1"
         style={{ color: cfg.sub }}
       >
         {label}
       </div>
       <div
-        className="text-2xl font-bold leading-none"
+        className="text-[28px] font-bold leading-none"
         style={{ color: cfg.val }}
       >
         {value}
       </div>
       {sub && (
-        <div className="mt-1 text-xs" style={{ color: cfg.sub }}>
+        <div className="mt-1.5 text-xs" style={{ color: cfg.sub }}>
           {sub}
         </div>
       )}
@@ -421,14 +427,14 @@ function MarginBadge({ pct }: { pct: number | null }) {
 
   const color =
     pct >= 30
-      ? "bg-green-100 text-green-700"
+      ? "bg-green-100 text-green-700 border border-green-200"
       : pct >= 10
-      ? "bg-amber-100 text-amber-700"
-      : "bg-red-100 text-red-700";
+      ? "bg-amber-100 text-amber-700 border border-amber-200"
+      : "bg-red-100 text-red-700 border border-red-200";
 
   return (
     <span
-      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-bold ${color}`}
+      className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-bold ${color}`}
     >
       {pct.toFixed(0)}%
     </span>
@@ -437,12 +443,12 @@ function MarginBadge({ pct }: { pct: number | null }) {
 
 function SellBadge({ isSellable }: { isSellable?: boolean }) {
   return isSellable !== false ? (
-    <span className="inline-flex items-center gap-1.5 rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-semibold text-green-700">
+    <span className="inline-flex items-center gap-1.5 rounded-full bg-green-100 px-2.5 py-1 text-xs font-semibold text-green-700 border border-green-200">
       <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
       For sale
     </span>
   ) : (
-    <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-500">
+    <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-500 border border-slate-200">
       <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
       Not for sale
     </span>
@@ -452,8 +458,8 @@ function SellBadge({ isSellable }: { isSellable?: boolean }) {
 function ArchiveBadge({ active }: { active?: boolean }) {
   if (active !== false) return null;
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-500">
-      <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
+    <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700 border border-amber-200">
+      <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
       Archived
     </span>
   );
@@ -734,6 +740,7 @@ function InlineCustomSizeCreator({
     </div>
   );
 }
+
 /* ─────────────────────────────────────────────
    Archive Confirmation Modal
 ───────────────────────────────────────────── */
@@ -806,7 +813,7 @@ function ArchiveModal({
 }
 
 /* ─────────────────────────────────────────────
-   Confirm Save Modal (Add / Edit)
+   Confirm Save Modal
 ───────────────────────────────────────────── */
 function ConfirmSaveModal({
   open,
@@ -1010,12 +1017,7 @@ function ProductForm({
         HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
       >
     ) => {
-      const value =
-        e.target instanceof HTMLInputElement &&
-        e.target.type === "checkbox"
-          ? String(e.target.checked)
-          : e.target.value;
-
+      const value = e.target.value;
       setForm((prev) => ({ ...prev, [k]: value as never }));
       setTouched((t) => ({ ...t, [k]: true }));
     };
@@ -1124,8 +1126,6 @@ function ProductForm({
                 </option>
               ))}
             </select>
-
-            
           </div>
         </div>
       </FormSection>
@@ -1330,16 +1330,16 @@ function Pagination({
   }
 
   return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-t border-slate-100 bg-slate-50/50 px-6 py-3.5">
-      <span className="text-xs text-slate-400">
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-t border-[#F1E6C9] bg-[#FFFDF8] px-6 py-4">
+      <span className="text-xs text-slate-500">
         Showing {start}–{end} of {totalItems} product
         {totalItems !== 1 ? "s" : ""}
       </span>
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-1.5">
         <button
           onClick={() => onPage(page - 1)}
           disabled={page === 1}
-          className="grid h-8 w-8 place-items-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition"
+          className="grid h-9 w-9 place-items-center rounded-xl border border-[#EADFC2] bg-white text-slate-500 hover:bg-[#FFF8E6] disabled:opacity-40 disabled:cursor-not-allowed transition"
         >
           <IconChevronLeft />
         </button>
@@ -1356,10 +1356,10 @@ function Pagination({
             <button
               key={p}
               onClick={() => onPage(p as number)}
-              className={`h-8 min-w-[32px] px-2 rounded-lg text-sm font-semibold transition ${
+              className={`h-9 min-w-[36px] px-2 rounded-xl text-sm font-semibold transition ${
                 p === page
-                  ? "bg-amber-500 text-white border border-amber-500"
-                  : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-100"
+                  ? "bg-amber-500 text-white border border-amber-500 shadow-[0_10px_24px_rgba(245,197,24,0.28)]"
+                  : "border border-[#EADFC2] bg-white text-slate-700 hover:bg-[#FFF8E6]"
               }`}
             >
               {p}
@@ -1370,7 +1370,7 @@ function Pagination({
         <button
           onClick={() => onPage(page + 1)}
           disabled={page === totalPages}
-          className="grid h-8 w-8 place-items-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition"
+          className="grid h-9 w-9 place-items-center rounded-xl border border-[#EADFC2] bg-white text-slate-500 hover:bg-[#FFF8E6] disabled:opacity-40 disabled:cursor-not-allowed transition"
         >
           <IconChevronRight />
         </button>
@@ -1418,18 +1418,6 @@ export default function ProductsPage() {
 
   async function refresh(o: string) {
     setItems(await listProducts(o, !showArchived));
-  }
-
-  async function reloadCategories(o: string) {
-    const cats = await listCategories(o);
-    setCategories(cats as CategoryLookup[]);
-    return cats as CategoryLookup[];
-  }
-
-  async function reloadSuppliers(o: string) {
-    const sups = await listSuppliers(o);
-    setSuppliers(sups as SupplierLookup[]);
-    return sups as SupplierLookup[];
   }
 
   async function reloadSizes(o: string) {
@@ -1592,22 +1580,6 @@ export default function ProductsPage() {
     );
     setEditForm((f) => ({ ...f, categoryId: id }));
     setToast({ message: `Category "${name}" created`, type: "success" });
-  }
-
-  function handleAddSupplierCreated(id: string, name: string) {
-    setSuppliers((prev) =>
-      [...prev, { id, name }].sort((a, b) => a.name.localeCompare(b.name))
-    );
-    setAddForm((f) => ({ ...f, supplierId: id }));
-    setToast({ message: `Supplier "${name}" created`, type: "success" });
-  }
-
-  function handleEditSupplierCreated(id: string, name: string) {
-    setSuppliers((prev) =>
-      [...prev, { id, name }].sort((a, b) => a.name.localeCompare(b.name))
-    );
-    setEditForm((f) => ({ ...f, supplierId: id }));
-    setToast({ message: `Supplier "${name}" created`, type: "success" });
   }
 
   function handleAddSizeCreated(id: string, label: string) {
@@ -1790,8 +1762,7 @@ export default function ProductsPage() {
 
   const hasFilters = !!(search || filterCat || filterStatus);
 
-  const TABLE_COLS = "2.4fr 1.2fr 1.2fr 1.1fr 0.9fr 0.9fr 0.8fr 1.3fr 96px";
-  const HEADERS = [
+const TABLE_COLS = S.tableGridCols;  const HEADERS = [
     "Product",
     "Category",
     "Supplier",
@@ -1834,7 +1805,7 @@ export default function ProductsPage() {
       )}
 
       {err && (
-        <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           <span className="shrink-0 mt-0.5">⚠️</span>
           <span className="flex-1">{err}</span>
           <button
@@ -1848,14 +1819,21 @@ export default function ProductsPage() {
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
+          <div className="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-amber-700">
+            Catalog
+          </div>
+          <h1 className="mt-3 text-[32px] font-bold text-slate-900 tracking-tight">
             Product Catalog
           </h1>
-          <p className="mt-0.5 text-sm text-slate-500">
+          <p className="mt-1 text-sm text-slate-500">
             Manage products, pricing, packaging and availability
           </p>
         </div>
-        <button className={S.btnPrimary} onClick={() => setShowAddModal(true)}>
+
+        <button
+          className={`${S.btnPrimary} shadow-[0_12px_28px_rgba(245,197,24,0.25)]`}
+          onClick={() => setShowAddModal(true)}
+        >
           <IconPlus />
           Add product
         </button>
@@ -1904,286 +1882,294 @@ export default function ProductsPage() {
         />
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <label className="relative flex-1 min-w-[200px] max-w-xs">
-          <div className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
-            <IconSearch />
-          </div>
-          <input
-            className="w-full rounded-xl border border-slate-200 bg-white pl-10 pr-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 focus:border-amber-500 focus:ring-2 focus:ring-amber-100 outline-none transition"
-            placeholder="Search products…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-          {search && (
-            <button
-              onClick={() => setSearch("")}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+      <div className="rounded-[24px] border border-[#EADFC2] bg-white shadow-[0_12px_36px_rgba(245,197,24,0.06)] overflow-hidden">
+        <div className="border-b border-[#F1E6C9] bg-[linear-gradient(180deg,#FFFDF8_0%,#FFF9EC_100%)] px-5 py-4 lg:px-6">
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="relative flex-1 min-w-[220px] max-w-sm">
+              <div className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
+                <IconSearch />
+              </div>
+              <input
+                className="w-full rounded-2xl border border-[#EADFC2] bg-white pl-10 pr-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 focus:border-amber-500 focus:ring-2 focus:ring-amber-100 outline-none transition"
+                placeholder="Search products…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+              {search && (
+                <button
+                  onClick={() => setSearch("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                >
+                  <IconX />
+                </button>
+              )}
+            </label>
+
+            <select
+              className="rounded-2xl border border-[#EADFC2] bg-white px-3.5 py-2.5 text-sm text-slate-700 focus:border-amber-500 focus:ring-2 focus:ring-amber-100 outline-none transition cursor-pointer"
+              style={S.selectChevronStyle}
+              value={filterCat}
+              onChange={(e) => setFilterCat(e.target.value)}
             >
-              <IconX />
+              <option value="">All categories</option>
+              {allCategories.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+
+            <select
+              className="rounded-2xl border border-[#EADFC2] bg-white px-3.5 py-2.5 text-sm text-slate-700 focus:border-amber-500 focus:ring-2 focus:ring-amber-100 outline-none transition cursor-pointer"
+              style={S.selectChevronStyle}
+              value={filterStatus}
+              onChange={(e) =>
+                setFilterStatus(
+                  e.target.value as "" | "sellable" | "not_sellable"
+                )
+              }
+            >
+              <option value="">All statuses</option>
+              <option value="sellable">For sale</option>
+              <option value="not_sellable">Not for sale</option>
+            </select>
+
+            {hasFilters && (
+              <button
+                onClick={clearFilters}
+                className="text-sm font-semibold text-amber-600 hover:text-amber-700 transition px-1"
+              >
+                Clear
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={() => setShowArchived((v) => !v)}
+              className={`rounded-2xl border px-3.5 py-2.5 text-sm font-semibold transition ${
+                showArchived
+                  ? "border-amber-300 bg-amber-50 text-amber-700 shadow-[0_8px_20px_rgba(245,197,24,0.12)]"
+                  : "border-[#EADFC2] bg-white text-slate-700 hover:bg-[#FFF8E6]"
+              }`}
+            >
+              {showArchived ? "Showing archived too" : "Show archived"}
             </button>
-          )}
-        </label>
 
-        <select
-          className="rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-700 focus:border-amber-500 focus:ring-2 focus:ring-amber-100 outline-none transition cursor-pointer"
-          style={S.selectChevronStyle}
-          value={filterCat}
-          onChange={(e) => setFilterCat(e.target.value)}
-        >
-          <option value="">All categories</option>
-          {allCategories.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
-
-        <select
-          className="rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-700 focus:border-amber-500 focus:ring-2 focus:ring-amber-100 outline-none transition cursor-pointer"
-          style={S.selectChevronStyle}
-          value={filterStatus}
-          onChange={(e) =>
-            setFilterStatus(e.target.value as "" | "sellable" | "not_sellable")
-          }
-        >
-          <option value="">All statuses</option>
-          <option value="sellable">For sale</option>
-          <option value="not_sellable">Not for sale</option>
-        </select>
-
-        {hasFilters && (
-          <button
-            onClick={clearFilters}
-            className="text-sm font-semibold text-amber-600 hover:text-amber-700 transition px-1"
-          >
-            Clear
-          </button>
-        )}
-
-        <button
-          type="button"
-          onClick={() => setShowArchived((v) => !v)}
-          className={`rounded-xl border px-3.5 py-2.5 text-sm font-semibold transition ${
-            showArchived
-              ? "border-amber-300 bg-amber-50 text-amber-700"
-              : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-          }`}
-        >
-          {showArchived ? "Showing archived too" : "Show archived"}
-        </button>
-
-        <span className="ml-auto text-xs text-slate-400 whitespace-nowrap">
-          {filtered.length} of {items.length}
-        </span>
-      </div>
-
-      <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-        <div
-          className="hidden lg:grid items-center gap-4 px-6 py-3.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500 bg-slate-50 border-b border-slate-200"
-          style={{ gridTemplateColumns: TABLE_COLS }}
-        >
-          {HEADERS.map((h, i) => (
-            <div key={i} className={i >= 4 && i <= 6 ? "text-right" : ""}>
-              {h}
-            </div>
-          ))}
+            <span className="ml-auto text-xs text-slate-500 whitespace-nowrap">
+              {filtered.length} of {items.length}
+            </span>
+          </div>
         </div>
 
-        <div className="divide-y divide-slate-100">
-          {paginated.length === 0 ? (
-            <div className="py-20 text-center">
-              <div className="text-5xl mb-4">🍯</div>
-              <p className="text-lg font-semibold text-slate-700">
-                {items.length === 0 ? "No products yet" : "No matching products"}
-              </p>
-              <p className="text-sm text-slate-400 mt-1">
-                {items.length === 0
-                  ? 'Click "Add product" to get started'
-                  : "Try adjusting your filters"}
-              </p>
+        <div className="px-3 py-3 sm:px-4 sm:py-4">
+          <div className="hidden lg:block">
+            <div
+              className="grid items-center gap-4 px-6 py-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500"
+              style={{ gridTemplateColumns: TABLE_COLS }}
+            >
+              {HEADERS.map((h, i) => (
+                <div key={i} className={i >= 4 && i <= 6 ? "text-right" : ""}>
+                  {h}
+                </div>
+              ))}
             </div>
-          ) : (
-            paginated.map((p) => {
-              const mgn = margin(p.cost_price, p.unit_price);
-              const categoryName = getCategoryName(p);
-              const packagingLabel = getPackagingLabel(p);
+          </div>
 
-              return (
-                <div
-                  key={p.id}
-                  className="transition-colors hover:bg-slate-50/60 group"
-                >
+          <div className="space-y-3">
+            {paginated.length === 0 ? (
+              <div className="py-20 text-center">
+                <div className="text-5xl mb-4">🍯</div>
+                <p className="text-lg font-semibold text-slate-700">
+                  {items.length === 0 ? "No products yet" : "No matching products"}
+                </p>
+                <p className="text-sm text-slate-400 mt-1">
+                  {items.length === 0
+                    ? 'Click "Add product" to get started'
+                    : "Try adjusting your filters"}
+                </p>
+              </div>
+            ) : (
+              paginated.map((p) => {
+                const mgn = margin(p.cost_price, p.unit_price);
+                const categoryName = getCategoryName(p);
+                const packagingLabel = getPackagingLabel(p);
+
+                return (
                   <div
-                    className="hidden lg:grid items-center gap-4 px-6 py-4 text-sm"
-                    style={{ gridTemplateColumns: TABLE_COLS }}
+                    key={p.id}
+                    className="group rounded-[24px] border border-[#EFE4C6] bg-[linear-gradient(180deg,#FFFFFF_0%,#FFFCF4_100%)] shadow-[0_8px_30px_rgba(15,23,42,0.04)] transition-all duration-200 hover:-translate-y-[1px] hover:shadow-[0_16px_34px_rgba(245,197,24,0.10)] hover:border-[#E5D28D]"
                   >
-                    <div className="min-w-0 space-y-1">
-                      <div className="font-semibold text-slate-900 truncate">
-                        {p.name || "Unnamed"}
-                      </div>
-                      <div className="text-xs text-slate-500 truncate">
-                        {packagingLabel || "—"}
-                      </div>
-                      {p.sku && (
-                        <div className="text-[11px] font-mono text-slate-400 truncate">
-                          SKU {p.sku}
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="truncate text-sm text-slate-700">
-                      {categoryName || <span className="text-slate-300">—</span>}
-                    </div>
-
-                    <div className="truncate text-sm text-slate-700">
-                      {p.supplier?.name || (
-                        <span className="text-slate-300">—</span>
-                      )}
-                    </div>
-
-                    <div className="truncate font-mono text-xs text-slate-500">
-                      {p.barcode || p.sku || (
-                        <span className="text-slate-300">—</span>
-                      )}
-                    </div>
-
-                    <div className="text-right text-slate-700">
-                      {fmt(p.cost_price)}
-                    </div>
-
-                    <div className="text-right font-bold text-slate-900">
-                      {fmt(p.unit_price)}
-                    </div>
-
-                    <div className="text-right">
-                      <MarginBadge pct={mgn} />
-                    </div>
-
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <SellBadge isSellable={p.is_sellable} />
-                      <ArchiveBadge active={p.active} />
-                    </div>
-
-                    <div className="flex items-center justify-end gap-1.5">
-                      <button
-                        onClick={() => openEdit(p)}
-                        className="grid h-8 w-8 place-items-center rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition opacity-0 group-hover:opacity-100"
-                        title="Edit"
-                      >
-                        <IconEdit />
-                      </button>
-
-                      {p.active === false ? (
-                        <button
-                          onClick={() => handleRestore(p.id, p.name)}
-                          className="rounded-lg bg-green-50 px-3 h-8 text-xs font-semibold text-green-700 hover:bg-green-100 transition opacity-0 group-hover:opacity-100"
-                        >
-                          Restore
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => setDeletingProduct(p)}
-                          className="grid h-8 w-8 place-items-center rounded-lg bg-red-50 text-red-500 hover:bg-red-100 transition opacity-0 group-hover:opacity-100"
-                          title="Archive"
-                        >
-                          <IconTrash />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="lg:hidden px-5 py-4 space-y-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="font-semibold text-slate-900 truncate">
+                    <div
+                      className="hidden lg:grid items-center gap-4 px-6 py-5 text-sm"
+                      style={{ gridTemplateColumns: TABLE_COLS }}
+                    >
+                      <div className="min-w-0 space-y-1">
+                        <div className="font-semibold text-slate-900 truncate text-[15px]">
                           {p.name || "Unnamed"}
                         </div>
-                        {categoryName && (
-                          <div className="mt-0.5 text-xs text-slate-500">
-                            {categoryName}
-                          </div>
-                        )}
-                        {(packagingLabel || p.sku) && (
-                          <div className="text-xs text-slate-400 mt-1">
-                            {packagingLabel || p.sku}
+                        <div className="text-xs text-slate-500 truncate">
+                          {packagingLabel || "—"}
+                        </div>
+                        {p.sku && (
+                          <div className="text-[11px] font-mono text-slate-400 truncate">
+                            SKU {p.sku}
                           </div>
                         )}
                       </div>
-                      <div className="flex items-center gap-2 flex-wrap justify-end">
+
+                      <div className="truncate text-sm text-slate-700">
+                        {categoryName || <span className="text-slate-300">—</span>}
+                      </div>
+
+                      <div className="truncate text-sm text-slate-700">
+                        {p.supplier?.name || (
+                          <span className="text-slate-300">—</span>
+                        )}
+                      </div>
+
+                      <div className="truncate font-mono text-xs text-slate-500">
+                        {p.barcode || p.sku || (
+                          <span className="text-slate-300">—</span>
+                        )}
+                      </div>
+
+                      <div className="text-right text-slate-700 font-medium">
+                        {fmt(p.cost_price)}
+                      </div>
+
+                      <div className="text-right font-bold text-slate-900">
+                        {fmt(p.unit_price)}
+                      </div>
+
+                      <div className="text-right">
+                        <MarginBadge pct={mgn} />
+                      </div>
+
+                      <div className="flex items-center gap-2 flex-wrap">
                         <SellBadge isSellable={p.is_sellable} />
                         <ArchiveBadge active={p.active} />
                       </div>
-                    </div>
 
-                    <div className="grid grid-cols-3 gap-3 rounded-xl bg-slate-50 border border-slate-100 p-3 text-sm">
-                      <div>
-                        <div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">
-                          Cost
-                        </div>
-                        <div className="font-medium text-slate-800 mt-0.5">
-                          {fmt(p.cost_price)}
-                        </div>
-                      </div>
-                      <div>
-                        <div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">
-                          Sell
-                        </div>
-                        <div className="font-bold text-slate-900 mt-0.5">
-                          {fmt(p.unit_price)}
-                        </div>
-                      </div>
-                      <div>
-                        <div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">
-                          Margin
-                        </div>
-                        <div className="mt-0.5">
-                          <MarginBadge pct={mgn} />
-                        </div>
-                      </div>
-                    </div>
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => openEdit(p)}
+                          className="grid h-9 w-9 place-items-center rounded-xl border border-blue-200 bg-blue-50 text-blue-600 hover:bg-blue-100 transition opacity-0 group-hover:opacity-100"
+                          title="Edit"
+                        >
+                          <IconEdit />
+                        </button>
 
-                    {(p.supplier?.name || p.barcode || p.sku) && (
-                      <div className="text-xs text-slate-500 flex flex-wrap gap-x-4 gap-y-0.5">
-                        {p.supplier?.name && (
-                          <span>Supplier: {p.supplier.name}</span>
-                        )}
-                        {p.sku && <span className="font-mono">SKU: {p.sku}</span>}
-                        {p.barcode && (
-                          <span className="font-mono">Barcode: {p.barcode}</span>
+                        {p.active === false ? (
+                          <button
+                            onClick={() => handleRestore(p.id, p.name)}
+                            className="rounded-xl border border-green-200 bg-green-50 px-3.5 h-9 text-xs font-semibold text-green-700 hover:bg-green-100 transition opacity-0 group-hover:opacity-100"
+                          >
+                            Restore
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => setDeletingProduct(p)}
+                            className="grid h-9 w-9 place-items-center rounded-xl border border-red-200 bg-red-50 text-red-500 hover:bg-red-100 transition opacity-0 group-hover:opacity-100"
+                            title="Archive"
+                          >
+                            <IconTrash />
+                          </button>
                         )}
                       </div>
-                    )}
+                    </div>
 
-                    <div className="flex gap-2 pt-1">
-                      <button
-                        onClick={() => openEdit(p)}
-                        className="flex-1 flex items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 py-2.5 text-xs font-semibold text-blue-700 hover:bg-blue-100 transition"
-                      >
-                        <IconEdit /> Edit
-                      </button>
+                    <div className="lg:hidden px-5 py-4 space-y-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="font-semibold text-slate-900 truncate">
+                            {p.name || "Unnamed"}
+                          </div>
+                          {categoryName && (
+                            <div className="mt-0.5 text-xs text-slate-500">
+                              {categoryName}
+                            </div>
+                          )}
+                          {(packagingLabel || p.sku) && (
+                            <div className="text-xs text-slate-400 mt-1">
+                              {packagingLabel || p.sku}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 flex-wrap justify-end">
+                          <SellBadge isSellable={p.is_sellable} />
+                          <ArchiveBadge active={p.active} />
+                        </div>
+                      </div>
 
-                      {p.active === false ? (
-                        <button
-                          onClick={() => handleRestore(p.id, p.name)}
-                          className="flex-1 flex items-center justify-center gap-2 rounded-xl border border-green-200 bg-green-50 py-2.5 text-xs font-semibold text-green-700 hover:bg-green-100 transition"
-                        >
-                          Restore
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => setDeletingProduct(p)}
-                          className="flex-1 flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 py-2.5 text-xs font-semibold text-red-600 hover:bg-red-100 transition"
-                        >
-                          <IconTrash /> Archive
-                        </button>
+                      <div className="grid grid-cols-3 gap-3 rounded-2xl bg-[#FFF9EC] border border-[#F1E6C9] p-3 text-sm">
+                        <div>
+                          <div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">
+                            Cost
+                          </div>
+                          <div className="font-medium text-slate-800 mt-0.5">
+                            {fmt(p.cost_price)}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">
+                            Sell
+                          </div>
+                          <div className="font-bold text-slate-900 mt-0.5">
+                            {fmt(p.unit_price)}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">
+                            Margin
+                          </div>
+                          <div className="mt-0.5">
+                            <MarginBadge pct={mgn} />
+                          </div>
+                        </div>
+                      </div>
+
+                      {(p.supplier?.name || p.barcode || p.sku) && (
+                        <div className="text-xs text-slate-500 flex flex-wrap gap-x-4 gap-y-0.5">
+                          {p.supplier?.name && (
+                            <span>Supplier: {p.supplier.name}</span>
+                          )}
+                          {p.sku && <span className="font-mono">SKU: {p.sku}</span>}
+                          {p.barcode && (
+                            <span className="font-mono">Barcode: {p.barcode}</span>
+                          )}
+                        </div>
                       )}
+
+                      <div className="flex gap-2 pt-1">
+                        <button
+                          onClick={() => openEdit(p)}
+                          className="flex-1 flex items-center justify-center gap-2 rounded-2xl border border-blue-200 bg-blue-50 py-2.5 text-xs font-semibold text-blue-700 hover:bg-blue-100 transition"
+                        >
+                          <IconEdit /> Edit
+                        </button>
+
+                        {p.active === false ? (
+                          <button
+                            onClick={() => handleRestore(p.id, p.name)}
+                            className="flex-1 flex items-center justify-center gap-2 rounded-2xl border border-green-200 bg-green-50 py-2.5 text-xs font-semibold text-green-700 hover:bg-green-100 transition"
+                          >
+                            Restore
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => setDeletingProduct(p)}
+                            className="flex-1 flex items-center justify-center gap-2 rounded-2xl border border-red-200 bg-red-50 py-2.5 text-xs font-semibold text-red-600 hover:bg-red-100 transition"
+                          >
+                            <IconTrash /> Archive
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-              );
-            })
-          )}
+                );
+              })
+            )}
+          </div>
         </div>
 
         <Pagination
@@ -2214,7 +2200,7 @@ export default function ProductsPage() {
             orgId={orgId}
             onCategoryCreated={handleAddCategoryCreated}
             onSizeCreated={handleAddSizeCreated}
-            onSupplierCreated={handleAddSupplierCreated}
+            onSupplierCreated={() => {}}
             onSubmit={handleAdd}
             onCancel={() => setShowAddModal(false)}
             saving={saving}
@@ -2242,7 +2228,7 @@ export default function ProductsPage() {
             orgId={orgId}
             onCategoryCreated={handleEditCategoryCreated}
             onSizeCreated={handleEditSizeCreated}
-            onSupplierCreated={handleEditSupplierCreated}
+            onSupplierCreated={() => {}}
             onSubmit={handleEdit}
             onCancel={() => setEditProduct(null)}
             saving={saving}
