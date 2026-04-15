@@ -1,11 +1,17 @@
 import { createClient } from "@/lib/supabase/client";
 
+export type QuantityUnit = "g" | "kg" | "ml" | "L" | "pc";
+
 export type InventoryProduct = {
   id: string;
   name: string;
-  unit_price: number;
-  sku: string | null;
-  category: string | null;
+  sku?: string | null;
+  barcode?: string | null;
+  category?: string | null;
+  unit_price?: number | null;
+  cost_price?: number | null;
+  quantity_value?: number | null;
+  quantity_unit?: QuantityUnit | null;
 };
 
 export type InventoryRow = {
@@ -13,14 +19,33 @@ export type InventoryRow = {
   org_id: string;
   qty_on_hand: number;
   reorder_level: number;
-  updated_at: string;
-
-  // After normalization, this is a single object (not an array)
+  updated_at?: string | null;
   products?: InventoryProduct | null;
+};
+
+export type InventoryMovementRow = {
+  id: string;
+  org_id: string;
+  product_id: string;
+  ref_sale_id?: string | null;
+  type: "add" | "remove" | "set" | "restock" | "sale";
+  qty_delta: number;
+  qty_before: number;
+  qty_after: number;
+  note?: string | null;
+  created_at: string;
+  products?: {
+    id: string;
+    name: string;
+    sku?: string | null;
+    quantity_value?: number | null;
+    quantity_unit?: QuantityUnit | null;
+  } | null;
 };
 
 export async function listInventory(orgId: string): Promise<InventoryRow[]> {
   const supabase = createClient();
+
   const { data, error } = await supabase
     .from("inventory")
     .select(`
@@ -29,43 +54,170 @@ export async function listInventory(orgId: string): Promise<InventoryRow[]> {
       qty_on_hand,
       reorder_level,
       updated_at,
-      products:products ( id, name, unit_price, sku, category )
+      products:products (
+        id,
+        name,
+        sku,
+        barcode,
+        cost_price,
+        unit_price,
+        quantity_value,
+        quantity_unit,
+        category:categories ( name )
+      )
     `)
     .eq("org_id", orgId)
     .order("updated_at", { ascending: false });
 
   if (error) throw new Error(error.message);
 
-  // Flatten the array join → single object | null
-  return (data ?? []).map((row) => ({
-    ...row,
-    products: Array.isArray(row.products)
-      ? (row.products[0] ?? null)
-      : row.products,
-  })) as InventoryRow[];
+  return (data ?? []).map((row: any) => {
+    const rawProduct = Array.isArray(row.products) ? row.products[0] : row.products;
+    const rawCategory = Array.isArray(rawProduct?.category)
+      ? rawProduct.category[0]
+      : rawProduct?.category;
+
+    return {
+      product_id: row.product_id,
+      org_id: row.org_id,
+      qty_on_hand: Number(row.qty_on_hand ?? 0),
+      reorder_level: Number(row.reorder_level ?? 0),
+      updated_at: row.updated_at ?? null,
+      products: rawProduct
+        ? {
+            id: rawProduct.id,
+            name: rawProduct.name,
+            sku: rawProduct.sku ?? null,
+            barcode: rawProduct.barcode ?? null,
+            cost_price:
+              rawProduct.cost_price !== null && rawProduct.cost_price !== undefined
+                ? Number(rawProduct.cost_price)
+                : null,
+            unit_price:
+              rawProduct.unit_price !== null && rawProduct.unit_price !== undefined
+                ? Number(rawProduct.unit_price)
+                : null,
+            quantity_value:
+              rawProduct.quantity_value !== null &&
+              rawProduct.quantity_value !== undefined
+                ? Number(rawProduct.quantity_value)
+                : null,
+            quantity_unit: rawProduct.quantity_unit ?? null,
+            category: rawCategory?.name ?? null,
+          }
+        : null,
+    };
+  });
+}
+
+export async function createInventoryRow(
+  orgId: string,
+  payload: {
+    product_id: string;
+    qty_on_hand: number;
+    reorder_level: number;
+  }
+) {
+  const supabase = createClient();
+
+  const { error } = await supabase.from("inventory").insert([
+    {
+      org_id: orgId,
+      product_id: payload.product_id,
+      qty_on_hand: payload.qty_on_hand,
+      reorder_level: payload.reorder_level,
+    },
+  ]);
+
+  if (error) throw new Error(error.message);
 }
 
 export async function updateInventory(
   orgId: string,
   productId: string,
-  patch: Partial<Pick<InventoryRow, "qty_on_hand" | "reorder_level">>
+  payload: {
+    qty_on_hand: number;
+    reorder_level: number;
+  }
 ) {
   const supabase = createClient();
-  const { data, error } = await supabase
+
+  const { error } = await supabase
     .from("inventory")
-    .update({ ...patch, updated_at: new Date().toISOString() })
+    .update({
+      qty_on_hand: payload.qty_on_hand,
+      reorder_level: payload.reorder_level,
+      updated_at: new Date().toISOString(),
+    })
     .eq("org_id", orgId)
-    .eq("product_id", productId)
-    .select("product_id, org_id, qty_on_hand, reorder_level, updated_at")
-    .maybeSingle(); // better than .single()
+    .eq("product_id", productId);
 
-  if (error) throw new Error(`Inventory update failed: ${error.message}`);
+  if (error) throw new Error(error.message);
+}
 
-  if (!data) {
-    throw new Error(
-      "No rows updated. Likely RLS blocked UPDATE (or row not found for this org_id/product_id)."
-    );
+export async function listInventoryMovements(
+  orgId: string,
+  productId?: string
+): Promise<InventoryMovementRow[]> {
+  const supabase = createClient();
+
+  let query = supabase
+    .from("inventory_movements")
+    .select(`
+      id,
+      org_id,
+      product_id,
+      ref_sale_id,
+      type,
+      qty_delta,
+      qty_before,
+      qty_after,
+      note,
+      created_at,
+      products:products (
+        id,
+        name,
+        sku,
+        quantity_value,
+        quantity_unit
+      )
+    `)
+    .eq("org_id", orgId)
+    .order("created_at", { ascending: false });
+
+  if (productId) {
+    query = query.eq("product_id", productId);
   }
 
-  return data;
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+
+  return (data ?? []).map((row: any) => {
+    const p = Array.isArray(row.products) ? row.products[0] : row.products;
+
+    return {
+      id: row.id,
+      org_id: row.org_id,
+      product_id: row.product_id,
+      ref_sale_id: row.ref_sale_id ?? null,
+      type: row.type,
+      qty_delta: Number(row.qty_delta ?? 0),
+      qty_before: Number(row.qty_before ?? 0),
+      qty_after: Number(row.qty_after ?? 0),
+      note: row.note ?? null,
+      created_at: row.created_at,
+      products: p
+        ? {
+            id: p.id,
+            name: p.name,
+            sku: p.sku ?? null,
+            quantity_value:
+              p.quantity_value !== null && p.quantity_value !== undefined
+                ? Number(p.quantity_value)
+                : null,
+            quantity_unit: p.quantity_unit ?? null,
+          }
+        : null,
+    };
+  });
 }

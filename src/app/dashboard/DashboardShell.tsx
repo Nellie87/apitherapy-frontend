@@ -230,18 +230,7 @@ export default function DashboardShell({
             {formattedDate}
           </div>
 
-          <div className="topbar-badge">
-            <span
-              style={{
-                width: 7,
-                height: 7,
-                borderRadius: "50%",
-                background: "#D4A017",
-                display: "inline-block",
-              }}
-            />
-            Live operations
-          </div>
+              
         </div>
 
         <div className="lg:p-8 p-4 pt-5 lg:pt-8 mt-[60px] lg:mt-0">
