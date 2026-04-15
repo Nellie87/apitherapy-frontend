@@ -7,7 +7,7 @@ export type SaleRow = {
   org_id: string;
   sale_no: string;
   customer_name: string | null;
-  payment_method: PaymentMethod | null;
+  payment_method: PaymentMethod | string | null;
   status: string;
   subtotal: number;
   discount_total: number;
@@ -82,7 +82,6 @@ export async function listSales(orgId: string) {
 
   return (data ?? []).map((r: any) => ({
     ...r,
-    payment_method: r.payment_method ?? null,
     subtotal: Number(r.subtotal ?? 0),
     discount_total: Number(r.discount_total ?? 0),
     total: Number(r.total ?? 0),
@@ -122,10 +121,8 @@ export async function getSale(orgId: string, saleId: string) {
   if (error) throw new Error(error.message);
 
   const r: any = data;
-
   return {
     ...r,
-    payment_method: r.payment_method ?? null,
     subtotal: Number(r.subtotal ?? 0),
     discount_total: Number(r.discount_total ?? 0),
     total: Number(r.total ?? 0),
@@ -195,13 +192,11 @@ export async function createSaleStrict(
   if (error) throw new Error(error.message);
 
   const r: any = data;
-
   return {
     sale_id: String(r.sale_id),
     sale_no: String(r.sale_no),
     subtotal: Number(r.subtotal ?? 0),
     discount_total: Number(r.discount_total ?? 0),
     total: Number(r.total ?? 0),
-    payment_method: (r.payment_method ?? args.payment_method) as PaymentMethod,
   };
 }

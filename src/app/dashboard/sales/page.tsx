@@ -2,18 +2,25 @@
 
 import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { bootstrapOrg } from "@/lib/org/bootstrapOrg";
-import { listSales, type SaleRow } from "@/lib/api/sales";
+import { listSales, type SaleRowWithItems } from "@/lib/api/sales";
 import * as S from "./page.styles";
 import Link from "next/link";
 
-/* ─── Helpers ────────────────────────────────────────────────── */
+/* Helpers */
 function fmtMoney(v: number) {
-  return `Ksh ${Number(v || 0).toLocaleString("en-KE", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+  return `Ksh ${Number(v || 0).toLocaleString("en-KE", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  })}`;
 }
 
 function fmtDate(d: string) {
   try {
-    return new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+    return new Date(d).toLocaleDateString("en-GB", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
   } catch {
     return d;
   }
@@ -21,7 +28,10 @@ function fmtDate(d: string) {
 
 function fmtTime(d: string) {
   try {
-    return new Date(d).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+    return new Date(d).toLocaleTimeString("en-GB", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
   } catch {
     return "";
   }
@@ -43,10 +53,22 @@ function isThisWeek(d: string) {
 function isThisMonth(d: string) {
   const date = new Date(d);
   const now = new Date();
-  return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
+  return (
+    date.getMonth() === now.getMonth() &&
+    date.getFullYear() === now.getFullYear()
+  );
 }
 
-/* ─── Stat Card ─────────────────────────────────────────────── */
+function paymentPill(method?: string | null) {
+  const key = (method ?? "").toLowerCase();
+  if (key === "cash") return "bg-green-100 text-green-700";
+  if (key === "mpesa") return "bg-blue-100 text-blue-700";
+  if (key === "card") return "bg-purple-100 text-purple-700";
+  if (key === "credit") return "bg-amber-100 text-amber-700";
+  return "bg-slate-100 text-slate-600";
+}
+
+/* Stat card */
 function StatCard({
   label,
   value,
@@ -61,59 +83,71 @@ function StatCard({
   variant?: "neutral" | "success" | "warning";
 }) {
   const cfg = {
-    neutral: { bg: "#fff", border: "#e2e8f0", iconBg: "#f8fafc", iconColor: "#475569", valueColor: "#0f172a", subColor: "#64748b" },
-    success: { bg: "#f0fdf4", border: "#bbf7d0", iconBg: "#dcfce7", iconColor: "#166534", valueColor: "#166534", subColor: "#16a34a" },
-    warning: { bg: "#fffbeb", border: "#fde68a", iconBg: "#fef3c7", iconColor: "#92400e", valueColor: "#92400e", subColor: "#d97706" },
+    neutral: {
+      border: "#E2E8F0",
+      bg: "#FFFFFF",
+      iconBg: "#F8FAFC",
+      iconColor: "#475569",
+      valueColor: "#0F172A",
+      subColor: "#64748B",
+    },
+    success: {
+      border: "#BBF7D0",
+      bg: "#FFFFFF",
+      iconBg: "#F0FDF4",
+      iconColor: "#166534",
+      valueColor: "#166534",
+      subColor: "#16A34A",
+    },
+    warning: {
+      border: "#FDE68A",
+      bg: "#FFFFFF",
+      iconBg: "#FFFBEB",
+      iconColor: "#B45309",
+      valueColor: "#92400E",
+      subColor: "#B45309",
+    },
   }[variant];
 
   return (
     <div
-      className="rounded-2xl p-5 transition-all duration-150 hover:shadow-md"
-      style={{ background: cfg.bg, border: `1.5px solid ${cfg.border}` }}
+      className="rounded-[22px] p-4 bg-white transition hover:-translate-y-0.5"
+      style={{
+        border: `1.5px solid ${cfg.border}`,
+        boxShadow: "0 8px 24px rgba(15,23,42,0.05)",
+      }}
     >
-      <div className="flex items-start justify-between gap-3 mb-3">
+      <div className="flex items-center gap-4">
         <div
-          className="grid h-11 w-11 place-items-center rounded-xl text-xl"
+          className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl text-lg"
           style={{ background: cfg.iconBg, color: cfg.iconColor }}
         >
           {icon}
         </div>
-        <span className="text-xs font-semibold uppercase tracking-wider mt-1" style={{ color: cfg.subColor }}>
-          {label}
-        </span>
-      </div>
-      <div className="text-2xl font-bold leading-none" style={{ color: cfg.valueColor }}>
-        {value}
-      </div>
-      <div className="mt-1.5 text-xs font-medium" style={{ color: cfg.subColor }}>
-        {sub}
+
+        <div className="min-w-0">
+          <div
+            className="text-[11px] font-semibold uppercase tracking-[0.18em]"
+            style={{ color: cfg.subColor }}
+          >
+            {label}
+          </div>
+          <div
+            className="mt-1 text-[26px] font-bold leading-none"
+            style={{ color: cfg.valueColor }}
+          >
+            {value}
+          </div>
+          <div className="mt-1 text-xs" style={{ color: cfg.subColor }}>
+            {sub}
+          </div>
+        </div>
       </div>
     </div>
   );
 }
 
-/* ─── Payment Method Badge ───────────────────────────────────── */
-function PayBadge({ method }: { method?: string | null }) {
-  if (!method) return <span className="text-xs text-slate-400">—</span>;
-
-  const cfg: Record<string, { bg: string; text: string; label: string }> = {
-    cash: { bg: "bg-green-100", text: "text-green-700", label: "Cash" },
-    mpesa: { bg: "bg-blue-100", text: "text-blue-700", label: "M-Pesa" },
-    card: { bg: "bg-purple-100", text: "text-purple-700", label: "Card" },
-    credit: { bg: "bg-amber-100", text: "text-amber-700", label: "Credit" },
-  };
-
-  const key = method.toLowerCase();
-  const c = cfg[key] ?? { bg: "bg-slate-100", text: "text-slate-600", label: method };
-
-  return (
-    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${c.bg} ${c.text}`}>
-      {c.label}
-    </span>
-  );
-}
-
-/* ─── Product Preview Helper ─────────────────────────────────── */
+/* Product preview */
 interface ProductPreview {
   list: { name: string; qty: number }[];
   totalQty: number;
@@ -121,7 +155,6 @@ interface ProductPreview {
 
 function saleProductsPreview(sale: any): ProductPreview {
   const items = (sale.sale_items ?? []) as any[];
-
   const map = new Map<string, { name: string; qty: number }>();
 
   for (const it of items) {
@@ -142,15 +175,14 @@ function saleProductsPreview(sale: any): ProductPreview {
   return { list, totalQty };
 }
 
-/* ─── Page ───────────────────────────────────────────────────── */
 type DateFilter = "all" | "today" | "week" | "month" | "custom";
 
 export default function SalesPage() {
   const [orgId, setOrgId] = useState<string | null>(null);
-  const [rows, setRows] = useState<SaleRow[]>([]);
+  const [rows, setRows] = useState<SaleRowWithItems[]>([]);
   const [q, setQ] = useState("");
   const [dateFilter, setDateFilter] = useState<DateFilter>("all");
-  const [customDate, setCustomDate] = useState<string>(""); // YYYY-MM-DD
+  const [customDate, setCustomDate] = useState<string>("");
   const [err, setErr] = useState("");
 
   async function refresh(o: string) {
@@ -159,7 +191,6 @@ export default function SalesPage() {
       setRows(data || []);
     } catch (e: any) {
       console.error(e);
-      // Keep previous rows on error
     }
   }
 
@@ -189,7 +220,6 @@ export default function SalesPage() {
   const filtered = useMemo(() => {
     let result = rows;
 
-    // Date filtering
     if (dateFilter === "today") {
       result = result.filter((s) => isToday(s.created_at));
     } else if (dateFilter === "week") {
@@ -208,7 +238,6 @@ export default function SalesPage() {
       });
     }
 
-    // Text / product search
     const t = q.trim().toLowerCase();
     if (t) {
       result = result.filter((s) => {
@@ -234,7 +263,10 @@ export default function SalesPage() {
     () => ({
       totalSales: rows.length,
       totalRevenue: rows.reduce((sum, r) => sum + Number(r.total ?? 0), 0),
-      totalDiscounts: rows.reduce((sum, r) => sum + Number(r.discount_total ?? 0), 0),
+      totalDiscounts: rows.reduce(
+        (sum, r) => sum + Number(r.discount_total ?? 0),
+        0
+      ),
       todaySales: rows.filter((r) => isToday(r.created_at)).length,
       todayRevenue: rows
         .filter((r) => isToday(r.created_at))
@@ -252,13 +284,19 @@ export default function SalesPage() {
     { key: "month", label: "This month" },
   ];
 
-  const GRID = "1.2fr 1.6fr 1.1fr 0.9fr 0.7fr 0.9fr";
+  const GRID = "1.2fr 1.7fr 1.1fr 0.9fr 0.7fr 0.9fr";
 
   if (!orgId && !err) {
     return (
       <div className="flex h-64 items-center justify-center">
         <div className="flex items-center gap-3 text-slate-500">
-          <svg className="h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <svg
+            className="h-5 w-5 animate-spin"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+          >
             <circle cx="12" cy="12" r="10" strokeOpacity="0.2" />
             <path d="M12 2a10 10 0 0110 10" />
           </svg>
@@ -270,31 +308,45 @@ export default function SalesPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Error */}
       {err && (
         <div className={S.alert}>
           <span className="shrink-0 mt-0.5">⚠️</span>
           <span>{err}</span>
-          <button onClick={() => setErr("")} className="ml-auto shrink-0 text-red-400 hover:text-red-600">
+          <button
+            onClick={() => setErr("")}
+            className="ml-auto shrink-0 text-red-400 hover:text-red-600"
+          >
             ✕
           </button>
         </div>
       )}
 
-      {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Sales</h1>
-          <p className="mt-1 text-sm text-slate-500">Track completed transactions and revenue</p>
+          <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-600">
+            Sales
+          </div>
+          <h1 className="mt-3 text-[32px] font-bold text-slate-900 tracking-tight">
+            Sales History
+          </h1>
+          <p className="mt-1 text-sm text-slate-500">
+            Track completed transactions, payments and totals
+          </p>
         </div>
+
         <Link href="/dashboard/sales/new" className={S.btnPrimary}>
           + New Sale
         </Link>
       </div>
 
-      {/* KPI Cards */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <StatCard label="Total Sales" value={String(kpis.totalSales)} sub="all transactions" icon="📋" variant="neutral" />
+        <StatCard
+          label="Total Sales"
+          value={String(kpis.totalSales)}
+          sub="all transactions"
+          icon="📋"
+          variant="neutral"
+        />
         <StatCard
           label="Total Revenue"
           value={fmtMoney(kpis.totalRevenue)}
@@ -302,7 +354,13 @@ export default function SalesPage() {
           icon="📈"
           variant="success"
         />
-        <StatCard label="Average Sale" value={fmtMoney(avgSale)} sub="per transaction" icon="💰" variant="neutral" />
+        <StatCard
+          label="Average Sale"
+          value={fmtMoney(avgSale)}
+          sub="per transaction"
+          icon="💰"
+          variant="neutral"
+        />
         <StatCard
           label="Discounts Given"
           value={fmtMoney(kpis.totalDiscounts)}
@@ -312,15 +370,18 @@ export default function SalesPage() {
         />
       </div>
 
-      {/* Today highlight */}
       {kpis.todaySales > 0 && (
         <div className="flex items-center gap-4 rounded-2xl border border-green-200 bg-green-50 px-5 py-4">
-          <div className="grid h-10 w-10 place-items-center rounded-xl bg-green-100 text-xl shrink-0">🌟</div>
+          <div className="grid h-10 w-10 place-items-center rounded-xl bg-green-100 text-xl shrink-0">
+            🌟
+          </div>
           <div>
             <div className="font-bold text-green-800">Today so far</div>
             <div className="text-sm text-green-700">
-              <span className="font-semibold">{kpis.todaySales}</span> sale{kpis.todaySales !== 1 ? "s" : ""} ·{" "}
-              <span className="font-semibold">{fmtMoney(kpis.todayRevenue)}</span> revenue
+              <span className="font-semibold">{kpis.todaySales}</span> sale
+              {kpis.todaySales !== 1 ? "s" : ""} ·{" "}
+              <span className="font-semibold">{fmtMoney(kpis.todayRevenue)}</span>{" "}
+              revenue
             </div>
           </div>
           <button
@@ -332,11 +393,16 @@ export default function SalesPage() {
         </div>
       )}
 
-      {/* Search + Filters */}
       <div className="flex flex-wrap items-center gap-3">
-        {/* Search */}
-        <label className="flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 shadow-sm focus-within:border-amber-500 focus-within:ring-2 focus-within:ring-amber-100 transition flex-1 min-w-[220px]">
-          <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#94a3b8" strokeWidth="2.2">
+        <label className="flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 shadow-sm focus-within:border-slate-400 focus-within:ring-2 focus-within:ring-slate-100 transition flex-1 min-w-[220px]">
+          <svg
+            width="15"
+            height="15"
+            viewBox="0 0 20 20"
+            fill="none"
+            stroke="#94a3b8"
+            strokeWidth="2.2"
+          >
             <circle cx="9" cy="9" r="5.5" />
             <line x1="13.5" y1="13.5" x2="18" y2="18" />
           </svg>
@@ -347,13 +413,15 @@ export default function SalesPage() {
             onChange={(e) => setQ(e.target.value)}
           />
           {q && (
-            <button onClick={() => setQ("")} className="text-slate-400 hover:text-slate-600 shrink-0 text-xs">
+            <button
+              onClick={() => setQ("")}
+              className="text-slate-400 hover:text-slate-600 shrink-0 text-xs"
+            >
               ✕
             </button>
           )}
         </label>
 
-        {/* Date controls */}
         <div className="flex items-center gap-2 flex-wrap">
           <div className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 p-1">
             {DATE_FILTERS.map(({ key, label }) => (
@@ -375,7 +443,7 @@ export default function SalesPage() {
             type="date"
             value={customDate}
             onChange={handleDatePick}
-            className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 cursor-pointer hover:border-slate-400 focus:border-amber-500 focus:ring-2 focus:ring-amber-100 outline-none"
+            className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 cursor-pointer hover:border-slate-400 focus:border-slate-400 focus:ring-2 focus:ring-slate-100 outline-none"
           />
         </div>
 
@@ -384,21 +452,27 @@ export default function SalesPage() {
         </span>
       </div>
 
-      {/* Table / Cards */}
-      <div className={`${S.card} overflow-hidden`}>
-        {/* Desktop header */}
+      <div className="rounded-[24px] border border-slate-200 bg-white shadow-[0_12px_36px_rgba(15,23,42,0.05)] overflow-hidden">
         <div
           className="hidden lg:grid items-center gap-4 px-5 py-3"
-          style={{ gridTemplateColumns: GRID, background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}
+          style={{
+            gridTemplateColumns: GRID,
+            background: "#f8fafc",
+            borderBottom: "1px solid #e2e8f0",
+          }}
         >
-          {["Sale No", "Customer & Items", "Date", "Payment", "Items", "Total"].map((h) => (
-            <div key={h} className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-              {h}
-            </div>
-          ))}
+          {["Sale No", "Customer & Items", "Date", "Payment", "Items", "Total"].map(
+            (h) => (
+              <div
+                key={h}
+                className="text-xs font-semibold uppercase tracking-wider text-slate-500"
+              >
+                {h}
+              </div>
+            )
+          )}
         </div>
 
-        {/* Rows */}
         <div className="divide-y divide-slate-100">
           {filtered.length === 0 ? (
             <div className="py-20 text-center">
@@ -419,7 +493,7 @@ export default function SalesPage() {
                       handleFilterChange("all");
                       setCustomDate("");
                     }}
-                    className="text-amber-600 hover:text-amber-700 font-medium"
+                    className="text-slate-700 hover:text-slate-900 font-medium"
                   >
                     View all sales
                   </button>
@@ -431,28 +505,30 @@ export default function SalesPage() {
           ) : (
             filtered.map((s) => {
               const pv = saleProductsPreview(s);
-              const itemCount = (s as any).sale_items?.length ?? (s as any).item_count ?? null;
+              const itemCount = (s as any).sale_items?.length ?? null;
 
               return (
                 <Link
                   key={s.id}
                   href={`/dashboard/sales/${s.id}`}
-                  className="group block transition-colors hover:bg-slate-50 focus:outline-none focus:bg-amber-50"
+                  className="group block transition-colors hover:bg-slate-50 focus:outline-none focus:bg-slate-50"
                 >
-                  {/* Desktop row */}
-                  <div className="hidden lg:grid items-center gap-4 px-5 py-3.5" style={{ gridTemplateColumns: GRID }}>
-                    {/* Sale No */}
+                  <div
+                    className="hidden lg:grid items-center gap-4 px-5 py-3.5"
+                    style={{ gridTemplateColumns: GRID }}
+                  >
                     <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="h-1.5 w-1.5 rounded-full bg-amber-400 shrink-0" />
-                      <span className="font-semibold text-slate-900 text-sm truncate group-hover:text-amber-700 transition-colors">
+                      <div className="h-1.5 w-1.5 rounded-full bg-slate-400 shrink-0" />
+                      <span className="font-semibold text-slate-900 text-sm truncate group-hover:text-slate-700 transition-colors">
                         {s.sale_no}
                       </span>
                     </div>
 
-                    {/* Customer + Products */}
                     <div className="min-w-0">
                       <div className="text-sm text-slate-600 truncate">
-                        {s.customer_name || <span className="text-slate-400 italic">Walk-in</span>}
+                        {s.customer_name || (
+                          <span className="text-slate-400 italic">Walk-in</span>
+                        )}
                       </div>
                       {pv.list.length > 0 && (
                         <div className="mt-1 flex flex-wrap gap-1">
@@ -465,7 +541,7 @@ export default function SalesPage() {
                             </span>
                           ))}
                           {pv.list.length > 3 && (
-                            <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
+                            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-700">
                               +{pv.list.length - 3} more
                             </span>
                           )}
@@ -473,17 +549,25 @@ export default function SalesPage() {
                       )}
                     </div>
 
-                    {/* Date */}
                     <div>
-                      <div className="text-sm text-slate-700 font-medium">{fmtDate(s.created_at)}</div>
-                      <div className="text-xs text-slate-400">{fmtTime(s.created_at)}</div>
+                      <div className="text-sm text-slate-700 font-medium">
+                        {fmtDate(s.created_at)}
+                      </div>
+                      <div className="text-xs text-slate-400">
+                        {fmtTime(s.created_at)}
+                      </div>
                     </div>
 
-                    {/* Payment */}
                     <div>
-<PayBadge method={s.payment_method} />                    </div>
+                      <span
+                        className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${paymentPill(
+                          s.payment_method
+                        )}`}
+                      >
+                        {s.payment_method || "—"}
+                      </span>
+                    </div>
 
-                    {/* Items count */}
                     <div className="text-sm text-slate-600">
                       {itemCount !== null ? (
                         <span className="font-medium">{itemCount}</span>
@@ -492,9 +576,10 @@ export default function SalesPage() {
                       )}
                     </div>
 
-                    {/* Total */}
                     <div className="text-right">
-                      <div className="font-bold text-slate-900 text-sm">{fmtMoney(Number(s.total ?? 0))}</div>
+                      <div className="font-bold text-slate-900 text-sm">
+                        {fmtMoney(Number(s.total ?? 0))}
+                      </div>
                       {Number(s.discount_total ?? 0) > 0 && (
                         <div className="text-xs text-amber-600 font-medium">
                           -{fmtMoney(Number(s.discount_total))} off
@@ -503,13 +588,15 @@ export default function SalesPage() {
                     </div>
                   </div>
 
-                  {/* Mobile card */}
                   <div className="lg:hidden px-5 py-4 border-b border-slate-100 last:border-b-0">
                     <div className="flex items-start justify-between gap-3 mb-2">
                       <div className="min-w-0 pr-2">
-                        <div className="font-semibold text-slate-900 text-sm">{s.sale_no}</div>
+                        <div className="font-semibold text-slate-900 text-sm">
+                          {s.sale_no}
+                        </div>
                         <div className="text-xs text-slate-500 mt-0.5">
-                          {s.customer_name || <span className="italic">Walk-in</span>} · {fmtDate(s.created_at)}
+                          {s.customer_name || <span className="italic">Walk-in</span>} ·{" "}
+                          {fmtDate(s.created_at)}
                         </div>
 
                         {pv.list.length > 0 && (
@@ -523,7 +610,7 @@ export default function SalesPage() {
                               </span>
                             ))}
                             {pv.list.length > 2 && (
-                              <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700">
+                              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-700">
                                 +{pv.list.length - 2}
                               </span>
                             )}
@@ -532,16 +619,29 @@ export default function SalesPage() {
                       </div>
 
                       <div className="text-right shrink-0">
-                        <div className="font-bold text-slate-900">{fmtMoney(Number(s.total ?? 0))}</div>
+                        <div className="font-bold text-slate-900">
+                          {fmtMoney(Number(s.total ?? 0))}
+                        </div>
                         {Number(s.discount_total ?? 0) > 0 && (
-                          <div className="text-xs text-amber-600">-{fmtMoney(Number(s.discount_total))}</div>
+                          <div className="text-xs text-amber-600">
+                            -{fmtMoney(Number(s.discount_total))}
+                          </div>
                         )}
                       </div>
                     </div>
 
                     <div className="flex items-center gap-2 mt-2">
-<PayBadge method={s.payment_method} />                      <span className="text-xs text-slate-500">
-                        {itemCount !== null ? `${itemCount} item${itemCount !== 1 ? "s" : ""}` : "—"}
+                      <span
+                        className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${paymentPill(
+                          s.payment_method
+                        )}`}
+                      >
+                        {s.payment_method || "—"}
+                      </span>
+                      <span className="text-xs text-slate-500">
+                        {itemCount !== null
+                          ? `${itemCount} item${itemCount !== 1 ? "s" : ""}`
+                          : "—"}
                       </span>
                     </div>
                   </div>
@@ -551,15 +651,17 @@ export default function SalesPage() {
           )}
         </div>
 
-        {/* Footer summary */}
         {filtered.length > 0 && (
           <div className="flex items-center justify-between border-t border-slate-100 px-5 py-3">
             <span className="text-xs text-slate-400">
-              Showing {filtered.length} of {rows.length} sale{rows.length !== 1 ? "s" : ""}
+              Showing {filtered.length} of {rows.length} sale
+              {rows.length !== 1 ? "s" : ""}
             </span>
             <span className="text-xs font-semibold text-slate-600">
               Subtotal:{" "}
-              <span className="text-slate-900">{fmtMoney(filtered.reduce((s, r) => s + Number(r.total ?? 0), 0))}</span>
+              <span className="text-slate-900">
+                {fmtMoney(filtered.reduce((s, r) => s + Number(r.total ?? 0), 0))}
+              </span>
             </span>
           </div>
         )}
