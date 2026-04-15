@@ -949,25 +949,7 @@ export default function InventoryPage() {
     [paginatedHistory]
   );
 
-  async function openProductHistory(row: InventoryRow) {
-    if (!orgId) return;
 
-    setHistoryRow(row);
-    setHistoryOpen(true);
-    setLoadingHistory(true);
-
-    try {
-      const data = await listInventoryMovements(orgId, row.product_id);
-      setProductMovements(data);
-    } catch (e: any) {
-      setToast({
-        message: e.message ?? "Failed to load product history",
-        type: "error",
-      });
-    } finally {
-      setLoadingHistory(false);
-    }
-  }
 
   function handleAdjustModalClose() {
     if (adjustDirty) return;
@@ -1249,24 +1231,14 @@ export default function InventoryPage() {
       <div className="flex flex-col gap-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-600">
-              Inventory
-            </div>
+
             <h1 className="mt-3 text-[32px] font-bold text-slate-900 tracking-tight">
               Stock Overview
             </h1>
-            <p className="mt-1 text-sm text-slate-500">
-              Track sellable packs, reorder levels, values and history
-            </p>
+          
           </div>
 
-          <button
-            className={`${S.btnPrimary} shadow-sm`}
-            onClick={() => setAddOpen(true)}
-          >
-            <IconPlus />
-            Add stock item
-          </button>
+          
         </div>
 
         <div className="flex items-center justify-between flex-wrap gap-3">
@@ -1274,7 +1246,11 @@ export default function InventoryPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      
+
+      {tab === "overview" && (
+        <>
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard
           title="Total products"
           value={String(kpis.totalItems)}
@@ -1311,7 +1287,6 @@ export default function InventoryPage() {
         />
       </div>
 
-      {tab === "overview" && (
         <div className="rounded-[24px] border border-slate-200 bg-white shadow-[0_12px_36px_rgba(15,23,42,0.05)] overflow-hidden">
           <div className="border-b border-slate-100 bg-slate-50/70 px-5 py-4 lg:px-6">
             <div className="flex flex-wrap items-center gap-2">
@@ -1395,7 +1370,7 @@ export default function InventoryPage() {
                       >
                         <button
                           type="button"
-                          onClick={() => openProductHistory(r)}
+                          // onClick={() => openProductHistory(r)}
                           className="min-w-0 space-y-1 text-left"
                         >
                           <div className="font-semibold text-slate-900 truncate text-[15px] hover:text-blue-700 transition">
@@ -1609,6 +1584,7 @@ export default function InventoryPage() {
             itemLabel="stock item"
           />
         </div>
+        </>
       )}
 
       {tab === "history" && (
@@ -1619,9 +1595,7 @@ export default function InventoryPage() {
                 <div className="text-sm font-semibold text-slate-900">
                   Recent stock timeline
                 </div>
-                <div className="text-xs text-slate-500 mt-0.5">
-                  Latest movements across all products
-                </div>
+                
               </div>
 
               <span className="text-xs text-slate-500">
@@ -1971,93 +1945,6 @@ export default function InventoryPage() {
         )}
       </Modal>
 
-      <Modal
-        open={historyOpen}
-        title={
-          historyRow
-            ? `History — ${formatProductDisplayName({
-                name: historyRow.products?.name,
-                quantity_value: historyRow.products?.quantity_value,
-                quantity_unit: historyRow.products?.quantity_unit,
-              })}`
-            : "History"
-        }
-        sub="Recent movements for this product"
-        size="lg"
-        onClose={() => setHistoryOpen(false)}
-      >
-        {loadingHistory ? (
-          <div className="flex h-40 items-center justify-center text-slate-400 text-sm">
-            Loading history…
-          </div>
-        ) : productMovements.length === 0 ? (
-          <div className="py-12 text-center">
-            <div className="text-4xl mb-3">🕘</div>
-            <div className="font-semibold text-slate-700">No movement history yet</div>
-            <div className="text-sm text-slate-400 mt-1">
-              Adjustments, restocks and sales will appear here.
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {productMovements.map((m) => (
-              <div
-                key={m.id}
-                className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"
-              >
-                <div className="flex items-start justify-between gap-4">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span
-                        className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ${movementColor(
-                          m.type
-                        )}`}
-                      >
-                        <IconClock />
-                        {movementLabel(m.type)}
-                      </span>
-
-                      <span className="text-xs text-slate-400">
-                        {fmtDateTime(m.created_at)}
-                      </span>
-                    </div>
-
-                    <div className="mt-2 text-sm text-slate-700">
-                      Before{" "}
-                      <span className="font-semibold text-slate-900">
-                        {m.qty_before}
-                      </span>
-                      {" · "}
-                      After{" "}
-                      <span className="font-semibold text-slate-900">
-                        {m.qty_after}
-                      </span>
-                      {" · "}
-                      Change{" "}
-                      <span className="font-semibold text-slate-900">
-                        {m.qty_delta > 0 ? "+" : ""}
-                        {m.qty_delta}
-                      </span>
-                    </div>
-
-                    {m.note && (
-                      <div className="mt-2 text-sm text-slate-500">
-                        Note: {m.note}
-                      </div>
-                    )}
-
-                    {m.ref_sale_id && (
-                      <div className="mt-1 text-xs text-slate-400">
-                        Related sale: {m.ref_sale_id}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </Modal>
     </div>
   );
 }
