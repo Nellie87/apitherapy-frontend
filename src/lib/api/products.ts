@@ -1,10 +1,65 @@
 import { createClient } from "@/lib/supabase/client";
 
-/* ─────────────────────────────────────────────
-   List products WITH lookup joins
-   activeOnly = true by default
-───────────────────────────────────────────── */
-export async function listProducts(orgId: string, activeOnly = true) {
+export type QuantityUnit = "g" | "kg" | "ml" | "L" | "pc";
+export type UnitKind = "mass" | "volume" | "count";
+
+export type ProductRow = {
+  id: string;
+  org_id: string;
+  name: string;
+  sku?: string | null;
+  category_id?: string | null;
+  barcode?: string | null;
+  notes?: string | null;
+  cost_price?: number;
+  unit_price?: number;
+  quantity_value?: number | null;
+  quantity_unit?: QuantityUnit | null;
+  unit_measure_id?: string | null;
+  unit_size_id?: string | null;
+  is_sellable?: boolean;
+  active?: boolean;
+  created_at?: string;
+  supplier_id?: string | null;
+  category?: { id: string; name: string } | null;
+  supplier?: {
+    id: string;
+    name: string;
+    contact_person?: string | null;
+    phone?: string | null;
+    email?: string | null;
+    notes?: string | null;
+    active?: boolean | null;
+  } | null;
+  unit_measure?: { id: string; name: string } | null;
+  unit_size?: { id: string; label: string; kind: UnitKind } | null;
+};
+
+export type CreateProductPayload = {
+  name: string;
+  sku?: string;
+  category_id?: string | null;
+  barcode?: string;
+  supplier_id?: string | null;
+  notes?: string;
+  unit_price: number;
+  cost_price?: number;
+  unit_measure_id?: string | null;
+  unit_size_id?: string | null;
+  quantity_value?: number | null;
+  quantity_unit?: QuantityUnit | null;
+  is_sellable?: boolean;
+};
+
+function normalizeSingle<T>(value: T | T[] | null | undefined): T | null {
+  if (Array.isArray(value)) return value[0] ?? null;
+  return value ?? null;
+}
+
+export async function listProducts(
+  orgId: string,
+  activeOnly = true
+): Promise<ProductRow[]> {
   const supabase = createClient();
 
   let query = supabase
@@ -19,6 +74,10 @@ export async function listProducts(orgId: string, activeOnly = true) {
       notes,
       cost_price,
       unit_price,
+      quantity_value,
+      quantity_unit,
+      unit_measure_id,
+      unit_size_id,
       is_sellable,
       active,
       created_at,
@@ -44,35 +103,29 @@ export async function listProducts(orgId: string, activeOnly = true) {
     is_sellable: row.is_sellable !== false,
     cost_price: Number(row.cost_price ?? 0),
     unit_price: Number(row.unit_price ?? 0),
-    category: Array.isArray(row.category) ? (row.category[0] ?? null) : row.category,
-    supplier: Array.isArray(row.supplier) ? (row.supplier[0] ?? null) : row.supplier,
-    unit_measure: Array.isArray(row.unit_measure)
-      ? (row.unit_measure[0] ?? null)
-      : row.unit_measure,
-    unit_size: Array.isArray(row.unit_size)
-      ? (row.unit_size[0] ?? null)
-      : row.unit_size,
+    quantity_value:
+      row.quantity_value !== null && row.quantity_value !== undefined
+        ? Number(row.quantity_value)
+        : null,
+    quantity_unit: row.quantity_unit ?? null,
+    category: normalizeSingle(row.category),
+    supplier: normalizeSingle(row.supplier),
+    unit_measure: normalizeSingle(row.unit_measure),
+    unit_size: (() => {
+      const size = normalizeSingle(row.unit_size);
+      if (!size) return null;
+      return {
+        id: size.id,
+        label: size.label,
+        kind: size.kind as UnitKind,
+      };
+    })(),
   }));
 }
 
-/* ─────────────────────────────────────────────
-   Create product + inventory row
-───────────────────────────────────────────── */
 export async function createProduct(
   orgId: string,
-  payload: {
-    name: string;
-    sku?: string;
-    category_id?: string | null;
-    barcode?: string;
-    supplier_id?: string | null;
-    notes?: string;
-    unit_price: number;
-    cost_price?: number;
-    unit_measure_id?: string | null;
-    unit_size_id?: string | null;
-    is_sellable?: boolean;
-  }
+  payload: CreateProductPayload
 ) {
   const supabase = createClient();
 
@@ -104,11 +157,9 @@ export async function createProduct(
   return data;
 }
 
-/* ─────────────────────────────────────────────
-   Archive product (soft delete)
-───────────────────────────────────────────── */
 export async function archiveProduct(orgId: string, id: string) {
   const supabase = createClient();
+
   const { error } = await supabase
     .from("products")
     .update({ active: false })
@@ -118,11 +169,9 @@ export async function archiveProduct(orgId: string, id: string) {
   if (error) throw new Error(error.message);
 }
 
-/* ─────────────────────────────────────────────
-   Restore product
-───────────────────────────────────────────── */
 export async function restoreProduct(orgId: string, id: string) {
   const supabase = createClient();
+
   const { error } = await supabase
     .from("products")
     .update({ active: true })
@@ -132,9 +181,6 @@ export async function restoreProduct(orgId: string, id: string) {
   if (error) throw new Error(error.message);
 }
 
-/* ─────────────────────────────────────────────
-   Hard delete ONLY if never used in sales
-───────────────────────────────────────────── */
 export async function deleteProductForever(orgId: string, id: string) {
   const supabase = createClient();
 

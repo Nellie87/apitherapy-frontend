@@ -7,18 +7,16 @@ import {
   createProduct,
   archiveProduct,
   restoreProduct,
+  type ProductRow,
+  type QuantityUnit,
 } from "@/lib/api/products";
 import {
   listUnitMeasures,
-  listUnitSizes,
   listCategories,
   createCategory,
-  createUnitSize,
   listSuppliers,
-  createSupplier,
 } from "@/lib/api/lookups";
 import { createClient } from "@/lib/supabase/client";
-
 import * as S from "./page.styles";
 
 /* ─────────────────────────────────────────────
@@ -30,15 +28,6 @@ type MeasureLookup = {
   id: string;
   name: string;
   allowed_kinds: UnitKind[];
-};
-
-type SizeLookup = {
-  id: string;
-  label: string;
-  kind: UnitKind;
-  grams?: number | null;
-  ml?: number | null;
-  count?: number | null;
 };
 
 type CategoryLookup = {
@@ -53,36 +42,10 @@ type SupplierLookup = {
   phone?: string | null;
   email?: string | null;
   notes?: string | null;
-  active?: boolean;
+  active?: boolean | null;
 };
 
-type Product = {
-  id: string;
-  name?: string;
-  sku?: string | null;
-  category_id?: string | null;
-  category?: { id?: string; name?: string } | null;
-  barcode?: string | null;
-  supplier_id?: string | null;
-  supplier?: {
-    id?: string;
-    name?: string;
-    contact_person?: string | null;
-    phone?: string | null;
-    email?: string | null;
-    notes?: string | null;
-    active?: boolean;
-  } | null;
-  notes?: string | null;
-  cost_price?: number | string | null;
-  unit_price?: number | string | null;
-  unit_measure_id?: string | null;
-  unit_size_id?: string | null;
-  unit_measure?: { id?: string; name?: string } | null;
-  unit_size?: { id?: string; label?: string; kind?: UnitKind } | null;
-  is_sellable?: boolean;
-  active?: boolean;
-};
+type Product = ProductRow;
 
 type FormData = {
   name: string;
@@ -93,8 +56,10 @@ type FormData = {
   notes: string;
   costPrice: string;
   sellPrice: string;
+  quantityValue: string;
+  quantityUnit: QuantityUnit | "";
+  quantityMode: "preset" | "custom";
   unitMeasureId: string;
-  unitSizeId: string;
   isSellable: boolean;
 };
 
@@ -112,12 +77,28 @@ const BLANK_FORM: FormData = {
   notes: "",
   costPrice: "0",
   sellPrice: "0",
+  quantityValue: "",
+  quantityUnit: "",
+  quantityMode: "preset",
   unitMeasureId: "",
-  unitSizeId: "",
   isSellable: true,
 };
 
-const PAGE_SIZE = 15;
+const PAGE_SIZE = 5;
+
+const UNIT_OPTIONS_BY_KIND: Record<UnitKind, QuantityUnit[]> = {
+  mass: ["g", "kg"],
+  volume: ["ml", "L"],
+  count: ["pc"],
+};
+
+const QUANTITY_PRESETS: Record<QuantityUnit, string[]> = {
+  g: ["50", "100", "125", "200", "250", "500", "1000", "2000"],
+  kg: ["0.5", "1", "2", "5", "10"],
+  ml: ["30", "50", "100", "125", "200", "250", "500", "750", "1000"],
+  L: ["1", "2", "5", "10", "20"],
+  pc: ["1", "2", "4", "6", "8", "12", "24", "45"],
+};
 
 /* ─────────────────────────────────────────────
    Helpers
@@ -144,34 +125,94 @@ function getCategoryName(p: Product) {
   return p.category?.name ?? "";
 }
 
-function getPackagingLabel(p: Product) {
-  const measure = p.unit_measure?.name?.trim();
-  const size = p.unit_size?.label?.trim();
-  if (measure && size) return `${measure} • ${size}`;
-  if (measure) return measure;
-  if (size) return size;
-  return "";
-}
-
-function inferSizeKindFromMeasure(
+function getAllowedQuantityUnits(
   measureId: string,
   measures: MeasureLookup[]
-): UnitKind | null {
+): QuantityUnit[] {
   const measure = measures.find((m) => m.id === measureId);
-  if (!measure || !measure.allowed_kinds?.length) return null;
-  return measure.allowed_kinds[0] ?? null;
+  if (!measure?.allowed_kinds?.length) return [];
+
+  const units = new Set<QuantityUnit>();
+  for (const kind of measure.allowed_kinds) {
+    UNIT_OPTIONS_BY_KIND[kind].forEach((u) => units.add(u));
+  }
+  return Array.from(units);
+}
+
+function formatQuantity(
+  value?: number | string | null,
+  unit?: QuantityUnit | string | null
+) {
+  if (value === null || value === undefined || value === "") return "";
+  if (!unit) return "";
+
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "";
+
+  const formatted = Number.isInteger(n)
+    ? String(n)
+    : n.toLocaleString("en-KE", {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 3,
+      });
+
+  return `${formatted} ${unit}`;
+}
+
+function formatProductDisplayName(product: {
+  name?: string | null;
+  quantity_value?: number | string | null;
+  quantity_unit?: QuantityUnit | string | null;
+}) {
+  const base = (product.name ?? "").trim();
+  const qty = formatQuantity(product.quantity_value, product.quantity_unit);
+
+  if (!base) return qty || "Unnamed product";
+  if (!qty) return base;
+  return `${base} ${qty}`;
+}
+
+function sanitizeQuantityInput(value: string) {
+  const cleaned = value.replace(/[^\d.]/g, "");
+  const parts = cleaned.split(".");
+  if (parts.length <= 1) return cleaned;
+  return `${parts[0]}.${parts.slice(1).join("")}`;
 }
 
 function validateForm(form: FormData): FormErrors {
   const errors: FormErrors = {};
+
   if (!form.name.trim()) errors.name = "Product name is required";
   if (!form.categoryId) errors.categoryId = "Category is required";
-  if (!form.unitMeasureId) errors.unitMeasureId = "Packaging type is required";
-  if (!form.unitSizeId) errors.unitSizeId = "Pack size is required";
+  if (!form.unitMeasureId) errors.unitMeasureId = "Container / form is required";
+  if (!form.quantityValue || Number(form.quantityValue) <= 0) {
+    errors.quantityValue = "Quantity is required";
+  }
+  if (!form.quantityUnit) {
+    errors.quantityUnit = "Unit is required";
+  }
   if (form.isSellable && Number(form.sellPrice || 0) <= 0) {
     errors.sellPrice = "Sell price is required for sellable products";
   }
+
   return errors;
+}
+
+function useBodyScrollLock(locked: boolean) {
+  useEffect(() => {
+    if (!locked) return;
+
+    const originalBodyOverflow = document.body.style.overflow;
+    const originalHtmlOverflow = document.documentElement.style.overflow;
+
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = originalBodyOverflow;
+      document.documentElement.style.overflow = originalHtmlOverflow;
+    };
+  }, [locked]);
 }
 
 /* ─────────────────────────────────────────────
@@ -314,7 +355,7 @@ function Toast({
 
   return (
     <div
-      className={`fixed bottom-5 right-5 z-50 flex items-center gap-3 rounded-xl px-5 py-3.5 shadow-xl text-white text-sm font-semibold transition-all duration-300 ${
+      className={`fixed bottom-5 right-5 z-50 flex items-center gap-3 rounded-2xl px-5 py-3.5 shadow-xl text-white text-sm font-semibold transition-all duration-300 ${
         type === "success" ? "bg-green-600" : "bg-red-600"
       }`}
     >
@@ -350,62 +391,69 @@ function KpiCard({
 }) {
   const cfg = {
     neutral: {
-      border: "#e2e8f0",
-      iconBg: "#f8fafc",
-      iconColor: "#475569",
-      val: "#0f172a",
-      sub: "#64748b",
+      border: "#F1E4BF",
+      iconBg: "#FFF9E7",
+      iconColor: "#8A6A00",
+      val: "#2A2112",
+      sub: "#9A7A18",
+      shadow: "0 10px 25px rgba(245,197,24,0.06)",
     },
     success: {
-      border: "#bbf7d0",
-      iconBg: "#dcfce7",
+      border: "#CBE9D2",
+      iconBg: "#EAF8EE",
       iconColor: "#166534",
       val: "#166534",
-      sub: "#16a34a",
+      sub: "#2C8F4B",
+      shadow: "0 10px 25px rgba(34,197,94,0.08)",
     },
     warning: {
-      border: "#fde68a",
-      iconBg: "#fef3c7",
-      iconColor: "#92400e",
-      val: "#92400e",
-      sub: "#d97706",
+      border: "#F4D98C",
+      iconBg: "#FFF6D9",
+      iconColor: "#9A5B00",
+      val: "#8B5A00",
+      sub: "#C17A00",
+      shadow: "0 10px 25px rgba(245,158,11,0.08)",
     },
     info: {
-      border: "#bfdbfe",
-      iconBg: "#dbeafe",
-      iconColor: "#1e40af",
-      val: "#1e40af",
-      sub: "#3b82f6",
+      border: "#E7D8A7",
+      iconBg: "#FFF7D6",
+      iconColor: "#7A6300",
+      val: "#7A6300",
+      sub: "#A28300",
+      shadow: "0 10px 25px rgba(245,197,24,0.08)",
     },
   }[variant];
 
   return (
     <div
-      className="rounded-2xl p-4 bg-white transition hover:shadow-md"
-      style={{ border: `1.5px solid ${cfg.border}` }}
+      className="rounded-[22px] p-4 bg-white transition hover:-translate-y-0.5"
+      style={{
+        border: `1.5px solid ${cfg.border}`,
+        boxShadow: cfg.shadow,
+      }}
     >
       <div className="flex items-center gap-3 mb-3">
         <div
-          className="grid h-10 w-10 shrink-0 place-items-center rounded-xl text-lg"
+          className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl text-lg"
           style={{ background: cfg.iconBg, color: cfg.iconColor }}
         >
           {icon}
         </div>
       </div>
       <div
-        className="text-[11px] font-semibold uppercase tracking-wider mb-1"
+        className="text-[11px] font-semibold uppercase tracking-[0.18em] mb-1"
         style={{ color: cfg.sub }}
       >
         {label}
       </div>
       <div
-        className="text-2xl font-bold leading-none"
+        className="text-[28px] font-bold leading-none"
         style={{ color: cfg.val }}
       >
         {value}
       </div>
       {sub && (
-        <div className="mt-1 text-xs" style={{ color: cfg.sub }}>
+        <div className="mt-1.5 text-xs" style={{ color: cfg.sub }}>
           {sub}
         </div>
       )}
@@ -421,14 +469,14 @@ function MarginBadge({ pct }: { pct: number | null }) {
 
   const color =
     pct >= 30
-      ? "bg-green-100 text-green-700"
+      ? "bg-green-100 text-green-700 border border-green-200"
       : pct >= 10
-      ? "bg-amber-100 text-amber-700"
-      : "bg-red-100 text-red-700";
+      ? "bg-amber-100 text-amber-700 border border-amber-200"
+      : "bg-red-100 text-red-700 border border-red-200";
 
   return (
     <span
-      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-bold ${color}`}
+      className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-bold ${color}`}
     >
       {pct.toFixed(0)}%
     </span>
@@ -437,12 +485,12 @@ function MarginBadge({ pct }: { pct: number | null }) {
 
 function SellBadge({ isSellable }: { isSellable?: boolean }) {
   return isSellable !== false ? (
-    <span className="inline-flex items-center gap-1.5 rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-semibold text-green-700">
+    <span className="inline-flex items-center gap-1.5 rounded-full bg-green-100 px-2.5 py-1 text-xs font-semibold text-green-700 border border-green-200">
       <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
       For sale
     </span>
   ) : (
-    <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-500">
+    <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-500 border border-slate-200">
       <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
       Not for sale
     </span>
@@ -452,24 +500,18 @@ function SellBadge({ isSellable }: { isSellable?: boolean }) {
 function ArchiveBadge({ active }: { active?: boolean }) {
   if (active !== false) return null;
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-500">
-      <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
+    <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700 border border-amber-200">
+      <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
       Archived
     </span>
   );
 }
 
-/* ─────────────────────────────────────────────
-   Field Error
-───────────────────────────────────────────── */
 function FieldError({ message }: { message?: string }) {
   if (!message) return null;
   return <p className="mt-1 text-xs text-red-500 font-medium">{message}</p>;
 }
 
-/* ─────────────────────────────────────────────
-   Form Label
-───────────────────────────────────────────── */
 function Label({
   children,
   required,
@@ -485,9 +527,6 @@ function Label({
   );
 }
 
-/* ─────────────────────────────────────────────
-   Section Divider
-───────────────────────────────────────────── */
 function FormSection({
   title,
   children,
@@ -603,139 +642,7 @@ function InlineCategoryCreator({
 }
 
 /* ─────────────────────────────────────────────
-   Inline Custom Size Creator
-───────────────────────────────────────────── */
-function InlineCustomSizeCreator({
-  orgId,
-  kind,
-  onCreated,
-}: {
-  orgId: string;
-  kind: UnitKind | null;
-  onCreated: (id: string, label: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const [value, setValue] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (open) setTimeout(() => inputRef.current?.focus(), 50);
-  }, [open]);
-
-  const unitLabel =
-    kind === "mass"
-      ? "grams"
-      : kind === "volume"
-      ? "ml"
-      : kind === "count"
-      ? "pieces"
-      : "";
-
-  const preview =
-    kind && value && Number(value) > 0
-      ? kind === "mass"
-        ? `${Math.round(Number(value))}g`
-        : kind === "volume"
-        ? `${Math.round(Number(value))}ml`
-        : `${Math.round(Number(value))}pcs`
-      : null;
-
-  async function handleCreate() {
-    if (!kind || !value || Number(value) <= 0) return;
-    setSaving(true);
-    setError("");
-    try {
-      const created = await createUnitSize(orgId, kind, Number(value));
-      onCreated(created.id, created.label ?? preview ?? value);
-      setValue("");
-      setOpen(false);
-    } catch (e: any) {
-      setError(e.message ?? "Failed to create size");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <div className="mt-1">
-      {!open ? (
-        <button
-          type="button"
-          onClick={() => {
-            if (kind) setOpen(true);
-          }}
-          disabled={!kind}
-          className="flex items-center gap-1.5 text-xs font-semibold text-amber-600 hover:text-amber-700 disabled:opacity-40 disabled:cursor-not-allowed transition"
-        >
-          <IconPlus />
-          Add custom size
-        </button>
-      ) : (
-        <div className="rounded-xl border border-green-200 bg-green-50 p-3 space-y-2">
-          <div className="text-xs font-semibold text-green-800">
-            Custom size {unitLabel ? `(${unitLabel})` : ""}
-          </div>
-          <div className="flex items-center gap-2">
-            <input
-              ref={inputRef}
-              type="number"
-              min="1"
-              step="1"
-              className="flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 placeholder-slate-400 focus:border-green-400 focus:ring-2 focus:ring-green-100 outline-none"
-              placeholder={
-                kind === "mass"
-                  ? "e.g. 350"
-                  : kind === "volume"
-                  ? "e.g. 300"
-                  : "e.g. 24"
-              }
-              value={value}
-              onChange={(e) => setValue(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  handleCreate();
-                }
-                if (e.key === "Escape") setOpen(false);
-              }}
-            />
-            {preview && (
-              <span className="text-xs font-bold text-green-700 whitespace-nowrap">
-                → {preview}
-              </span>
-            )}
-          </div>
-          {error && <p className="text-xs text-red-500">{error}</p>}
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={handleCreate}
-              disabled={saving || !value || Number(value) <= 0}
-              className="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-700 disabled:opacity-50 transition"
-            >
-              {saving ? "Creating…" : "Create"}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setOpen(false);
-                setValue("");
-                setError("");
-              }}
-              className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-/* ─────────────────────────────────────────────
-   Archive Confirmation Modal
+   Modals
 ───────────────────────────────────────────── */
 function ArchiveModal({
   product,
@@ -774,7 +681,7 @@ function ArchiveModal({
 
         <div className="rounded-xl bg-slate-50 border border-slate-200 px-4 py-3 mb-5">
           <div className="text-sm font-semibold text-slate-900">
-            {product.name}
+            {formatProductDisplayName(product)}
           </div>
           {(product.sku || product.barcode) && (
             <div className="mt-1 text-xs text-slate-500 font-mono">
@@ -805,16 +712,12 @@ function ArchiveModal({
   );
 }
 
-/* ─────────────────────────────────────────────
-   Confirm Save Modal (Add / Edit)
-───────────────────────────────────────────── */
 function ConfirmSaveModal({
   open,
   mode,
   form,
   categories,
   measures,
-  sizes,
   loading,
   onConfirm,
   onCancel,
@@ -824,7 +727,6 @@ function ConfirmSaveModal({
   form: FormData;
   categories: CategoryLookup[];
   measures: MeasureLookup[];
-  sizes: SizeLookup[];
   loading: boolean;
   onConfirm: () => void;
   onCancel: () => void;
@@ -833,15 +735,23 @@ function ConfirmSaveModal({
 
   const cat = categories.find((c) => c.id === form.categoryId);
   const measure = measures.find((m) => m.id === form.unitMeasureId);
-  const size = sizes.find((s) => s.id === form.unitSizeId);
 
   const rows = [
-    { label: "Name", value: form.name || "—" },
+    {
+      label: "Product",
+      value:
+        formatProductDisplayName({
+          name: form.name,
+          quantity_value: form.quantityValue,
+          quantity_unit: form.quantityUnit,
+        }) || "—",
+    },
     { label: "SKU", value: form.sku || "—" },
     { label: "Category", value: cat?.name || "—" },
+    { label: "Container / form", value: measure?.name || "—" },
     {
-      label: "Packaging",
-      value: [measure?.name, size?.label].filter(Boolean).join(" • ") || "—",
+      label: "Quantity",
+      value: formatQuantity(form.quantityValue, form.quantityUnit) || "—",
     },
     { label: "Cost", value: fmt(form.costPrice) },
     { label: "Sell price", value: fmt(form.sellPrice) },
@@ -850,7 +760,7 @@ function ConfirmSaveModal({
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
       onClick={onCancel}
     >
       <div
@@ -904,9 +814,6 @@ function ConfirmSaveModal({
   );
 }
 
-/* ─────────────────────────────────────────────
-   Modal Shell
-───────────────────────────────────────────── */
 function Modal({
   title,
   sub,
@@ -969,12 +876,9 @@ function ProductForm({
   setForm,
   measures,
   categories,
-  filteredSizes,
   suppliers,
   orgId,
   onCategoryCreated,
-  onSizeCreated,
-  onSupplierCreated,
   onSubmit,
   onCancel,
   saving,
@@ -984,12 +888,9 @@ function ProductForm({
   setForm: React.Dispatch<React.SetStateAction<FormData>>;
   measures: MeasureLookup[];
   categories: CategoryLookup[];
-  filteredSizes: SizeLookup[];
   suppliers: SupplierLookup[];
   orgId: string;
   onCategoryCreated: (id: string, name: string) => void;
-  onSizeCreated: (id: string, label: string) => void;
-  onSupplierCreated: (id: string, name: string) => void;
   onSubmit: (e: React.FormEvent) => void;
   onCancel: () => void;
   saving: boolean;
@@ -1003,19 +904,24 @@ function ProductForm({
   const errors = validateForm(form);
   const hasErrors = Object.keys(errors).length > 0;
 
-  const set =
+  const allowedUnits = useMemo(
+    () => getAllowedQuantityUnits(form.unitMeasureId, measures),
+    [form.unitMeasureId, measures]
+  );
+
+  const presetValues = useMemo(() => {
+    if (!form.quantityUnit) return [];
+    return QUANTITY_PRESETS[form.quantityUnit] ?? [];
+  }, [form.quantityUnit]);
+
+  const setField =
     (k: keyof FormData) =>
     (
       e: React.ChangeEvent<
         HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
       >
     ) => {
-      const value =
-        e.target instanceof HTMLInputElement &&
-        e.target.type === "checkbox"
-          ? String(e.target.checked)
-          : e.target.value;
-
+      const value = e.target.value;
       setForm((prev) => ({ ...prev, [k]: value as never }));
       setTouched((t) => ({ ...t, [k]: true }));
     };
@@ -1027,7 +933,37 @@ function ProductForm({
     errors[k] && (touched[k] || submitAttempted) ? errors[k] : undefined;
 
   const marginPct = margin(form.costPrice, form.sellPrice);
-  const activeKind = inferSizeKindFromMeasure(form.unitMeasureId, measures);
+
+  useEffect(() => {
+    if (!allowedUnits.length) return;
+
+    if (!form.quantityUnit || !allowedUnits.includes(form.quantityUnit)) {
+      const nextUnit = allowedUnits[0];
+      setForm((prev) => ({
+        ...prev,
+        quantityUnit: nextUnit,
+        quantityValue:
+          prev.quantityMode === "preset"
+            ? (QUANTITY_PRESETS[nextUnit]?.[0] ?? "")
+            : prev.quantityValue,
+      }));
+    }
+  }, [allowedUnits, form.quantityUnit, setForm, form.quantityMode]);
+
+  useEffect(() => {
+    if (form.quantityMode !== "preset") return;
+    if (!form.quantityUnit) return;
+
+    const values = QUANTITY_PRESETS[form.quantityUnit] ?? [];
+    if (!values.length) return;
+
+    if (!form.quantityValue || !values.includes(form.quantityValue)) {
+      setForm((prev) => ({
+        ...prev,
+        quantityValue: values[0] ?? "",
+      }));
+    }
+  }, [form.quantityMode, form.quantityUnit, form.quantityValue, setForm]);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -1055,30 +991,32 @@ function ProductForm({
                   ? "border-red-400 focus:border-red-400 focus:ring-red-100"
                   : ""
               }`}
-              placeholder="e.g. Raw Honey 500ml Bottle"
+              placeholder="e.g. Granola or Raw Honey"
               value={form.name}
-              onChange={set("name")}
+              onChange={setField("name")}
               onBlur={() => touch("name")}
             />
             <FieldError message={showErr("name")} />
           </div>
+
           <div>
             <Label>SKU</Label>
             <input
               className={S.inputCls}
-              placeholder="e.g. HON-BOT-500"
+              placeholder="e.g. GRA-200"
               value={form.sku}
-              onChange={set("sku")}
+              onChange={setField("sku")}
             />
           </div>
         </div>
+
         <div>
           <Label>Barcode</Label>
           <input
             className={`${S.inputCls} font-mono`}
             placeholder="EAN / UPC (optional)"
             value={form.barcode}
-            onChange={set("barcode")}
+            onChange={setField("barcode")}
           />
         </div>
       </FormSection>
@@ -1094,7 +1032,7 @@ function ProductForm({
                   : ""
               }`}
               value={form.categoryId}
-              onChange={set("categoryId")}
+              onChange={setField("categoryId")}
               onBlur={() => touch("categoryId")}
               style={S.selectChevronStyle}
             >
@@ -1115,7 +1053,7 @@ function ProductForm({
               className={S.selectCls}
               style={S.selectChevronStyle}
               value={form.supplierId}
-              onChange={set("supplierId")}
+              onChange={setField("supplierId")}
             >
               <option value="">— Select supplier —</option>
               {suppliers.map((s) => (
@@ -1124,16 +1062,14 @@ function ProductForm({
                 </option>
               ))}
             </select>
-
-            
           </div>
         </div>
       </FormSection>
 
-      <FormSection title="Packaging">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <FormSection title="Product structure">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
-            <Label required>Packaging type</Label>
+            <Label required>Container / form</Label>
             <select
               className={`${S.selectCls} ${
                 showErr("unitMeasureId")
@@ -1142,10 +1078,10 @@ function ProductForm({
               }`}
               style={S.selectChevronStyle}
               value={form.unitMeasureId}
-              onChange={set("unitMeasureId")}
+              onChange={setField("unitMeasureId")}
               onBlur={() => touch("unitMeasureId")}
             >
-              <option value="">— Select type —</option>
+              <option value="">— Select form —</option>
               {measures.map((m) => (
                 <option key={m.id} value={m.id}>
                   {m.name}
@@ -1156,38 +1092,134 @@ function ProductForm({
           </div>
 
           <div>
-            <Label required>Pack size</Label>
+            <Label required>Unit</Label>
             <select
               className={`${S.selectCls} ${
-                showErr("unitSizeId")
+                showErr("quantityUnit")
                   ? "border-red-400 focus:border-red-400 focus:ring-red-100"
                   : ""
               }`}
               style={S.selectChevronStyle}
-              value={form.unitSizeId}
-              onChange={set("unitSizeId")}
-              onBlur={() => touch("unitSizeId")}
-              disabled={!filteredSizes.length}
+              value={form.quantityUnit}
+              onChange={(e) => {
+                const nextUnit = e.target.value as QuantityUnit | "";
+                setForm((prev) => ({
+                  ...prev,
+                  quantityUnit: nextUnit,
+                  quantityValue:
+                    prev.quantityMode === "preset"
+                      ? (nextUnit ? QUANTITY_PRESETS[nextUnit]?.[0] ?? "" : "")
+                      : prev.quantityValue,
+                }));
+                setTouched((t) => ({ ...t, quantityUnit: true }));
+              }}
+              onBlur={() => touch("quantityUnit")}
+              disabled={!allowedUnits.length}
             >
-              {!filteredSizes.length ? (
-                <option value="">Select packaging type first</option>
+              {!allowedUnits.length ? (
+                <option value="">Select form first</option>
               ) : (
                 <>
-                  <option value="">— Select size —</option>
-                  {filteredSizes.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.label}
+                  <option value="">— Select unit —</option>
+                  {allowedUnits.map((u) => (
+                    <option key={u} value={u}>
+                      {u}
                     </option>
                   ))}
                 </>
               )}
             </select>
-            <FieldError message={showErr("unitSizeId")} />
-            <InlineCustomSizeCreator
-              orgId={orgId}
-              kind={activeKind}
-              onCreated={onSizeCreated}
+            <FieldError message={showErr("quantityUnit")} />
+          </div>
+
+          <div>
+            <Label required>Quantity mode</Label>
+            <select
+              className={S.selectCls}
+              style={S.selectChevronStyle}
+              value={form.quantityMode}
+              onChange={(e) => {
+                const nextMode = e.target.value as "preset" | "custom";
+                setForm((prev) => ({
+                  ...prev,
+                  quantityMode: nextMode,
+                  quantityValue:
+                    nextMode === "preset" && prev.quantityUnit
+                      ? (QUANTITY_PRESETS[prev.quantityUnit]?.[0] ?? "")
+                      : prev.quantityValue,
+                }));
+              }}
+            >
+              <option value="preset">Choose common quantity</option>
+              <option value="custom">Enter custom quantity</option>
+            </select>
+          </div>
+        </div>
+
+        {form.quantityMode === "preset" ? (
+          <div>
+            <Label required>Quantity</Label>
+            <select
+              className={`${S.selectCls} ${
+                showErr("quantityValue")
+                  ? "border-red-400 focus:border-red-400 focus:ring-red-100"
+                  : ""
+              }`}
+              style={S.selectChevronStyle}
+              value={form.quantityValue}
+              onChange={setField("quantityValue")}
+              onBlur={() => touch("quantityValue")}
+              disabled={!form.quantityUnit}
+            >
+              {!form.quantityUnit ? (
+                <option value="">Select unit first</option>
+              ) : (
+                <>
+                  <option value="">— Select quantity —</option>
+                  {presetValues.map((value) => (
+                    <option key={value} value={value}>
+                      {value}
+                    </option>
+                  ))}
+                </>
+              )}
+            </select>
+            <FieldError message={showErr("quantityValue")} />
+          </div>
+        ) : (
+          <div>
+            <Label required>Custom quantity</Label>
+            <input
+              className={`${S.inputCls} ${
+                showErr("quantityValue")
+                  ? "border-red-400 focus:border-red-400 focus:ring-red-100"
+                  : ""
+              }`}
+              type="text"
+              inputMode="decimal"
+              placeholder="e.g. 200"
+              value={form.quantityValue}
+              onChange={(e) => {
+                const value = sanitizeQuantityInput(e.target.value);
+                setForm((prev) => ({ ...prev, quantityValue: value }));
+                setTouched((t) => ({ ...t, quantityValue: true }));
+              }}
+              onBlur={() => touch("quantityValue")}
             />
+            <FieldError message={showErr("quantityValue")} />
+          </div>
+        )}
+
+        <div className="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm">
+          <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-amber-700">
+            Preview
+          </div>
+          <div className="mt-1 text-slate-900 font-semibold">
+            {formatProductDisplayName({
+              name: form.name,
+              quantity_value: form.quantityValue,
+              quantity_unit: form.quantityUnit,
+            })}
           </div>
         </div>
       </FormSection>
@@ -1211,16 +1243,20 @@ function ProductForm({
           </select>
         </div>
 
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
             <Label>Cost price (Ksh)</Label>
             <input
               className={S.inputCls}
-              type="number"
-              min="0"
-              step="0.01"
+              type="text"
+              inputMode="decimal"
               value={form.costPrice}
-              onChange={set("costPrice")}
+              onChange={(e) =>
+                setForm((prev) => ({
+                  ...prev,
+                  costPrice: sanitizeQuantityInput(e.target.value),
+                }))
+              }
             />
           </div>
 
@@ -1232,11 +1268,15 @@ function ProductForm({
                   ? "border-red-400 focus:border-red-400 focus:ring-red-100"
                   : ""
               }`}
-              type="number"
-              min="0"
-              step="0.01"
+              type="text"
+              inputMode="decimal"
               value={form.sellPrice}
-              onChange={set("sellPrice")}
+              onChange={(e) =>
+                setForm((prev) => ({
+                  ...prev,
+                  sellPrice: sanitizeQuantityInput(e.target.value),
+                }))
+              }
               onBlur={() => touch("sellPrice")}
             />
             <FieldError message={showErr("sellPrice")} />
@@ -1271,7 +1311,7 @@ function ProductForm({
           className={`${S.inputCls} resize-none`}
           placeholder="Batch details, storage info, allergens…"
           value={form.notes}
-          onChange={set("notes")}
+          onChange={setField("notes")}
         />
       </FormSection>
 
@@ -1330,16 +1370,17 @@ function Pagination({
   }
 
   return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-t border-slate-100 bg-slate-50/50 px-6 py-3.5">
-      <span className="text-xs text-slate-400">
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-t border-[#F1E6C9] bg-[#FFFDF8] px-6 py-4">
+      <span className="text-xs text-slate-500">
         Showing {start}–{end} of {totalItems} product
         {totalItems !== 1 ? "s" : ""}
       </span>
-      <div className="flex items-center gap-1">
+
+      <div className="flex items-center gap-1.5">
         <button
           onClick={() => onPage(page - 1)}
           disabled={page === 1}
-          className="grid h-8 w-8 place-items-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition"
+          className="grid h-9 w-9 place-items-center rounded-xl border border-[#EADFC2] bg-white text-slate-500 hover:bg-[#FFF8E6] disabled:opacity-40 disabled:cursor-not-allowed transition"
         >
           <IconChevronLeft />
         </button>
@@ -1356,10 +1397,10 @@ function Pagination({
             <button
               key={p}
               onClick={() => onPage(p as number)}
-              className={`h-8 min-w-[32px] px-2 rounded-lg text-sm font-semibold transition ${
+              className={`h-9 min-w-[36px] px-2 rounded-xl text-sm font-semibold transition ${
                 p === page
-                  ? "bg-amber-500 text-white border border-amber-500"
-                  : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-100"
+                  ? "bg-amber-500 text-white border border-amber-500 shadow-[0_10px_24px_rgba(245,197,24,0.28)]"
+                  : "border border-[#EADFC2] bg-white text-slate-700 hover:bg-[#FFF8E6]"
               }`}
             >
               {p}
@@ -1370,7 +1411,7 @@ function Pagination({
         <button
           onClick={() => onPage(page + 1)}
           disabled={page === totalPages}
-          className="grid h-8 w-8 place-items-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition"
+          className="grid h-9 w-9 place-items-center rounded-xl border border-[#EADFC2] bg-white text-slate-500 hover:bg-[#FFF8E6] disabled:opacity-40 disabled:cursor-not-allowed transition"
         >
           <IconChevronRight />
         </button>
@@ -1392,7 +1433,6 @@ export default function ProductsPage() {
   } | null>(null);
 
   const [measures, setMeasures] = useState<MeasureLookup[]>([]);
-  const [sizes, setSizes] = useState<SizeLookup[]>([]);
   const [categories, setCategories] = useState<CategoryLookup[]>([]);
   const [suppliers, setSuppliers] = useState<SupplierLookup[]>([]);
 
@@ -1416,26 +1456,18 @@ export default function ProductsPage() {
   const [pendingAddConfirm, setPendingAddConfirm] = useState(false);
   const [pendingEditConfirm, setPendingEditConfirm] = useState(false);
 
+  const isAnyModalOpen =
+    showAddModal ||
+    !!editProduct ||
+    !!deletingProduct ||
+    pendingAddConfirm ||
+    pendingEditConfirm;
+
+  useBodyScrollLock(isAnyModalOpen);
+
   async function refresh(o: string) {
-    setItems(await listProducts(o, !showArchived));
-  }
-
-  async function reloadCategories(o: string) {
-    const cats = await listCategories(o);
-    setCategories(cats as CategoryLookup[]);
-    return cats as CategoryLookup[];
-  }
-
-  async function reloadSuppliers(o: string) {
-    const sups = await listSuppliers(o);
-    setSuppliers(sups as SupplierLookup[]);
-    return sups as SupplierLookup[];
-  }
-
-  async function reloadSizes(o: string) {
-    const usizes = await listUnitSizes(o);
-    setSizes(usizes as SizeLookup[]);
-    return usizes as SizeLookup[];
+    const rows = await listProducts(o, !showArchived);
+    setItems(rows);
   }
 
   useEffect(() => {
@@ -1444,28 +1476,28 @@ export default function ProductsPage() {
         const o = await bootstrapOrg();
         setOrgId(o);
 
-        const [uoms, usizes, cats, sups] = await Promise.all([
+        const [uoms, cats, sups] = await Promise.all([
           listUnitMeasures(o),
-          listUnitSizes(o),
           listCategories(o),
           listSuppliers(o),
         ]);
 
-        setMeasures(uoms as MeasureLookup[]);
-        setSizes(usizes as SizeLookup[]);
+        const typedMeasures = uoms as MeasureLookup[];
+        setMeasures(typedMeasures);
         setCategories(cats as CategoryLookup[]);
         setSuppliers(sups as SupplierLookup[]);
 
-        const firstId = uoms?.[0]?.id ?? "";
-        const firstAllowed = (uoms?.[0] as MeasureLookup)?.allowed_kinds ?? [];
-        const firstSizeId =
-          (usizes as SizeLookup[]).find((s) => firstAllowed.includes(s.kind))
-            ?.id ?? "";
+        const firstId = typedMeasures?.[0]?.id ?? "";
+        const firstAllowedUnit =
+          getAllowedQuantityUnits(firstId, typedMeasures)[0] ?? "";
 
         setAddForm((f) => ({
           ...f,
           unitMeasureId: firstId,
-          unitSizeId: firstSizeId,
+          quantityUnit: firstAllowedUnit,
+          quantityValue: firstAllowedUnit
+            ? (QUANTITY_PRESETS[firstAllowedUnit]?.[0] ?? "")
+            : "",
         }));
 
         await refresh(o);
@@ -1479,36 +1511,6 @@ export default function ProductsPage() {
     setPage(1);
   }, [search, filterCat, filterStatus, showArchived]);
 
-  const addFilteredSizes = useMemo(() => {
-    const m = measures.find((m) => m.id === addForm.unitMeasureId);
-    if (!m) return sizes;
-    return sizes.filter((s) => m.allowed_kinds.includes(s.kind));
-  }, [sizes, measures, addForm.unitMeasureId]);
-
-  const editFilteredSizes = useMemo(() => {
-    const m = measures.find((m) => m.id === editForm.unitMeasureId);
-    if (!m) return sizes;
-    return sizes.filter((s) => m.allowed_kinds.includes(s.kind));
-  }, [sizes, measures, editForm.unitMeasureId]);
-
-  useEffect(() => {
-    if (
-      addFilteredSizes.length &&
-      !addFilteredSizes.find((s) => s.id === addForm.unitSizeId)
-    ) {
-      setAddForm((f) => ({ ...f, unitSizeId: addFilteredSizes[0].id }));
-    }
-  }, [addFilteredSizes, addForm.unitSizeId]);
-
-  useEffect(() => {
-    if (
-      editFilteredSizes.length &&
-      !editFilteredSizes.find((s) => s.id === editForm.unitSizeId)
-    ) {
-      setEditForm((f) => ({ ...f, unitSizeId: editFilteredSizes[0].id }));
-    }
-  }, [editFilteredSizes, editForm.unitSizeId]);
-
   const allCategories = useMemo(() => {
     return categories
       .map((c) => c.name)
@@ -1520,13 +1522,16 @@ export default function ProductsPage() {
     const t = search.trim().toLowerCase();
 
     return items.filter((p) => {
+      const displayName = formatProductDisplayName(p).toLowerCase();
       const catName = getCategoryName(p).toLowerCase();
       const sku = (p.sku ?? "").toLowerCase();
       const supplierName = (p.supplier?.name ?? "").toLowerCase();
+      const qty = formatQuantity(p.quantity_value, p.quantity_unit).toLowerCase();
 
       const matchText =
         !t ||
-        (p.name ?? "").toLowerCase().includes(t) ||
+        displayName.includes(t) ||
+        qty.includes(t) ||
         sku.includes(t) ||
         (p.barcode ?? "").toLowerCase().includes(t) ||
         supplierName.includes(t) ||
@@ -1594,38 +1599,6 @@ export default function ProductsPage() {
     setToast({ message: `Category "${name}" created`, type: "success" });
   }
 
-  function handleAddSupplierCreated(id: string, name: string) {
-    setSuppliers((prev) =>
-      [...prev, { id, name }].sort((a, b) => a.name.localeCompare(b.name))
-    );
-    setAddForm((f) => ({ ...f, supplierId: id }));
-    setToast({ message: `Supplier "${name}" created`, type: "success" });
-  }
-
-  function handleEditSupplierCreated(id: string, name: string) {
-    setSuppliers((prev) =>
-      [...prev, { id, name }].sort((a, b) => a.name.localeCompare(b.name))
-    );
-    setEditForm((f) => ({ ...f, supplierId: id }));
-    setToast({ message: `Supplier "${name}" created`, type: "success" });
-  }
-
-  function handleAddSizeCreated(id: string, label: string) {
-    if (!orgId) return;
-    reloadSizes(orgId).then(() => {
-      setAddForm((f) => ({ ...f, unitSizeId: id }));
-    });
-    setToast({ message: `Size "${label}" created`, type: "success" });
-  }
-
-  function handleEditSizeCreated(id: string, label: string) {
-    if (!orgId) return;
-    reloadSizes(orgId).then(() => {
-      setEditForm((f) => ({ ...f, unitSizeId: id }));
-    });
-    setToast({ message: `Size "${label}" created`, type: "success" });
-  }
-
   function handleAdd(e: React.FormEvent) {
     e.preventDefault();
     const errors = validateForm(addForm);
@@ -1639,10 +1612,14 @@ export default function ProductsPage() {
     setErr("");
 
     try {
-      const productName = addForm.name.trim();
+      const productDisplay = formatProductDisplayName({
+        name: addForm.name.trim(),
+        quantity_value: addForm.quantityValue,
+        quantity_unit: addForm.quantityUnit,
+      });
 
       await createProduct(orgId, {
-        name: productName,
+        name: addForm.name.trim(),
         sku: addForm.sku.trim() || undefined,
         category_id: addForm.categoryId || null,
         barcode: addForm.barcode.trim() || undefined,
@@ -1650,22 +1627,32 @@ export default function ProductsPage() {
         notes: addForm.notes.trim() || undefined,
         cost_price: Number(addForm.costPrice || 0),
         unit_price: Number(addForm.sellPrice || 0),
+        quantity_value: Number(addForm.quantityValue),
+        quantity_unit: addForm.quantityUnit || null,
         unit_measure_id: addForm.unitMeasureId || null,
-        unit_size_id: addForm.unitSizeId || null,
         is_sellable: addForm.isSellable,
       });
+
+      const allowedUnits = getAllowedQuantityUnits(
+        addForm.unitMeasureId,
+        measures
+      );
+      const nextUnit = allowedUnits[0] ?? "";
 
       setAddForm({
         ...BLANK_FORM,
         unitMeasureId: addForm.unitMeasureId,
-        unitSizeId: addForm.unitSizeId,
+        quantityUnit: nextUnit,
+        quantityMode: "preset",
+        quantityValue: nextUnit ? (QUANTITY_PRESETS[nextUnit]?.[0] ?? "") : "",
       });
+
       setShowAddModal(false);
       setPendingAddConfirm(false);
       await refresh(orgId);
 
       setToast({
-        message: `"${productName}" added successfully`,
+        message: `"${productDisplay}" added successfully`,
         type: "success",
       });
     } catch (e: any) {
@@ -1690,13 +1677,18 @@ export default function ProductsPage() {
     setErr("");
 
     try {
-      const updatedName = editForm.name.trim();
+      const updatedDisplay = formatProductDisplayName({
+        name: editForm.name.trim(),
+        quantity_value: editForm.quantityValue,
+        quantity_unit: editForm.quantityUnit,
+      });
+
       const supabase = createClient();
 
       const { error } = await supabase
         .from("products")
         .update({
-          name: updatedName,
+          name: editForm.name.trim(),
           sku: editForm.sku.trim() || null,
           category_id: editForm.categoryId || null,
           barcode: editForm.barcode.trim() || null,
@@ -1704,8 +1696,9 @@ export default function ProductsPage() {
           notes: editForm.notes.trim() || null,
           cost_price: Number(editForm.costPrice || 0),
           unit_price: Number(editForm.sellPrice || 0),
+          quantity_value: Number(editForm.quantityValue),
+          quantity_unit: editForm.quantityUnit || null,
           unit_measure_id: editForm.unitMeasureId || null,
-          unit_size_id: editForm.unitSizeId || null,
           is_sellable: editForm.isSellable,
         })
         .eq("org_id", orgId)
@@ -1717,7 +1710,7 @@ export default function ProductsPage() {
       setPendingEditConfirm(false);
       await refresh(orgId);
 
-      setToast({ message: `"${updatedName}" updated`, type: "success" });
+      setToast({ message: `"${updatedDisplay}" updated`, type: "success" });
     } catch (e: any) {
       setErr(e.message ?? String(e));
       setToast({ message: "Failed to update product", type: "error" });
@@ -1732,7 +1725,7 @@ export default function ProductsPage() {
     setDeleting(true);
 
     try {
-      const productName = deletingProduct.name;
+      const productName = formatProductDisplayName(deletingProduct);
       await archiveProduct(orgId, deletingProduct.id);
       await refresh(orgId);
 
@@ -1749,14 +1742,16 @@ export default function ProductsPage() {
     }
   }
 
-  async function handleRestore(id: string, name?: string) {
+  async function handleRestore(id: string, product?: Product) {
     if (!orgId) return;
 
     try {
       await restoreProduct(orgId, id);
       await refresh(orgId);
       setToast({
-        message: name ? `"${name}" restored` : "Product restored",
+        message: product
+          ? `"${formatProductDisplayName(product)}" restored`
+          : "Product restored",
         type: "success",
       });
     } catch (e: any) {
@@ -1766,6 +1761,22 @@ export default function ProductsPage() {
   }
 
   function openEdit(p: Product) {
+    const allowedUnits = getAllowedQuantityUnits(
+      p.unit_measure_id ?? measures[0]?.id ?? "",
+      measures
+    );
+
+    const quantityUnit =
+      (p.quantity_unit as QuantityUnit | null) ?? allowedUnits[0] ?? "";
+    const quantityValue =
+      p.quantity_value !== null && p.quantity_value !== undefined
+        ? String(p.quantity_value)
+        : "";
+
+    const presetValues = quantityUnit ? QUANTITY_PRESETS[quantityUnit] ?? [] : [];
+    const quantityMode =
+      quantityValue && presetValues.includes(quantityValue) ? "preset" : "custom";
+
     setEditForm({
       name: p.name ?? "",
       sku: p.sku ?? "",
@@ -1775,10 +1786,13 @@ export default function ProductsPage() {
       notes: p.notes ?? "",
       costPrice: String(p.cost_price ?? "0"),
       sellPrice: String(p.unit_price ?? "0"),
+      quantityValue,
+      quantityUnit,
+      quantityMode,
       unitMeasureId: p.unit_measure_id ?? measures[0]?.id ?? "",
-      unitSizeId: p.unit_size_id ?? "",
       isSellable: p.is_sellable ?? true,
     });
+
     setEditProduct(p);
   }
 
@@ -1790,7 +1804,7 @@ export default function ProductsPage() {
 
   const hasFilters = !!(search || filterCat || filterStatus);
 
-  const TABLE_COLS = "2.4fr 1.2fr 1.2fr 1.1fr 0.9fr 0.9fr 0.8fr 1.3fr 96px";
+  const TABLE_COLS = S.tableGridCols;
   const HEADERS = [
     "Product",
     "Category",
@@ -1834,7 +1848,7 @@ export default function ProductsPage() {
       )}
 
       {err && (
-        <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           <span className="shrink-0 mt-0.5">⚠️</span>
           <span className="flex-1">{err}</span>
           <button
@@ -1848,14 +1862,21 @@ export default function ProductsPage() {
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
+          <div className="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-amber-700">
+            Catalog
+          </div>
+          <h1 className="mt-3 text-[32px] font-bold text-slate-900 tracking-tight">
             Product Catalog
           </h1>
-          <p className="mt-0.5 text-sm text-slate-500">
-            Manage products, pricing, packaging and availability
+          <p className="mt-1 text-sm text-slate-500">
+            Manage products, sizes, pricing and availability
           </p>
         </div>
-        <button className={S.btnPrimary} onClick={() => setShowAddModal(true)}>
+
+        <button
+          className={`${S.btnPrimary} shadow-[0_12px_28px_rgba(245,197,24,0.25)]`}
+          onClick={() => setShowAddModal(true)}
+        >
           <IconPlus />
           Add product
         </button>
@@ -1904,286 +1925,295 @@ export default function ProductsPage() {
         />
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <label className="relative flex-1 min-w-[200px] max-w-xs">
-          <div className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
-            <IconSearch />
-          </div>
-          <input
-            className="w-full rounded-xl border border-slate-200 bg-white pl-10 pr-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 focus:border-amber-500 focus:ring-2 focus:ring-amber-100 outline-none transition"
-            placeholder="Search products…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-          {search && (
-            <button
-              onClick={() => setSearch("")}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+      <div className="rounded-[24px] border border-[#EADFC2] bg-white shadow-[0_12px_36px_rgba(245,197,24,0.06)] overflow-hidden">
+        <div className="border-b border-[#F1E6C9] bg-[linear-gradient(180deg,#FFFDF8_0%,#FFF9EC_100%)] px-5 py-4 lg:px-6">
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="relative flex-1 min-w-[220px] max-w-sm">
+              <div className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
+                <IconSearch />
+              </div>
+              <input
+                className="w-full rounded-2xl border border-[#EADFC2] bg-white pl-10 pr-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 focus:border-amber-500 focus:ring-2 focus:ring-amber-100 outline-none transition"
+                placeholder="Search products…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+              {search && (
+                <button
+                  onClick={() => setSearch("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                >
+                  <IconX />
+                </button>
+              )}
+            </label>
+
+            <select
+              className="rounded-2xl border border-[#EADFC2] bg-white px-3.5 py-2.5 text-sm text-slate-700 focus:border-amber-500 focus:ring-2 focus:ring-amber-100 outline-none transition cursor-pointer"
+              style={S.selectChevronStyle}
+              value={filterCat}
+              onChange={(e) => setFilterCat(e.target.value)}
             >
-              <IconX />
+              <option value="">All categories</option>
+              {allCategories.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+
+            <select
+              className="rounded-2xl border border-[#EADFC2] bg-white px-3.5 py-2.5 text-sm text-slate-700 focus:border-amber-500 focus:ring-2 focus:ring-amber-100 outline-none transition cursor-pointer"
+              style={S.selectChevronStyle}
+              value={filterStatus}
+              onChange={(e) =>
+                setFilterStatus(
+                  e.target.value as "" | "sellable" | "not_sellable"
+                )
+              }
+            >
+              <option value="">All statuses</option>
+              <option value="sellable">For sale</option>
+              <option value="not_sellable">Not for sale</option>
+            </select>
+
+            {hasFilters && (
+              <button
+                onClick={clearFilters}
+                className="text-sm font-semibold text-amber-600 hover:text-amber-700 transition px-1"
+              >
+                Clear
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={() => setShowArchived((v) => !v)}
+              className={`rounded-2xl border px-3.5 py-2.5 text-sm font-semibold transition ${
+                showArchived
+                  ? "border-amber-300 bg-amber-50 text-amber-700 shadow-[0_8px_20px_rgba(245,197,24,0.12)]"
+                  : "border-[#EADFC2] bg-white text-slate-700 hover:bg-[#FFF8E6]"
+              }`}
+            >
+              {showArchived ? "Showing archived too" : "Show archived"}
             </button>
-          )}
-        </label>
 
-        <select
-          className="rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-700 focus:border-amber-500 focus:ring-2 focus:ring-amber-100 outline-none transition cursor-pointer"
-          style={S.selectChevronStyle}
-          value={filterCat}
-          onChange={(e) => setFilterCat(e.target.value)}
-        >
-          <option value="">All categories</option>
-          {allCategories.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
-
-        <select
-          className="rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-700 focus:border-amber-500 focus:ring-2 focus:ring-amber-100 outline-none transition cursor-pointer"
-          style={S.selectChevronStyle}
-          value={filterStatus}
-          onChange={(e) =>
-            setFilterStatus(e.target.value as "" | "sellable" | "not_sellable")
-          }
-        >
-          <option value="">All statuses</option>
-          <option value="sellable">For sale</option>
-          <option value="not_sellable">Not for sale</option>
-        </select>
-
-        {hasFilters && (
-          <button
-            onClick={clearFilters}
-            className="text-sm font-semibold text-amber-600 hover:text-amber-700 transition px-1"
-          >
-            Clear
-          </button>
-        )}
-
-        <button
-          type="button"
-          onClick={() => setShowArchived((v) => !v)}
-          className={`rounded-xl border px-3.5 py-2.5 text-sm font-semibold transition ${
-            showArchived
-              ? "border-amber-300 bg-amber-50 text-amber-700"
-              : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-          }`}
-        >
-          {showArchived ? "Showing archived too" : "Show archived"}
-        </button>
-
-        <span className="ml-auto text-xs text-slate-400 whitespace-nowrap">
-          {filtered.length} of {items.length}
-        </span>
-      </div>
-
-      <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-        <div
-          className="hidden lg:grid items-center gap-4 px-6 py-3.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500 bg-slate-50 border-b border-slate-200"
-          style={{ gridTemplateColumns: TABLE_COLS }}
-        >
-          {HEADERS.map((h, i) => (
-            <div key={i} className={i >= 4 && i <= 6 ? "text-right" : ""}>
-              {h}
-            </div>
-          ))}
+            <span className="ml-auto text-xs text-slate-500 whitespace-nowrap">
+              {filtered.length} of {items.length}
+            </span>
+          </div>
         </div>
 
-        <div className="divide-y divide-slate-100">
-          {paginated.length === 0 ? (
-            <div className="py-20 text-center">
-              <div className="text-5xl mb-4">🍯</div>
-              <p className="text-lg font-semibold text-slate-700">
-                {items.length === 0 ? "No products yet" : "No matching products"}
-              </p>
-              <p className="text-sm text-slate-400 mt-1">
-                {items.length === 0
-                  ? 'Click "Add product" to get started'
-                  : "Try adjusting your filters"}
-              </p>
+        <div className="px-3 py-3 sm:px-4 sm:py-4">
+          <div className="hidden lg:block">
+            <div
+              className="grid items-center gap-4 px-6 py-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500"
+              style={{ gridTemplateColumns: TABLE_COLS }}
+            >
+              {HEADERS.map((h, i) => (
+                <div key={i} className={i >= 4 && i <= 6 ? "text-right" : ""}>
+                  {h}
+                </div>
+              ))}
             </div>
-          ) : (
-            paginated.map((p) => {
-              const mgn = margin(p.cost_price, p.unit_price);
-              const categoryName = getCategoryName(p);
-              const packagingLabel = getPackagingLabel(p);
+          </div>
 
-              return (
-                <div
-                  key={p.id}
-                  className="transition-colors hover:bg-slate-50/60 group"
-                >
+          <div className="space-y-3">
+            {paginated.length === 0 ? (
+              <div className="py-20 text-center">
+                <div className="text-5xl mb-4">🍯</div>
+                <p className="text-lg font-semibold text-slate-700">
+                  {items.length === 0 ? "No products yet" : "No matching products"}
+                </p>
+                <p className="text-sm text-slate-400 mt-1">
+                  {items.length === 0
+                    ? 'Click "Add product" to get started'
+                    : "Try adjusting your filters"}
+                </p>
+              </div>
+            ) : (
+              paginated.map((p) => {
+                const mgn = margin(p.cost_price, p.unit_price);
+                const categoryName = getCategoryName(p);
+                const displayName = formatProductDisplayName(p);
+
+                return (
                   <div
-                    className="hidden lg:grid items-center gap-4 px-6 py-4 text-sm"
-                    style={{ gridTemplateColumns: TABLE_COLS }}
+                    key={p.id}
+                    className="group rounded-[24px] border border-[#EFE4C6] bg-[linear-gradient(180deg,#FFFFFF_0%,#FFFCF4_100%)] shadow-[0_8px_30px_rgba(15,23,42,0.04)] transition-all duration-200 hover:-translate-y-px hover:shadow-[0_16px_34px_rgba(245,197,24,0.10)] hover:border-[#E5D28D]"
                   >
-                    <div className="min-w-0 space-y-1">
-                      <div className="font-semibold text-slate-900 truncate">
-                        {p.name || "Unnamed"}
-                      </div>
-                      <div className="text-xs text-slate-500 truncate">
-                        {packagingLabel || "—"}
-                      </div>
-                      {p.sku && (
-                        <div className="text-[11px] font-mono text-slate-400 truncate">
-                          SKU {p.sku}
+                    <div
+                      className="hidden lg:grid items-center gap-4 px-6 py-5 text-sm"
+                      style={{ gridTemplateColumns: TABLE_COLS }}
+                    >
+                      <div className="min-w-0 space-y-1">
+                        <div className="font-semibold text-slate-900 truncate text-[15px]">
+                          {displayName}
                         </div>
-                      )}
-                    </div>
-
-                    <div className="truncate text-sm text-slate-700">
-                      {categoryName || <span className="text-slate-300">—</span>}
-                    </div>
-
-                    <div className="truncate text-sm text-slate-700">
-                      {p.supplier?.name || (
-                        <span className="text-slate-300">—</span>
-                      )}
-                    </div>
-
-                    <div className="truncate font-mono text-xs text-slate-500">
-                      {p.barcode || p.sku || (
-                        <span className="text-slate-300">—</span>
-                      )}
-                    </div>
-
-                    <div className="text-right text-slate-700">
-                      {fmt(p.cost_price)}
-                    </div>
-
-                    <div className="text-right font-bold text-slate-900">
-                      {fmt(p.unit_price)}
-                    </div>
-
-                    <div className="text-right">
-                      <MarginBadge pct={mgn} />
-                    </div>
-
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <SellBadge isSellable={p.is_sellable} />
-                      <ArchiveBadge active={p.active} />
-                    </div>
-
-                    <div className="flex items-center justify-end gap-1.5">
-                      <button
-                        onClick={() => openEdit(p)}
-                        className="grid h-8 w-8 place-items-center rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition opacity-0 group-hover:opacity-100"
-                        title="Edit"
-                      >
-                        <IconEdit />
-                      </button>
-
-                      {p.active === false ? (
-                        <button
-                          onClick={() => handleRestore(p.id, p.name)}
-                          className="rounded-lg bg-green-50 px-3 h-8 text-xs font-semibold text-green-700 hover:bg-green-100 transition opacity-0 group-hover:opacity-100"
-                        >
-                          Restore
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => setDeletingProduct(p)}
-                          className="grid h-8 w-8 place-items-center rounded-lg bg-red-50 text-red-500 hover:bg-red-100 transition opacity-0 group-hover:opacity-100"
-                          title="Archive"
-                        >
-                          <IconTrash />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="lg:hidden px-5 py-4 space-y-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="font-semibold text-slate-900 truncate">
-                          {p.name || "Unnamed"}
+                        <div className="text-xs text-slate-500 truncate">
+                          {p.unit_measure?.name || "—"}
                         </div>
-                        {categoryName && (
-                          <div className="mt-0.5 text-xs text-slate-500">
-                            {categoryName}
-                          </div>
-                        )}
-                        {(packagingLabel || p.sku) && (
-                          <div className="text-xs text-slate-400 mt-1">
-                            {packagingLabel || p.sku}
+                        {p.sku && (
+                          <div className="text-[11px] font-mono text-slate-400 truncate">
+                            SKU {p.sku}
                           </div>
                         )}
                       </div>
-                      <div className="flex items-center gap-2 flex-wrap justify-end">
+
+                      <div className="truncate text-sm text-slate-700">
+                        {categoryName || <span className="text-slate-300">—</span>}
+                      </div>
+
+                      <div className="truncate text-sm text-slate-700">
+                        {p.supplier?.name || (
+                          <span className="text-slate-300">—</span>
+                        )}
+                      </div>
+
+                      <div className="truncate font-mono text-xs text-slate-500">
+                        {p.barcode || p.sku || (
+                          <span className="text-slate-300">—</span>
+                        )}
+                      </div>
+
+                      <div className="text-right text-slate-700 font-medium">
+                        {fmt(p.cost_price)}
+                      </div>
+
+                      <div className="text-right font-bold text-slate-900">
+                        {fmt(p.unit_price)}
+                      </div>
+
+                      <div className="text-right">
+                        <MarginBadge pct={mgn} />
+                      </div>
+
+                      <div className="flex items-center gap-2 flex-wrap">
                         <SellBadge isSellable={p.is_sellable} />
                         <ArchiveBadge active={p.active} />
                       </div>
-                    </div>
 
-                    <div className="grid grid-cols-3 gap-3 rounded-xl bg-slate-50 border border-slate-100 p-3 text-sm">
-                      <div>
-                        <div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">
-                          Cost
-                        </div>
-                        <div className="font-medium text-slate-800 mt-0.5">
-                          {fmt(p.cost_price)}
-                        </div>
-                      </div>
-                      <div>
-                        <div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">
-                          Sell
-                        </div>
-                        <div className="font-bold text-slate-900 mt-0.5">
-                          {fmt(p.unit_price)}
-                        </div>
-                      </div>
-                      <div>
-                        <div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">
-                          Margin
-                        </div>
-                        <div className="mt-0.5">
-                          <MarginBadge pct={mgn} />
-                        </div>
-                      </div>
-                    </div>
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => openEdit(p)}
+                          className="grid h-9 w-9 place-items-center rounded-xl border border-blue-200 bg-blue-50 text-blue-600 hover:bg-blue-100 transition opacity-0 group-hover:opacity-100"
+                          title="Edit"
+                        >
+                          <IconEdit />
+                        </button>
 
-                    {(p.supplier?.name || p.barcode || p.sku) && (
-                      <div className="text-xs text-slate-500 flex flex-wrap gap-x-4 gap-y-0.5">
-                        {p.supplier?.name && (
-                          <span>Supplier: {p.supplier.name}</span>
-                        )}
-                        {p.sku && <span className="font-mono">SKU: {p.sku}</span>}
-                        {p.barcode && (
-                          <span className="font-mono">Barcode: {p.barcode}</span>
+                        {p.active === false ? (
+                          <button
+                            onClick={() => handleRestore(p.id, p)}
+                            className="rounded-xl border border-green-200 bg-green-50 px-3.5 h-9 text-xs font-semibold text-green-700 hover:bg-green-100 transition opacity-0 group-hover:opacity-100"
+                          >
+                            Restore
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => setDeletingProduct(p)}
+                            className="grid h-9 w-9 place-items-center rounded-xl border border-red-200 bg-red-50 text-red-500 hover:bg-red-100 transition opacity-0 group-hover:opacity-100"
+                            title="Archive"
+                          >
+                            <IconTrash />
+                          </button>
                         )}
                       </div>
-                    )}
+                    </div>
 
-                    <div className="flex gap-2 pt-1">
-                      <button
-                        onClick={() => openEdit(p)}
-                        className="flex-1 flex items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 py-2.5 text-xs font-semibold text-blue-700 hover:bg-blue-100 transition"
-                      >
-                        <IconEdit /> Edit
-                      </button>
+                    <div className="lg:hidden px-5 py-4 space-y-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="font-semibold text-slate-900 truncate">
+                            {displayName}
+                          </div>
+                          {categoryName && (
+                            <div className="mt-0.5 text-xs text-slate-500">
+                              {categoryName}
+                            </div>
+                          )}
+                          {(p.unit_measure?.name || p.sku) && (
+                            <div className="text-xs text-slate-400 mt-1">
+                              {p.unit_measure?.name || p.sku}
+                            </div>
+                          )}
+                        </div>
 
-                      {p.active === false ? (
-                        <button
-                          onClick={() => handleRestore(p.id, p.name)}
-                          className="flex-1 flex items-center justify-center gap-2 rounded-xl border border-green-200 bg-green-50 py-2.5 text-xs font-semibold text-green-700 hover:bg-green-100 transition"
-                        >
-                          Restore
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => setDeletingProduct(p)}
-                          className="flex-1 flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 py-2.5 text-xs font-semibold text-red-600 hover:bg-red-100 transition"
-                        >
-                          <IconTrash /> Archive
-                        </button>
+                        <div className="flex items-center gap-2 flex-wrap justify-end">
+                          <SellBadge isSellable={p.is_sellable} />
+                          <ArchiveBadge active={p.active} />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-3 rounded-2xl bg-[#FFF9EC] border border-[#F1E6C9] p-3 text-sm">
+                        <div>
+                          <div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">
+                            Cost
+                          </div>
+                          <div className="font-medium text-slate-800 mt-0.5">
+                            {fmt(p.cost_price)}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">
+                            Sell
+                          </div>
+                          <div className="font-bold text-slate-900 mt-0.5">
+                            {fmt(p.unit_price)}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">
+                            Margin
+                          </div>
+                          <div className="mt-0.5">
+                            <MarginBadge pct={mgn} />
+                          </div>
+                        </div>
+                      </div>
+
+                      {(p.supplier?.name || p.barcode || p.sku) && (
+                        <div className="text-xs text-slate-500 flex flex-wrap gap-x-4 gap-y-0.5">
+                          {p.supplier?.name && (
+                            <span>Supplier: {p.supplier.name}</span>
+                          )}
+                          {p.sku && <span className="font-mono">SKU: {p.sku}</span>}
+                          {p.barcode && (
+                            <span className="font-mono">Barcode: {p.barcode}</span>
+                          )}
+                        </div>
                       )}
+
+                      <div className="flex gap-2 pt-1">
+                        <button
+                          onClick={() => openEdit(p)}
+                          className="flex-1 flex items-center justify-center gap-2 rounded-2xl border border-blue-200 bg-blue-50 py-2.5 text-xs font-semibold text-blue-700 hover:bg-blue-100 transition"
+                        >
+                          <IconEdit /> Edit
+                        </button>
+
+                        {p.active === false ? (
+                          <button
+                            onClick={() => handleRestore(p.id, p)}
+                            className="flex-1 flex items-center justify-center gap-2 rounded-2xl border border-green-200 bg-green-50 py-2.5 text-xs font-semibold text-green-700 hover:bg-green-100 transition"
+                          >
+                            Restore
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => setDeletingProduct(p)}
+                            className="flex-1 flex items-center justify-center gap-2 rounded-2xl border border-red-200 bg-red-50 py-2.5 text-xs font-semibold text-red-600 hover:bg-red-100 transition"
+                          >
+                            <IconTrash /> Archive
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-              );
-            })
-          )}
+                );
+              })
+            )}
+          </div>
         </div>
 
         <Pagination
@@ -2209,12 +2239,9 @@ export default function ProductsPage() {
             setForm={setAddForm}
             measures={measures}
             categories={categories}
-            filteredSizes={addFilteredSizes}
             suppliers={suppliers}
             orgId={orgId}
             onCategoryCreated={handleAddCategoryCreated}
-            onSizeCreated={handleAddSizeCreated}
-            onSupplierCreated={handleAddSupplierCreated}
             onSubmit={handleAdd}
             onCancel={() => setShowAddModal(false)}
             saving={saving}
@@ -2226,7 +2253,7 @@ export default function ProductsPage() {
       {editProduct && orgId && (
         <Modal
           title="Edit product"
-          sub={editProduct.name}
+          sub={formatProductDisplayName(editProduct)}
           icon={<IconEdit />}
           iconBg="#dbeafe"
           iconColor="#1e40af"
@@ -2237,12 +2264,9 @@ export default function ProductsPage() {
             setForm={setEditForm}
             measures={measures}
             categories={categories}
-            filteredSizes={editFilteredSizes}
             suppliers={suppliers}
             orgId={orgId}
             onCategoryCreated={handleEditCategoryCreated}
-            onSizeCreated={handleEditSizeCreated}
-            onSupplierCreated={handleEditSupplierCreated}
             onSubmit={handleEdit}
             onCancel={() => setEditProduct(null)}
             saving={saving}
@@ -2266,7 +2290,6 @@ export default function ProductsPage() {
         form={addForm}
         categories={categories}
         measures={measures}
-        sizes={sizes}
         loading={saving}
         onConfirm={performAdd}
         onCancel={() => setPendingAddConfirm(false)}
@@ -2278,7 +2301,6 @@ export default function ProductsPage() {
         form={editForm}
         categories={categories}
         measures={measures}
-        sizes={sizes}
         loading={saving}
         onConfirm={performEdit}
         onCancel={() => setPendingEditConfirm(false)}

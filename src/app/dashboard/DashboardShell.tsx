@@ -1,9 +1,10 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import "./dashboard-shell.css";
 
 const navItems = [
   { href: "/dashboard/summarydashboard", label: "Dashboard", icon: "⊞" },
@@ -11,8 +12,8 @@ const navItems = [
   { href: "/dashboard/products", label: "Products", icon: "◈" },
   { href: "/dashboard/sales", label: "Sales", icon: "◉" },
   { href: "/dashboard/reports", label: "Reports", icon: "◧" },
-  { href: "/dashboard/expenses", label: "Expenses", icon: "◧" },
-  { href: "/dashboard/suppliers", label: "Suppliers", icon: "◈" }
+  { href: "/dashboard/expenses", label: "Expenses", icon: "◨" },
+  { href: "/dashboard/suppliers", label: "Suppliers", icon: "◎" },
 ];
 
 export default function DashboardShell({
@@ -22,6 +23,11 @@ export default function DashboardShell({
 }) {
   const pathname = usePathname();
   const router = useRouter();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   async function handleLogout() {
     const supabase = createClient();
@@ -30,354 +36,222 @@ export default function DashboardShell({
     router.refresh();
   }
 
+  const formattedDate = mounted
+    ? new Date().toLocaleDateString("en-GB", {
+        weekday: "long",
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+      })
+    : "";
+
   return (
-    <>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600;700&display=swap');
-
-        :root {
-          --sidebar-bg:         #1A1A24;
-          --sidebar-border:     rgba(255,255,255,0.07);
-          --sidebar-text:       #C8C8D8;
-          --sidebar-text-dim:   #6E6E82;
-          --sidebar-hover-bg:   rgba(255, 255, 255, 0.06);
-          --sidebar-active-bg:  #2A2A3A;
-          --sidebar-active-text:#FFFFFF;
-
-          --accent:             #F5C518;
-
-          --main-bg:            #F4F5F7;
-          --surface-bg:         #FFFFFF;
-          --surface-border:     #E4E6EB;
-          --surface-shadow:     0 1px 3px rgba(0,0,0,0.08), 0 4px 16px rgba(0,0,0,0.05);
-
-          --topbar-bg:          rgba(255,255,255,0.72);
-          --topbar-border:      #E4E6EB;
-
-          --text-primary:       #17171F;
-          --text-secondary:     #4A4A5A;
-
-          font-family: 'DM Sans', system-ui, sans-serif;
-        }
-
-        .font-display {
-          font-family: 'DM Serif Display', Georgia, serif;
-        }
-
-        .nav-link {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          padding: 10px 14px;
-          border-radius: 10px;
-          font-size: 14px;
-          font-weight: 500;
-          color: var(--sidebar-text);
-          text-decoration: none;
-          transition: background 0.15s ease, color 0.15s ease;
-          position: relative;
-        }
-
-        .nav-link:hover {
-          background: var(--sidebar-hover-bg);
-          color: #FFFFFF;
-        }
-
-        .nav-link.active {
-          background: var(--sidebar-active-bg);
-          color: var(--sidebar-active-text);
-        }
-
-        .nav-link.active::before {
-          content: "";
-          position: absolute;
-          left: 0;
-          top: 20%;
-          height: 60%;
-          width: 3px;
-          background: var(--accent);
-          border-radius: 0 3px 3px 0;
-        }
-
-        .nav-icon {
-          font-size: 16px;
-          opacity: 0.9;
-          width: 20px;
-          text-align: center;
-          flex-shrink: 0;
-        }
-
-        .topbar {
-          height: 56px;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          padding: 0 28px;
-          background: var(--topbar-bg);
-          border-bottom: 1px solid var(--topbar-border);
-          backdrop-filter: blur(10px);
-          position: sticky;
-          top: 0;
-          z-index: 30;
-        }
-
-        .nav-divider {
-          height: 1px;
-          background: var(--sidebar-border);
-          margin: 12px 0;
-        }
-
-        .logout-link {
-          color: #FF6B6B !important;
-          background: none;
-          border: none;
-          width: 100%;
-          text-align: left;
-          cursor: pointer;
-        }
-
-        .logout-link:hover {
-          background: rgba(255, 107, 107, 0.1) !important;
-          color: #FF8A8A !important;
-        }
-
-        ::-webkit-scrollbar {
-          width: 6px;
-          height: 6px;
-        }
-
-        ::-webkit-scrollbar-track {
-          background: transparent;
-        }
-
-        ::-webkit-scrollbar-thumb {
-          background: rgba(255,255,255,0.1);
-          border-radius: 3px;
-        }
-      `}</style>
-
-      <div
-        className="flex min-h-screen"
+    <div className="shell-bg min-h-screen flex flex-col lg:flex-row">
+      <aside
+        className="sidebar hidden lg:flex flex-col flex-shrink-0"
         style={{
-          background: "var(--main-bg)",
-          fontFamily: "'DM Sans', sans-serif",
+          width: 260,
+          borderRight: "1px solid var(--sidebar-border)",
+          position: "sticky",
+          top: 0,
+          height: "100vh",
+          overflowY: "auto",
         }}
       >
-        <aside
-          className="hidden lg:flex flex-col flex-shrink-0"
-          style={{
-            width: 240,
-            background: "var(--sidebar-bg)",
-            borderRight: "1px solid var(--sidebar-border)",
-            position: "sticky",
-            top: 0,
-            height: "100vh",
-            overflowY: "auto",
-          }}
-        >
-          <div style={{ padding: "24px 20px 20px" }}>
-            <div className="flex items-center gap-3">
-              <div
-                style={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: 10,
-                  background: "linear-gradient(135deg, #F5C518 0%, #D4A017 100%)",
-                  display: "grid",
-                  placeItems: "center",
-                  fontSize: 20,
-                  flexShrink: 0,
-                }}
-              >
-                🐝
-              </div>
-
-              <div>
-                <div
-                  className="font-display"
-                  style={{
-                    color: "#FFFFFF",
-                    fontSize: 18,
-                    lineHeight: 1.2,
-                    letterSpacing: "-0.3px",
-                  }}
-                >
-                  Pollinators
-                </div>
-
-                <div
-                  style={{
-                    color: "var(--sidebar-text-dim)",
-                    fontSize: 11,
-                    marginTop: 2,
-                    fontWeight: 500,
-                    letterSpacing: "0.5px",
-                    textTransform: "uppercase",
-                  }}
-                >
-                  Apitherapy
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div style={{ padding: "4px 20px 8px" }}>
-            <span
+        <div style={{ padding: "28px 20px 20px" }}>
+          <div className="flex items-center gap-3">
+            <div
               style={{
-                color: "var(--sidebar-text-dim)",
-                fontSize: 10,
-                fontWeight: 700,
-                letterSpacing: "1.2px",
-                textTransform: "uppercase",
+                width: 44,
+                height: 44,
+                borderRadius: 14,
+                background:
+                  "linear-gradient(135deg, #F8D54A 0%, #E2B11A 55%, #C9920A 100%)",
+                display: "grid",
+                placeItems: "center",
+                fontSize: 22,
+                color: "#2B2100",
+                boxShadow:
+                  "0 10px 24px rgba(245,197,24,0.22), inset 0 1px 0 rgba(255,255,255,0.35)",
               }}
             >
-              Menu
-            </span>
-          </div>
-
-          <nav style={{ padding: "0 12px", flex: 1 }}>
-            {navItems.map((item) => {
-              const isActive =
-                pathname === item.href || pathname.startsWith(item.href + "/");
-
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={`nav-link ${isActive ? "active" : ""}`}
-                  style={{ marginBottom: 2 }}
-                >
-                  <span className="nav-icon">{item.icon}</span>
-                  <span>{item.label}</span>
-                </Link>
-              );
-            })}
-
-            <div className="nav-divider" style={{ margin: "16px 0" }} />
-
-            <div style={{ padding: "4px 2px 8px" }}>
-              <span
+              🐝
+            </div>
+            <div>
+              <div
+                className="font-display"
+                style={{ color: "#FFFFFF", fontSize: 21, letterSpacing: "-0.4px" }}
+              >
+                Pollinator Beekeeping & Apitherapy
+              </div>
+              <div
                 style={{
                   color: "var(--sidebar-text-dim)",
-                  fontSize: 10,
+                  fontSize: 11,
                   fontWeight: 700,
                   letterSpacing: "1.2px",
                   textTransform: "uppercase",
                 }}
               >
-                Account
-              </span>
-            </div>
-
-            <Link href="/dashboard/settings" className="nav-link" style={{ marginBottom: 2 }}>
-              <span className="nav-icon">◎</span>
-              <span>Settings</span>
-            </Link>
-
-            <button onClick={handleLogout} className="nav-link logout-link">
-              <span className="nav-icon">→</span>
-              <span>Log out</span>
-            </button>
-          </nav>
-
-          <div style={{ padding: "16px 20px" }}>
-            <div
-              style={{
-                background: "rgba(245,197,24,0.1)",
-                border: "1px solid rgba(245,197,24,0.2)",
-                borderRadius: 8,
-                padding: "10px 12px",
-              }}
-            >
-              <div
-                style={{
-                  color: "#F5C518",
-                  fontSize: 11,
-                  fontWeight: 700,
-                  letterSpacing: "0.5px",
-                }}
-              >
-                SEASON 2025
-              </div>
-
-              <div
-                style={{
-                  color: "var(--sidebar-text)",
-                  fontSize: 12,
-                  marginTop: 3,
-                }}
-              >
-                Harvest active
+                Apitherapy
               </div>
             </div>
-          </div>
-        </aside>
-
-        <div
-          className="lg:hidden fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-4"
-          style={{
-            height: 56,
-            background: "var(--sidebar-bg)",
-            borderBottom: "1px solid var(--sidebar-border)",
-          }}
-        >
-          <div className="flex items-center gap-2.5">
-            <span style={{ fontSize: 22 }}>🐝</span>
-            <span className="font-display" style={{ color: "#FFF", fontSize: 17 }}>
-              Pollinators
-            </span>
-          </div>
-
-          <div style={{ display: "flex", gap: 6, overflowX: "auto" }}>
-            {navItems.map((item) => {
-              const isActive =
-                pathname === item.href || pathname.startsWith(item.href + "/");
-
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  style={{
-                    padding: "5px 10px",
-                    borderRadius: 7,
-                    fontSize: 12,
-                    fontWeight: 500,
-                    color: isActive ? "#111" : "var(--sidebar-text)",
-                    background: isActive ? "var(--accent)" : "transparent",
-                    textDecoration: "none",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {item.label}
-                </Link>
-              );
-            })}
           </div>
         </div>
 
-        <main className="flex-1 min-w-0">
-          <div className="topbar">
-            <div
+        <div style={{ padding: "0 20px 12px" }}>
+          <span
+            style={{
+              color: "var(--sidebar-text-dim)",
+              fontSize: 10,
+              fontWeight: 800,
+              letterSpacing: "1.3px",
+              textTransform: "uppercase",
+            }}
+          >
+            MENU
+          </span>
+        </div>
+
+        <nav style={{ padding: "0 14px", flex: 1 }}>
+          {navItems.map((item) => {
+            const isActive =
+              pathname === item.href || pathname.startsWith(item.href + "/");
+
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`nav-link ${isActive ? "active" : ""}`}
+                style={{ marginBottom: 6, paddingLeft: isActive ? 28 : 14 }}
+              >
+                <span className="nav-icon">{item.icon}</span>
+                <span>{item.label}</span>
+              </Link>
+            );
+          })}
+
+          <div
+            className="nav-divider"
+            style={{ height: 1, background: "var(--sidebar-border)", margin: "20px 0" }}
+          />
+
+          <div style={{ padding: "4px 4px 12px" }}>
+            <span
               style={{
-                color: "var(--text-secondary)",
-                fontSize: 13,
-                fontWeight: 500,
+                color: "var(--sidebar-text-dim)",
+                fontSize: 10,
+                fontWeight: 800,
+                letterSpacing: "1.3px",
+                textTransform: "uppercase",
               }}
             >
-              {new Date().toLocaleDateString("en-GB", {
-                weekday: "long",
-                day: "numeric",
-                month: "long",
-                year: "numeric",
-              })}
-            </div>
+              ACCOUNT
+            </span>
           </div>
 
-          <div className="p-4 pt-4 lg:p-8 lg:pt-6 mt-14 lg:mt-0">
-            {children}
+          <Link
+            href="/dashboard/settings"
+            className={`nav-link ${
+              pathname.startsWith("/dashboard/settings") ? "active" : ""
+            }`}
+            style={{ marginBottom: 6 }}
+          >
+            <span className="nav-icon">⚙</span>
+            <span>Settings</span>
+          </Link>
+
+          <button
+            onClick={handleLogout}
+            className="nav-link logout-link"
+            style={{ color: "#FF8080", marginTop: 4 }}
+          >
+            <span className="nav-icon">→</span>
+            <span>Log out</span>
+          </button>
+        </nav>
+
+      </aside>
+
+      <div className="lg:hidden">
+        <div
+          className="fixed top-0 left-0 right-0 z-50"
+          style={{
+            background: "rgba(17,18,24,0.96)",
+            backdropFilter: "blur(16px)",
+            borderBottom: "1px solid var(--sidebar-border)",
+          }}
+        >
+          <div className="flex items-center justify-between px-5" style={{ height: 60 }}>
+            <div className="flex items-center gap-2.5">
+              <span style={{ fontSize: 24 }}>🐝</span>
+              <span className="font-display" style={{ color: "#FFF", fontSize: 18.5 }}>
+                Pollinators
+              </span>
+            </div>
+
+            <div
+              style={{
+                width: 9,
+                height: 9,
+                borderRadius: "50%",
+                background: "var(--accent)",
+                boxShadow: "0 0 18px rgba(245,197,24,0.7)",
+              }}
+            />
           </div>
-        </main>
+        </div>
+
+        <div className="mobile-nav">
+          {navItems.map((item) => {
+            const isActive =
+              pathname === item.href || pathname.startsWith(item.href + "/");
+
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`mobile-chip ${isActive ? "active" : "idle"}`}
+              >
+                <span className="nav-icon">{item.icon}</span>
+                <span>{item.label}</span>
+              </Link>
+            );
+          })}
+        </div>
       </div>
-    </>
+
+      <main className="flex-1 min-w-0 lg:ml-0">
+        <div className="topbar hidden lg:flex">
+          <div
+            suppressHydrationWarning
+            style={{ color: "var(--text-secondary)", fontSize: 13.5, fontWeight: 600 }}
+          >
+            {formattedDate}
+          </div>
+
+          <div className="topbar-badge">
+            <span
+              style={{
+                width: 7,
+                height: 7,
+                borderRadius: "50%",
+                background: "#D4A017",
+                display: "inline-block",
+              }}
+            />
+            Live operations
+          </div>
+        </div>
+
+        <div className="lg:p-8 p-4 pt-5 lg:pt-8 mt-[60px] lg:mt-0">
+          <div className="content-shell">
+            <div style={{ padding: "28px 32px", position: "relative", zIndex: 1 }}>
+              {children}
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
   );
 }
