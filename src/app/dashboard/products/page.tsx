@@ -7,6 +7,8 @@ import {
   createProduct,
   archiveProduct,
   restoreProduct,
+  type ProductRow,
+  type QuantityUnit,
 } from "@/lib/api/products";
 import {
   listUnitMeasures,
@@ -15,14 +17,12 @@ import {
   listSuppliers,
 } from "@/lib/api/lookups";
 import { createClient } from "@/lib/supabase/client";
-
 import * as S from "./page.styles";
 
 /* ─────────────────────────────────────────────
    Types
 ───────────────────────────────────────────── */
 type UnitKind = "mass" | "volume" | "count";
-type QuantityUnit = "g" | "kg" | "ml" | "L" | "pc";
 
 type MeasureLookup = {
   id: string;
@@ -42,36 +42,10 @@ type SupplierLookup = {
   phone?: string | null;
   email?: string | null;
   notes?: string | null;
-  active?: boolean;
+  active?: boolean | null;
 };
 
-type Product = {
-  id: string;
-  name?: string;
-  sku?: string | null;
-  category_id?: string | null;
-  category?: { id?: string; name?: string } | null;
-  barcode?: string | null;
-  supplier_id?: string | null;
-supplier?: {
-  id?: string;
-  name?: string;
-  contact_person?: string | null;
-  phone?: string | null;
-  email?: string | null;
-  notes?: string | null;
-  active?: boolean | null;
-} | null;
-  notes?: string | null;
-  cost_price?: number | string | null;
-  unit_price?: number | string | null;
-  quantity_value?: number | string | null;
-  quantity_unit?: QuantityUnit | null;
-  unit_measure_id?: string | null;
-  unit_measure?: { id?: string; name?: string } | null;
-  is_sellable?: boolean;
-  active?: boolean;
-};
+type Product = ProductRow;
 
 type FormData = {
   name: string;
@@ -84,6 +58,7 @@ type FormData = {
   sellPrice: string;
   quantityValue: string;
   quantityUnit: QuantityUnit | "";
+  quantityMode: "preset" | "custom";
   unitMeasureId: string;
   isSellable: boolean;
 };
@@ -104,6 +79,7 @@ const BLANK_FORM: FormData = {
   sellPrice: "0",
   quantityValue: "",
   quantityUnit: "",
+  quantityMode: "preset",
   unitMeasureId: "",
   isSellable: true,
 };
@@ -114,6 +90,14 @@ const UNIT_OPTIONS_BY_KIND: Record<UnitKind, QuantityUnit[]> = {
   mass: ["g", "kg"],
   volume: ["ml", "L"],
   count: ["pc"],
+};
+
+const QUANTITY_PRESETS: Record<QuantityUnit, string[]> = {
+  g: ["50", "100", "125", "200", "250", "500", "1000", "2000"],
+  kg: ["0.5", "1", "2", "5", "10"],
+  ml: ["30", "50", "100", "125", "200", "250", "500", "750", "1000"],
+  L: ["1", "2", "5", "10", "20"],
+  pc: ["1", "2", "4", "6", "8", "12", "24", "45"],
 };
 
 /* ─────────────────────────────────────────────
@@ -188,6 +172,13 @@ function formatProductDisplayName(product: {
   return `${base} ${qty}`;
 }
 
+function sanitizeQuantityInput(value: string) {
+  const cleaned = value.replace(/[^\d.]/g, "");
+  const parts = cleaned.split(".");
+  if (parts.length <= 1) return cleaned;
+  return `${parts[0]}.${parts.slice(1).join("")}`;
+}
+
 function validateForm(form: FormData): FormErrors {
   const errors: FormErrors = {};
 
@@ -205,6 +196,23 @@ function validateForm(form: FormData): FormErrors {
   }
 
   return errors;
+}
+
+function useBodyScrollLock(locked: boolean) {
+  useEffect(() => {
+    if (!locked) return;
+
+    const originalBodyOverflow = document.body.style.overflow;
+    const originalHtmlOverflow = document.documentElement.style.overflow;
+
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = originalBodyOverflow;
+      document.documentElement.style.overflow = originalHtmlOverflow;
+    };
+  }, [locked]);
 }
 
 /* ─────────────────────────────────────────────
@@ -499,17 +507,11 @@ function ArchiveBadge({ active }: { active?: boolean }) {
   );
 }
 
-/* ─────────────────────────────────────────────
-   Field Error
-───────────────────────────────────────────── */
 function FieldError({ message }: { message?: string }) {
   if (!message) return null;
   return <p className="mt-1 text-xs text-red-500 font-medium">{message}</p>;
 }
 
-/* ─────────────────────────────────────────────
-   Form Label
-───────────────────────────────────────────── */
 function Label({
   children,
   required,
@@ -525,9 +527,6 @@ function Label({
   );
 }
 
-/* ─────────────────────────────────────────────
-   Section Divider
-───────────────────────────────────────────── */
 function FormSection({
   title,
   children,
@@ -643,7 +642,7 @@ function InlineCategoryCreator({
 }
 
 /* ─────────────────────────────────────────────
-   Archive Confirmation Modal
+   Modals
 ───────────────────────────────────────────── */
 function ArchiveModal({
   product,
@@ -713,9 +712,6 @@ function ArchiveModal({
   );
 }
 
-/* ─────────────────────────────────────────────
-   Confirm Save Modal
-───────────────────────────────────────────── */
 function ConfirmSaveModal({
   open,
   mode,
@@ -764,7 +760,7 @@ function ConfirmSaveModal({
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
       onClick={onCancel}
     >
       <div
@@ -818,9 +814,6 @@ function ConfirmSaveModal({
   );
 }
 
-/* ─────────────────────────────────────────────
-   Modal Shell
-───────────────────────────────────────────── */
 function Modal({
   title,
   sub,
@@ -911,7 +904,17 @@ function ProductForm({
   const errors = validateForm(form);
   const hasErrors = Object.keys(errors).length > 0;
 
-  const set =
+  const allowedUnits = useMemo(
+    () => getAllowedQuantityUnits(form.unitMeasureId, measures),
+    [form.unitMeasureId, measures]
+  );
+
+  const presetValues = useMemo(() => {
+    if (!form.quantityUnit) return [];
+    return QUANTITY_PRESETS[form.quantityUnit] ?? [];
+  }, [form.quantityUnit]);
+
+  const setField =
     (k: keyof FormData) =>
     (
       e: React.ChangeEvent<
@@ -930,20 +933,37 @@ function ProductForm({
     errors[k] && (touched[k] || submitAttempted) ? errors[k] : undefined;
 
   const marginPct = margin(form.costPrice, form.sellPrice);
-  const allowedUnits = useMemo(
-    () => getAllowedQuantityUnits(form.unitMeasureId, measures),
-    [form.unitMeasureId, measures]
-  );
 
   useEffect(() => {
     if (!allowedUnits.length) return;
-    if (!form.quantityUnit || !allowedUnits.includes(form.quantityUnit as QuantityUnit)) {
+
+    if (!form.quantityUnit || !allowedUnits.includes(form.quantityUnit)) {
+      const nextUnit = allowedUnits[0];
       setForm((prev) => ({
         ...prev,
-        quantityUnit: allowedUnits[0],
+        quantityUnit: nextUnit,
+        quantityValue:
+          prev.quantityMode === "preset"
+            ? (QUANTITY_PRESETS[nextUnit]?.[0] ?? "")
+            : prev.quantityValue,
       }));
     }
-  }, [allowedUnits, form.quantityUnit, setForm]);
+  }, [allowedUnits, form.quantityUnit, setForm, form.quantityMode]);
+
+  useEffect(() => {
+    if (form.quantityMode !== "preset") return;
+    if (!form.quantityUnit) return;
+
+    const values = QUANTITY_PRESETS[form.quantityUnit] ?? [];
+    if (!values.length) return;
+
+    if (!form.quantityValue || !values.includes(form.quantityValue)) {
+      setForm((prev) => ({
+        ...prev,
+        quantityValue: values[0] ?? "",
+      }));
+    }
+  }, [form.quantityMode, form.quantityUnit, form.quantityValue, setForm]);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -973,28 +993,30 @@ function ProductForm({
               }`}
               placeholder="e.g. Granola or Raw Honey"
               value={form.name}
-              onChange={set("name")}
+              onChange={setField("name")}
               onBlur={() => touch("name")}
             />
             <FieldError message={showErr("name")} />
           </div>
+
           <div>
             <Label>SKU</Label>
             <input
               className={S.inputCls}
               placeholder="e.g. GRA-200"
               value={form.sku}
-              onChange={set("sku")}
+              onChange={setField("sku")}
             />
           </div>
         </div>
+
         <div>
           <Label>Barcode</Label>
           <input
             className={`${S.inputCls} font-mono`}
             placeholder="EAN / UPC (optional)"
             value={form.barcode}
-            onChange={set("barcode")}
+            onChange={setField("barcode")}
           />
         </div>
       </FormSection>
@@ -1010,7 +1032,7 @@ function ProductForm({
                   : ""
               }`}
               value={form.categoryId}
-              onChange={set("categoryId")}
+              onChange={setField("categoryId")}
               onBlur={() => touch("categoryId")}
               style={S.selectChevronStyle}
             >
@@ -1031,7 +1053,7 @@ function ProductForm({
               className={S.selectCls}
               style={S.selectChevronStyle}
               value={form.supplierId}
-              onChange={set("supplierId")}
+              onChange={setField("supplierId")}
             >
               <option value="">— Select supplier —</option>
               {suppliers.map((s) => (
@@ -1056,7 +1078,7 @@ function ProductForm({
               }`}
               style={S.selectChevronStyle}
               value={form.unitMeasureId}
-              onChange={set("unitMeasureId")}
+              onChange={setField("unitMeasureId")}
               onBlur={() => touch("unitMeasureId")}
             >
               <option value="">— Select form —</option>
@@ -1070,25 +1092,6 @@ function ProductForm({
           </div>
 
           <div>
-            <Label required>Quantity</Label>
-            <input
-              className={`${S.inputCls} ${
-                showErr("quantityValue")
-                  ? "border-red-400 focus:border-red-400 focus:ring-red-100"
-                  : ""
-              }`}
-              type="number"
-              min="0"
-              step="0.001"
-              placeholder="e.g. 200"
-              value={form.quantityValue}
-              onChange={set("quantityValue")}
-              onBlur={() => touch("quantityValue")}
-            />
-            <FieldError message={showErr("quantityValue")} />
-          </div>
-
-          <div>
             <Label required>Unit</Label>
             <select
               className={`${S.selectCls} ${
@@ -1098,7 +1101,18 @@ function ProductForm({
               }`}
               style={S.selectChevronStyle}
               value={form.quantityUnit}
-              onChange={set("quantityUnit")}
+              onChange={(e) => {
+                const nextUnit = e.target.value as QuantityUnit | "";
+                setForm((prev) => ({
+                  ...prev,
+                  quantityUnit: nextUnit,
+                  quantityValue:
+                    prev.quantityMode === "preset"
+                      ? (nextUnit ? QUANTITY_PRESETS[nextUnit]?.[0] ?? "" : "")
+                      : prev.quantityValue,
+                }));
+                setTouched((t) => ({ ...t, quantityUnit: true }));
+              }}
               onBlur={() => touch("quantityUnit")}
               disabled={!allowedUnits.length}
             >
@@ -1117,7 +1131,84 @@ function ProductForm({
             </select>
             <FieldError message={showErr("quantityUnit")} />
           </div>
+
+          <div>
+            <Label required>Quantity mode</Label>
+            <select
+              className={S.selectCls}
+              style={S.selectChevronStyle}
+              value={form.quantityMode}
+              onChange={(e) => {
+                const nextMode = e.target.value as "preset" | "custom";
+                setForm((prev) => ({
+                  ...prev,
+                  quantityMode: nextMode,
+                  quantityValue:
+                    nextMode === "preset" && prev.quantityUnit
+                      ? (QUANTITY_PRESETS[prev.quantityUnit]?.[0] ?? "")
+                      : prev.quantityValue,
+                }));
+              }}
+            >
+              <option value="preset">Choose common quantity</option>
+              <option value="custom">Enter custom quantity</option>
+            </select>
+          </div>
         </div>
+
+        {form.quantityMode === "preset" ? (
+          <div>
+            <Label required>Quantity</Label>
+            <select
+              className={`${S.selectCls} ${
+                showErr("quantityValue")
+                  ? "border-red-400 focus:border-red-400 focus:ring-red-100"
+                  : ""
+              }`}
+              style={S.selectChevronStyle}
+              value={form.quantityValue}
+              onChange={setField("quantityValue")}
+              onBlur={() => touch("quantityValue")}
+              disabled={!form.quantityUnit}
+            >
+              {!form.quantityUnit ? (
+                <option value="">Select unit first</option>
+              ) : (
+                <>
+                  <option value="">— Select quantity —</option>
+                  {presetValues.map((value) => (
+                    <option key={value} value={value}>
+                      {value}
+                    </option>
+                  ))}
+                </>
+              )}
+            </select>
+            <FieldError message={showErr("quantityValue")} />
+          </div>
+        ) : (
+          <div>
+            <Label required>Custom quantity</Label>
+            <input
+              className={`${S.inputCls} ${
+                showErr("quantityValue")
+                  ? "border-red-400 focus:border-red-400 focus:ring-red-100"
+                  : ""
+              }`}
+              type="text"
+              inputMode="decimal"
+              placeholder="e.g. 200"
+              value={form.quantityValue}
+              onChange={(e) => {
+                const value = sanitizeQuantityInput(e.target.value);
+                setForm((prev) => ({ ...prev, quantityValue: value }));
+                setTouched((t) => ({ ...t, quantityValue: true }));
+              }}
+              onBlur={() => touch("quantityValue")}
+            />
+            <FieldError message={showErr("quantityValue")} />
+          </div>
+        )}
 
         <div className="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm">
           <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-amber-700">
@@ -1152,16 +1243,20 @@ function ProductForm({
           </select>
         </div>
 
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
             <Label>Cost price (Ksh)</Label>
             <input
               className={S.inputCls}
-              type="number"
-              min="0"
-              step="0.01"
+              type="text"
+              inputMode="decimal"
               value={form.costPrice}
-              onChange={set("costPrice")}
+              onChange={(e) =>
+                setForm((prev) => ({
+                  ...prev,
+                  costPrice: sanitizeQuantityInput(e.target.value),
+                }))
+              }
             />
           </div>
 
@@ -1173,11 +1268,15 @@ function ProductForm({
                   ? "border-red-400 focus:border-red-400 focus:ring-red-100"
                   : ""
               }`}
-              type="number"
-              min="0"
-              step="0.01"
+              type="text"
+              inputMode="decimal"
               value={form.sellPrice}
-              onChange={set("sellPrice")}
+              onChange={(e) =>
+                setForm((prev) => ({
+                  ...prev,
+                  sellPrice: sanitizeQuantityInput(e.target.value),
+                }))
+              }
               onBlur={() => touch("sellPrice")}
             />
             <FieldError message={showErr("sellPrice")} />
@@ -1212,7 +1311,7 @@ function ProductForm({
           className={`${S.inputCls} resize-none`}
           placeholder="Batch details, storage info, allergens…"
           value={form.notes}
-          onChange={set("notes")}
+          onChange={setField("notes")}
         />
       </FormSection>
 
@@ -1276,6 +1375,7 @@ function Pagination({
         Showing {start}–{end} of {totalItems} product
         {totalItems !== 1 ? "s" : ""}
       </span>
+
       <div className="flex items-center gap-1.5">
         <button
           onClick={() => onPage(page - 1)}
@@ -1356,8 +1456,18 @@ export default function ProductsPage() {
   const [pendingAddConfirm, setPendingAddConfirm] = useState(false);
   const [pendingEditConfirm, setPendingEditConfirm] = useState(false);
 
+  const isAnyModalOpen =
+    showAddModal ||
+    !!editProduct ||
+    !!deletingProduct ||
+    pendingAddConfirm ||
+    pendingEditConfirm;
+
+  useBodyScrollLock(isAnyModalOpen);
+
   async function refresh(o: string) {
-    setItems(await listProducts(o, !showArchived));
+    const rows = await listProducts(o, !showArchived);
+    setItems(rows);
   }
 
   useEffect(() => {
@@ -1378,12 +1488,16 @@ export default function ProductsPage() {
         setSuppliers(sups as SupplierLookup[]);
 
         const firstId = typedMeasures?.[0]?.id ?? "";
-        const firstAllowedUnit = getAllowedQuantityUnits(firstId, typedMeasures)[0] ?? "";
+        const firstAllowedUnit =
+          getAllowedQuantityUnits(firstId, typedMeasures)[0] ?? "";
 
         setAddForm((f) => ({
           ...f,
           unitMeasureId: firstId,
           quantityUnit: firstAllowedUnit,
+          quantityValue: firstAllowedUnit
+            ? (QUANTITY_PRESETS[firstAllowedUnit]?.[0] ?? "")
+            : "",
         }));
 
         await refresh(o);
@@ -1519,13 +1633,20 @@ export default function ProductsPage() {
         is_sellable: addForm.isSellable,
       });
 
-      const allowedUnits = getAllowedQuantityUnits(addForm.unitMeasureId, measures);
+      const allowedUnits = getAllowedQuantityUnits(
+        addForm.unitMeasureId,
+        measures
+      );
+      const nextUnit = allowedUnits[0] ?? "";
 
       setAddForm({
         ...BLANK_FORM,
         unitMeasureId: addForm.unitMeasureId,
-        quantityUnit: allowedUnits[0] ?? "",
+        quantityUnit: nextUnit,
+        quantityMode: "preset",
+        quantityValue: nextUnit ? (QUANTITY_PRESETS[nextUnit]?.[0] ?? "") : "",
       });
+
       setShowAddModal(false);
       setPendingAddConfirm(false);
       await refresh(orgId);
@@ -1645,6 +1766,17 @@ export default function ProductsPage() {
       measures
     );
 
+    const quantityUnit =
+      (p.quantity_unit as QuantityUnit | null) ?? allowedUnits[0] ?? "";
+    const quantityValue =
+      p.quantity_value !== null && p.quantity_value !== undefined
+        ? String(p.quantity_value)
+        : "";
+
+    const presetValues = quantityUnit ? QUANTITY_PRESETS[quantityUnit] ?? [] : [];
+    const quantityMode =
+      quantityValue && presetValues.includes(quantityValue) ? "preset" : "custom";
+
     setEditForm({
       name: p.name ?? "",
       sku: p.sku ?? "",
@@ -1654,17 +1786,13 @@ export default function ProductsPage() {
       notes: p.notes ?? "",
       costPrice: String(p.cost_price ?? "0"),
       sellPrice: String(p.unit_price ?? "0"),
-      quantityValue:
-        p.quantity_value !== null && p.quantity_value !== undefined
-          ? String(p.quantity_value)
-          : "",
-      quantityUnit:
-        (p.quantity_unit as QuantityUnit | null) ??
-        allowedUnits[0] ??
-        "",
+      quantityValue,
+      quantityUnit,
+      quantityMode,
       unitMeasureId: p.unit_measure_id ?? measures[0]?.id ?? "",
       isSellable: p.is_sellable ?? true,
     });
+
     setEditProduct(p);
   }
 
@@ -1912,7 +2040,7 @@ export default function ProductsPage() {
                 return (
                   <div
                     key={p.id}
-                    className="group rounded-[24px] border border-[#EFE4C6] bg-[linear-gradient(180deg,#FFFFFF_0%,#FFFCF4_100%)] shadow-[0_8px_30px_rgba(15,23,42,0.04)] transition-all duration-200 hover:-translate-y-[1px] hover:shadow-[0_16px_34px_rgba(245,197,24,0.10)] hover:border-[#E5D28D]"
+                    className="group rounded-[24px] border border-[#EFE4C6] bg-[linear-gradient(180deg,#FFFFFF_0%,#FFFCF4_100%)] shadow-[0_8px_30px_rgba(15,23,42,0.04)] transition-all duration-200 hover:-translate-y-px hover:shadow-[0_16px_34px_rgba(245,197,24,0.10)] hover:border-[#E5D28D]"
                   >
                     <div
                       className="hidden lg:grid items-center gap-4 px-6 py-5 text-sm"
@@ -2010,6 +2138,7 @@ export default function ProductsPage() {
                             </div>
                           )}
                         </div>
+
                         <div className="flex items-center gap-2 flex-wrap justify-end">
                           <SellBadge isSellable={p.is_sellable} />
                           <ArchiveBadge active={p.active} />

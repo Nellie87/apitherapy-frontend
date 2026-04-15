@@ -171,39 +171,6 @@ export default function DashboardShell({
           </button>
         </nav>
 
-        <div style={{ padding: "20px" }}>
-          <div
-            style={{
-              background:
-                "linear-gradient(180deg, rgba(245,197,24,0.14), rgba(245,197,24,0.08))",
-              border: "1px solid rgba(245,197,24,0.20)",
-              borderRadius: 18,
-              padding: "16px",
-              boxShadow: "0 10px 24px rgba(245,197,24,0.08)",
-            }}
-          >
-            <div
-              style={{
-                color: "#A36E00",
-                fontSize: 11,
-                fontWeight: 800,
-                letterSpacing: "0.8px",
-              }}
-            >
-              SEASON 2025
-            </div>
-            <div
-              style={{
-                color: "#F8F2E4",
-                fontSize: 13.5,
-                marginTop: 6,
-                fontWeight: 600,
-              }}
-            >
-              Harvest active
-            </div>
-          </div>
-        </div>
       </aside>
 
       <div className="lg:hidden">

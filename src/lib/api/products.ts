@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/client";
 
-export type UnitKind = "mass" | "volume" | "count";
 export type QuantityUnit = "g" | "kg" | "ml" | "L" | "pc";
+export type UnitKind = "mass" | "volume" | "count";
 
 export type ProductRow = {
   id: string;
@@ -50,6 +50,11 @@ export type CreateProductPayload = {
   quantity_unit?: QuantityUnit | null;
   is_sellable?: boolean;
 };
+
+function normalizeSingle<T>(value: T | T[] | null | undefined): T | null {
+  if (Array.isArray(value)) return value[0] ?? null;
+  return value ?? null;
+}
 
 export async function listProducts(
   orgId: string,
@@ -103,24 +108,18 @@ export async function listProducts(
         ? Number(row.quantity_value)
         : null,
     quantity_unit: row.quantity_unit ?? null,
-    category: Array.isArray(row.category) ? (row.category[0] ?? null) : row.category,
-    supplier: Array.isArray(row.supplier) ? (row.supplier[0] ?? null) : row.supplier,
-    unit_measure: Array.isArray(row.unit_measure)
-      ? (row.unit_measure[0] ?? null)
-      : row.unit_measure,
-    unit_size: Array.isArray(row.unit_size)
-      ? row.unit_size[0]
-        ? {
-            ...row.unit_size[0],
-            kind: row.unit_size[0].kind as UnitKind,
-          }
-        : null
-      : row.unit_size
-      ? {
-          ...row.unit_size,
-          kind: row.unit_size.kind as UnitKind,
-        }
-      : null,
+    category: normalizeSingle(row.category),
+    supplier: normalizeSingle(row.supplier),
+    unit_measure: normalizeSingle(row.unit_measure),
+    unit_size: (() => {
+      const size = normalizeSingle(row.unit_size);
+      if (!size) return null;
+      return {
+        id: size.id,
+        label: size.label,
+        kind: size.kind as UnitKind,
+      };
+    })(),
   }));
 }
 
@@ -160,6 +159,7 @@ export async function createProduct(
 
 export async function archiveProduct(orgId: string, id: string) {
   const supabase = createClient();
+
   const { error } = await supabase
     .from("products")
     .update({ active: false })
@@ -171,6 +171,7 @@ export async function archiveProduct(orgId: string, id: string) {
 
 export async function restoreProduct(orgId: string, id: string) {
   const supabase = createClient();
+
   const { error } = await supabase
     .from("products")
     .update({ active: true })
