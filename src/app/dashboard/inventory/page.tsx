@@ -949,7 +949,25 @@ export default function InventoryPage() {
     [paginatedHistory]
   );
 
+  async function openProductHistory(row: InventoryRow) {
+    if (!orgId) return;
 
+    setHistoryRow(row);
+    setHistoryOpen(true);
+    setLoadingHistory(true);
+
+    try {
+      const data = await listInventoryMovements(orgId, row.product_id);
+      setProductMovements(data);
+    } catch (e: any) {
+      setToast({
+        message: e.message ?? "Failed to load product history",
+        type: "error",
+      });
+    } finally {
+      setLoadingHistory(false);
+    }
+  }
 
   function handleAdjustModalClose() {
     if (adjustDirty) return;
