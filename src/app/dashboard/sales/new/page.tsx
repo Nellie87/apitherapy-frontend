@@ -230,10 +230,11 @@ export default function NewSalePage() {
 
     setSaving(true);
     try {
-      const res = await createSaleStrict(orgId, {
-        customer_name: customer.trim() || undefined,
-        items,
-      });
+const res = await createSaleStrict(orgId, {
+  customer_name: customer.trim() || undefined,
+  payment_method: payment,
+  items,
+});
       await refresh(orgId);
       setCart([]);
       setCustomer("");

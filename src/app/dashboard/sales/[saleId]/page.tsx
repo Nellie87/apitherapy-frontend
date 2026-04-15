@@ -27,9 +27,11 @@ type NormalizedItem = {
   product_name: string;
   qty: number;
   base: number;
+  costAtSale: number;
   discountPerUnit: number;
   final: number;
   lineTotal: number;
+  lineProfit: number;
 };
 
 /* ─── Status Badge ───────────────────────────────────────────── */
@@ -273,15 +275,28 @@ export default function SaleDetailsPage() {
     })();
   }, [orgId, saleId]);
 
-  const normalizedItems = useMemo<NormalizedItem[]>(() => items.map((x) => {
-    const p = Array.isArray(x.products) ? x.products[0] : (x.products as any);
-    const qty           = Number(x.qty ?? 0);
-    const base          = Number((x as any).unit_price_base ?? x.unit_price ?? 0);
-    const discountPerUnit = Number((x as any).discount_per_unit ?? 0);
-    const final         = Math.max(0, base - discountPerUnit);
-    const lineTotal     = Number(x.line_total ?? final * qty);
-    return { id: x.id, product_name: p?.name ?? "Unknown product", qty, base, discountPerUnit, final, lineTotal };
-  }), [items]);
+const normalizedItems = useMemo<NormalizedItem[]>(() => items.map((x) => {
+  const p = Array.isArray(x.products) ? x.products[0] : (x.products as any);
+  const qty = Number(x.qty ?? 0);
+  const base = Number((x as any).unit_price_base ?? x.unit_price ?? 0);
+  const costAtSale = Number((x as any).cost_price_at_sale ?? 0);
+  const discountPerUnit = Number((x as any).discount_per_unit ?? 0);
+  const final = Math.max(0, base - discountPerUnit);
+  const lineTotal = Number(x.line_total ?? final * qty);
+  const lineProfit = (final - costAtSale) * qty;
+
+  return {
+    id: x.id,
+    product_name: p?.name ?? "Unknown product",
+    qty,
+    base,
+    costAtSale,
+    discountPerUnit,
+    final,
+    lineTotal,
+    lineProfit,
+  };
+}), [items]);
 
   const discountedLines = useMemo(() => normalizedItems.filter((x) => x.discountPerUnit > 0), [normalizedItems]);
 
@@ -290,7 +305,10 @@ export default function SaleDetailsPage() {
     discount_total: Number(sale?.discount_total ?? 0),
     total:          Number(sale?.total          ?? 0),
   }), [sale]);
-
+const totalProfit = useMemo(
+  () => normalizedItems.reduce((sum, x) => sum + x.lineProfit, 0),
+  [normalizedItems]
+);
   async function handleDownload() {
     if (!sale) return;
     setDownloading(true); setErr("");
@@ -369,21 +387,34 @@ export default function SaleDetailsPage() {
             <div className="text-3xl font-bold text-slate-900 leading-none">
               {loading ? <span className="text-slate-300">Loading…</span> : (sale?.sale_no ?? "—")}
             </div>
-            <div className="space-y-1.5 text-sm">
-              <div className="flex items-center gap-2">
-                <span className="w-16 text-xs font-semibold uppercase tracking-wider text-slate-400">Customer</span>
-                <span className="text-slate-700 font-medium">{sale?.customer_name ?? <span className="text-slate-400 italic">Walk-in</span>}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="w-16 text-xs font-semibold uppercase tracking-wider text-slate-400">Date</span>
-                <span className="text-slate-700">{sale?.created_at ? fmtDate(sale.created_at) : "—"}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="w-16 text-xs font-semibold uppercase tracking-wider text-slate-400">Status</span>
-                <StatusBadge status={sale?.status} />
-              </div>
+           <div className="space-y-1.5 text-sm">
             </div>
-          </div>
+  <div className="flex items-center gap-2">
+    <span className="w-20 text-xs font-semibold uppercase tracking-wider text-slate-400">Customer</span>
+    <span className="text-slate-700 font-medium">
+      {sale?.customer_name ?? <span className="text-slate-400 italic">Walk-in</span>}
+    </span>
+  </div>
+
+  <div className="flex items-center gap-2">
+    <span className="w-20 text-xs font-semibold uppercase tracking-wider text-slate-400">Date</span>
+    <span className="text-slate-700">
+      {sale?.created_at ? fmtDate(sale.created_at) : "—"}
+    </span>
+  </div>
+
+  <div className="flex items-center gap-2">
+    <span className="w-20 text-xs font-semibold uppercase tracking-wider text-slate-400">Payment</span>
+    <span className="text-slate-700 capitalize">
+      {sale?.payment_method ?? "—"}
+    </span>
+  </div>
+
+  <div className="flex items-center gap-2">
+    <span className="w-20 text-xs font-semibold uppercase tracking-wider text-slate-400">Status</span>
+    <StatusBadge status={sale?.status} />
+  </div>
+</div>
 
           {/* Right: business identity */}
           <div className="text-right space-y-1">
@@ -398,11 +429,17 @@ export default function SaleDetailsPage() {
       </div>
 
       {/* ── KPI Cards ── */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
         <StatCard label="Subtotal"  value={fmtMoney(kpis.subtotal)}       loading={loading} />
         <StatCard label="Discounts" value={fmtMoney(kpis.discount_total)} loading={loading}
           sub={discountedLines.length > 0 ? `${discountedLines.length} line${discountedLines.length !== 1 ? "s" : ""} discounted` : undefined} />
         <StatCard label="Total"     value={fmtMoney(kpis.total)}          loading={loading} highlight />
+        <StatCard
+  label="Profit"
+  value={fmtMoney(totalProfit)}
+  loading={loading}
+  sub="based on cost snapshot"
+/>
       </div>
 
       {/* ── Line Items Table ── */}

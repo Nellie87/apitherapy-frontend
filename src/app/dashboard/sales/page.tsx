@@ -481,8 +481,7 @@ export default function SalesPage() {
 
                     {/* Payment */}
                     <div>
-                      <PayBadge method={(s as any).payment_method} />
-                    </div>
+<PayBadge method={s.payment_method} />                    </div>
 
                     {/* Items count */}
                     <div className="text-sm text-slate-600">
@@ -541,8 +540,7 @@ export default function SalesPage() {
                     </div>
 
                     <div className="flex items-center gap-2 mt-2">
-                      <PayBadge method={(s as any).payment_method} />
-                      <span className="text-xs text-slate-500">
+<PayBadge method={s.payment_method} />                      <span className="text-xs text-slate-500">
                         {itemCount !== null ? `${itemCount} item${itemCount !== 1 ? "s" : ""}` : "—"}
                       </span>
                     </div>
