@@ -24,7 +24,8 @@ const PRODUCTS = [
     imageBg: "from-amber-50 to-yellow-100",
     accentHex: "#d4920a",
     tags: ["All", "Everyday", "Raw"],
-    img: "/honey-.png",
+    img: "/images/lipbalm.jpg",
+    
   },
   {
     id: 2,
@@ -462,6 +463,14 @@ export default function Page() {
                         <br />
                         Honey
                       </h3>
+                       <Image
+                    src="/images/lipbalm.jpg"
+                    alt="Honey dipper with fresh honey"
+                    width={380}
+                    height={200}
+                    className="relative z-10 h-auto w-[260px] object-contain drop-shadow-[0_18px_26px_rgba(70,46,8,0.18)]"
+                  />
+               
                       <div className="text-right">
                         <p className="text-[9px] uppercase tracking-wider text-stone-400">
                           from
@@ -1023,6 +1032,7 @@ export default function Page() {
               <p className="mb-4 text-[10px] font-bold uppercase tracking-[0.32em] text-stone-400">
                 Products
               </p>
+              
               <ul className="space-y-2.5">
                 {[
                   "Pure Raw Honey",
