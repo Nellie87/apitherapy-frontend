@@ -89,6 +89,21 @@ const BLANK_FORM: FormData = {
   isSellable: true,
 };
 
+const FIELD_LABELS: Record<string, string> = {
+  name: "Name",
+  sku: "SKU",
+  barcode: "Barcode",
+  notes: "Notes",
+  cost_price: "Cost price",
+  unit_price: "Sell price",
+  is_sellable: "Sellable",
+  quantity_value: "Quantity",
+  quantity_unit: "Unit",
+  category_id: "Category",
+  supplier_id: "Supplier",
+  unit_measure_id: "Container",
+};
+
 const PAGE_SIZE = 10;
 const HISTORY_PAGE_SIZE = 12;
 
@@ -106,6 +121,25 @@ const QUANTITY_PRESETS: Record<QuantityUnit, string[]> = {
   pc: ["1", "2", "4", "6", "8", "12", "24", "45"],
 };
 
+// History
+
+function formatHistoryValue(field: string, value: any) {
+  if (value === null || value === undefined) return "—";
+
+  if (field === "cost_price" || field === "unit_price") {
+    return fmt(value);
+  }
+
+  if (field === "is_sellable") {
+    return value ? "Yes" : "No";
+  }
+
+  if (field === "quantity_value") {
+    return String(value);
+  }
+
+  return String(value);
+}
 /* ─────────────────────────────────────────────
    Helpers
 ───────────────────────────────────────────── */
@@ -2559,19 +2593,41 @@ async function performEdit() {
           </div>
 
           <div className="mt-1 text-sm text-slate-600">{h.note}</div>
+{h.action === "edit" &&
+  h.details_json?.changed_fields?.length &&
+  h.details_json.before &&
+  h.details_json.after && (
+    <div className="mt-3 space-y-1.5">
+      {h.details_json.changed_fields.map((field) => {
+        const before = h.details_json?.before?.[field];
+        const after = h.details_json?.after?.[field];
 
-          {h.action === "edit" && h.details_json?.changed_fields?.length ? (
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {h.details_json.changed_fields.map((field) => (
-                <span
-                  key={field}
-                  className="rounded-full bg-white px-2 py-0.5 text-[11px] font-medium text-slate-600 border border-slate-200"
-                >
-                  {field}
-                </span>
-              ))}
-            </div>
-          ) : null}
+        // skip if somehow equal
+        if (before === after) return null;
+
+        return (
+          <div
+            key={field}
+            className="flex items-center gap-2 text-xs text-slate-600"
+          >
+            <span className="font-semibold text-slate-500 min-w-[90px]">
+              {FIELD_LABELS[field] || field}
+            </span>
+
+            <span className="line-through text-red-400">
+              {formatHistoryValue(field, before)}
+            </span>
+
+            <span className="text-slate-400">→</span>
+
+            <span className="font-semibold text-green-600">
+              {formatHistoryValue(field, after)}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  )}
 
           {h.action === "add" && h.details_json?.after ? (
             <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-slate-500">
