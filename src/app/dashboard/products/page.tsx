@@ -84,7 +84,7 @@ const BLANK_FORM: FormData = {
   isSellable: true,
 };
 
-const PAGE_SIZE = 5;
+const PAGE_SIZE = 10;
 
 const UNIT_OPTIONS_BY_KIND: Record<UnitKind, QuantityUnit[]> = {
   mass: ["g", "kg"],
@@ -390,14 +390,14 @@ function KpiCard({
   variant?: "neutral" | "success" | "warning" | "info";
 }) {
   const cfg = {
-    neutral: {
-      border: "#F1E4BF",
-      iconBg: "#FFF9E7",
-      iconColor: "#8A6A00",
-      val: "#2A2112",
-      sub: "#9A7A18",
-      shadow: "0 10px 25px rgba(245,197,24,0.06)",
-    },
+neutral: {
+  border: "#E2E8F0",
+  iconBg: "#F8FAFC",
+  iconColor: "#475569",
+  val: "#0F172A",
+  sub: "#64748B",
+  shadow: "0 10px 25px rgba(15,23,42,0.05)",
+},
     success: {
       border: "#CBE9D2",
       iconBg: "#EAF8EE",
@@ -414,14 +414,14 @@ function KpiCard({
       sub: "#C17A00",
       shadow: "0 10px 25px rgba(245,158,11,0.08)",
     },
-    info: {
-      border: "#E7D8A7",
-      iconBg: "#FFF7D6",
-      iconColor: "#7A6300",
-      val: "#7A6300",
-      sub: "#A28300",
-      shadow: "0 10px 25px rgba(245,197,24,0.08)",
-    },
+info: {
+  border: "#E2E8F0",
+  iconBg: "#F8FAFC",
+  iconColor: "#475569",
+  val: "#0F172A",
+  sub: "#64748B",
+  shadow: "0 10px 25px rgba(15,23,42,0.05)",
+},
   }[variant];
 
   return (
@@ -1370,7 +1370,7 @@ function Pagination({
   }
 
   return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-t border-[#F1E6C9] bg-[#FFFDF8] px-6 py-4">
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-t border-slate-100 bg-slate-50/70 px-6 py-4">
       <span className="text-xs text-slate-500">
         Showing {start}–{end} of {totalItems} product
         {totalItems !== 1 ? "s" : ""}
@@ -1862,7 +1862,7 @@ export default function ProductsPage() {
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <div className="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-amber-700">
+          <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-600">
             Catalog
           </div>
           <h1 className="mt-3 text-[32px] font-bold text-slate-900 tracking-tight">
@@ -1925,15 +1925,15 @@ export default function ProductsPage() {
         />
       </div>
 
-      <div className="rounded-[24px] border border-[#EADFC2] bg-white shadow-[0_12px_36px_rgba(245,197,24,0.06)] overflow-hidden">
-        <div className="border-b border-[#F1E6C9] bg-[linear-gradient(180deg,#FFFDF8_0%,#FFF9EC_100%)] px-5 py-4 lg:px-6">
+      <div className="rounded-[24px] border border-slate-200 bg-white shadow-[0_12px_36px_rgba(15,23,42,0.05)] overflow-hidden">
+        <div className="border-b border-slate-100 bg-slate-50/70 px-5 py-4 lg:px-6">
           <div className="flex flex-wrap items-center gap-2">
             <label className="relative flex-1 min-w-[220px] max-w-sm">
               <div className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
                 <IconSearch />
               </div>
               <input
-                className="w-full rounded-2xl border border-[#EADFC2] bg-white pl-10 pr-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 focus:border-amber-500 focus:ring-2 focus:ring-amber-100 outline-none transition"
+className="w-full rounded-2xl border border-slate-200 bg-white pl-10 pr-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 focus:border-slate-400 focus:ring-2 focus:ring-slate-100 outline-none transition"
                 placeholder="Search products…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -1991,8 +1991,8 @@ export default function ProductsPage() {
               onClick={() => setShowArchived((v) => !v)}
               className={`rounded-2xl border px-3.5 py-2.5 text-sm font-semibold transition ${
                 showArchived
-                  ? "border-amber-300 bg-amber-50 text-amber-700 shadow-[0_8px_20px_rgba(245,197,24,0.12)]"
-                  : "border-[#EADFC2] bg-white text-slate-700 hover:bg-[#FFF8E6]"
+  ? "border-slate-300 bg-slate-100 text-slate-700 shadow-[0_8px_20px_rgba(15,23,42,0.08)]"
+  : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
               }`}
             >
               {showArchived ? "Showing archived too" : "Show archived"}
@@ -2040,8 +2040,7 @@ export default function ProductsPage() {
                 return (
                   <div
                     key={p.id}
-                    className="group rounded-[24px] border border-[#EFE4C6] bg-[linear-gradient(180deg,#FFFFFF_0%,#FFFCF4_100%)] shadow-[0_8px_30px_rgba(15,23,42,0.04)] transition-all duration-200 hover:-translate-y-px hover:shadow-[0_16px_34px_rgba(245,197,24,0.10)] hover:border-[#E5D28D]"
-                  >
+className="group rounded-[24px] border border-slate-200 bg-white shadow-[0_8px_30px_rgba(15,23,42,0.04)] transition-all duration-200 hover:-translate-y-px hover:shadow-[0_16px_34px_rgba(15,23,42,0.08)] hover:border-slate-300"                  >
                     <div
                       className="hidden lg:grid items-center gap-4 px-6 py-5 text-sm"
                       style={{ gridTemplateColumns: TABLE_COLS }}
@@ -2096,7 +2095,7 @@ export default function ProductsPage() {
                       <div className="flex items-center justify-end gap-2">
                         <button
                           onClick={() => openEdit(p)}
-                          className="grid h-9 w-9 place-items-center rounded-xl border border-blue-200 bg-blue-50 text-blue-600 hover:bg-blue-100 transition opacity-0 group-hover:opacity-100"
+                          className="grid h-9 w-9 place-items-center rounded-xl border border-blue-200 bg-blue-50 text-blue-600 hover:bg-blue-100 transition opacity-100 group-hover:opacity-100"
                           title="Edit"
                         >
                           <IconEdit />
@@ -2105,14 +2104,14 @@ export default function ProductsPage() {
                         {p.active === false ? (
                           <button
                             onClick={() => handleRestore(p.id, p)}
-                            className="rounded-xl border border-green-200 bg-green-50 px-3.5 h-9 text-xs font-semibold text-green-700 hover:bg-green-100 transition opacity-0 group-hover:opacity-100"
+                            className="rounded-xl border border-green-200 bg-green-50 px-3.5 h-9 text-xs font-semibold text-green-700 hover:bg-green-100 transition opacity-100 group-hover:opacity-100"
                           >
                             Restore
                           </button>
                         ) : (
                           <button
                             onClick={() => setDeletingProduct(p)}
-                            className="grid h-9 w-9 place-items-center rounded-xl border border-red-200 bg-red-50 text-red-500 hover:bg-red-100 transition opacity-0 group-hover:opacity-100"
+                            className="grid h-9 w-9 place-items-center rounded-xl border border-red-200 bg-red-50 text-red-500 hover:bg-red-100 transition opacity-100 group-hover:opacity-100"
                             title="Archive"
                           >
                             <IconTrash />
@@ -2145,7 +2144,7 @@ export default function ProductsPage() {
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-3 gap-3 rounded-2xl bg-[#FFF9EC] border border-[#F1E6C9] p-3 text-sm">
+                      <div className="grid grid-cols-3 gap-3 rounded-2xl bg-slate-50 border border-slate-200 p-3 text-sm">
                         <div>
                           <div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">
                             Cost
