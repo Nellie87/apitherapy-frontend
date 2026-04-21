@@ -1441,7 +1441,9 @@ export default function ProductsPage() {
   const [filterStatus, setFilterStatus] = useState<
     "" | "sellable" | "not_sellable"
   >("");
-  const [showArchived, setShowArchived] = useState(false);
+  const [productFilter, setProductFilter] = useState<
+  "all" | "archived" | "not_for_sale"
+>("all");
   const [page, setPage] = useState(1);
 
   const [showAddModal, setShowAddModal] = useState(false);
@@ -1465,10 +1467,10 @@ export default function ProductsPage() {
 
   useBodyScrollLock(isAnyModalOpen);
 
-  async function refresh(o: string) {
-    const rows = await listProducts(o, !showArchived);
-    setItems(rows);
-  }
+async function refresh(o: string) {
+  const rows = await listProducts(o, false);
+  setItems(rows);
+}
 
   useEffect(() => {
     (async () => {
@@ -1505,11 +1507,11 @@ export default function ProductsPage() {
         setErr(e.message ?? String(e));
       }
     })();
-  }, [showArchived]);
+  }, []);
 
   useEffect(() => {
     setPage(1);
-  }, [search, filterCat, filterStatus, showArchived]);
+  }, [search, filterCat, filterStatus, productFilter]);
 
   const allCategories = useMemo(() => {
     return categories
@@ -1518,34 +1520,44 @@ export default function ProductsPage() {
       .sort((a, b) => a.localeCompare(b));
   }, [categories]);
 
-  const filtered = useMemo(() => {
-    const t = search.trim().toLowerCase();
+const filtered = useMemo(() => {
+  const t = search.trim().toLowerCase();
 
-    return items.filter((p) => {
-      const displayName = formatProductDisplayName(p).toLowerCase();
-      const catName = getCategoryName(p).toLowerCase();
-      const sku = (p.sku ?? "").toLowerCase();
-      const supplierName = (p.supplier?.name ?? "").toLowerCase();
-      const qty = formatQuantity(p.quantity_value, p.quantity_unit).toLowerCase();
+  return items.filter((p) => {
+    const displayName = formatProductDisplayName(p).toLowerCase();
+    const catName = getCategoryName(p).toLowerCase();
+    const sku = (p.sku ?? "").toLowerCase();
+    const supplierName = (p.supplier?.name ?? "").toLowerCase();
+    const qty = formatQuantity(p.quantity_value, p.quantity_unit).toLowerCase();
 
-      const matchText =
-        !t ||
-        displayName.includes(t) ||
-        qty.includes(t) ||
-        sku.includes(t) ||
-        (p.barcode ?? "").toLowerCase().includes(t) ||
-        supplierName.includes(t) ||
-        catName.includes(t);
+    const matchText =
+      !t ||
+      displayName.includes(t) ||
+      qty.includes(t) ||
+      sku.includes(t) ||
+      (p.barcode ?? "").toLowerCase().includes(t) ||
+      supplierName.includes(t) ||
+      catName.includes(t);
 
-      const matchCat = !filterCat || getCategoryName(p) === filterCat;
-      const matchStatus =
-        !filterStatus ||
-        (filterStatus === "sellable" && p.is_sellable !== false) ||
-        (filterStatus === "not_sellable" && p.is_sellable === false);
+    const matchCat = !filterCat || getCategoryName(p) === filterCat;
 
-      return matchText && matchCat && matchStatus;
-    });
-  }, [items, search, filterCat, filterStatus]);
+    const matchStatus =
+      !filterStatus ||
+      (filterStatus === "sellable" && p.is_sellable !== false) ||
+      (filterStatus === "not_sellable" && p.is_sellable === false);
+
+    const matchFilter =
+      productFilter === "all"
+        ? p.active !== false
+        : productFilter === "archived"
+        ? p.active === false
+        : productFilter === "not_for_sale"
+        ? p.active !== false && p.is_sellable === false
+        : true;
+
+    return matchText && matchCat && matchStatus && matchFilter;
+  });
+}, [items, search, filterCat, filterStatus, productFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
@@ -1560,28 +1572,29 @@ export default function ProductsPage() {
     }
   }, [page, totalPages]);
 
-  const kpis = useMemo(() => {
-    const total = items.length;
-    const activeSellable = items.filter((p) => p.is_sellable !== false).length;
-    const archived = items.filter((p) => p.active === false).length;
-    const margins = items
-      .map((p) => margin(p.cost_price, p.unit_price))
-      .filter((m) => m !== null) as number[];
-    const avgMargin = margins.length
-      ? margins.reduce((a, b) => a + b, 0) / margins.length
-      : 0;
-    const categoriesCount = new Set(
-      items.map((p) => getCategoryName(p)).filter(Boolean)
-    ).size;
+const kpis = useMemo(() => {
+  const total = items.length;
 
-    return {
-      total,
-      activeSellable,
-      archived,
-      avgMargin,
-      categories: categoriesCount,
-    };
-  }, [items]);
+  const archived = items.filter((p) => p.active === false).length;
+
+  const notForSale = items.filter(
+    (p) => p.active !== false && p.is_sellable === false
+  ).length;
+
+  const active = items.filter((p) => p.active !== false).length;
+
+  const categoriesCount = new Set(
+    items.map((p) => getCategoryName(p)).filter(Boolean)
+  ).size;
+
+  return {
+    total,
+    active,
+    archived,
+    notForSale,
+    categories: categoriesCount,
+  };
+}, [items]);
 
   function handleAddCategoryCreated(id: string, name: string) {
     setCategories((prev) =>
@@ -1882,48 +1895,45 @@ export default function ProductsPage() {
         </button>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-        <KpiCard
-          icon="📦"
-          label="Total products"
-          value={String(kpis.total)}
-          sub={showArchived ? "active + archived" : "active only"}
-        />
-        <KpiCard
-          icon="✅"
-          label="For sale"
-          value={String(kpis.activeSellable)}
-          sub="active listings"
-          variant="success"
-        />
-        <KpiCard
-          icon="🗄️"
-          label="Archived"
-          value={String(kpis.archived)}
-          sub="hidden from sales"
-          variant="warning"
-        />
-        <KpiCard
-          icon="🏷️"
-          label="Categories"
-          value={String(kpis.categories)}
-          sub="product groups"
-          variant="info"
-        />
-        <KpiCard
-          icon="📈"
-          label="Avg margin"
-          value={`${kpis.avgMargin.toFixed(0)}%`}
-          sub="gross margin"
-          variant={
-            kpis.avgMargin >= 30
-              ? "success"
-              : kpis.avgMargin >= 10
-              ? "warning"
-              : "neutral"
-          }
-        />
-      </div>
+<div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+
+  <div onClick={() => setProductFilter("all")} className="cursor-pointer">
+    <KpiCard
+      icon="📦"
+      label="All products"
+      value={String(kpis.total)}
+      sub="everything"
+    />
+  </div>
+
+  <div onClick={() => setProductFilter("archived")} className="cursor-pointer">
+    <KpiCard
+      icon="🗄️"
+      label="Archived"
+      value={String(kpis.archived)}
+      sub="hidden from sales"
+      variant="warning"
+    />
+  </div>
+
+  <div onClick={() => setProductFilter("not_for_sale")} className="cursor-pointer">
+    <KpiCard
+      icon="🚫"
+      label="Not for sale"
+      value={String(kpis.notForSale)}
+      sub="excluded from selling"
+      variant="info"
+    />
+  </div>
+
+  <KpiCard
+    icon="🏷️"
+    label="Categories"
+    value={String(kpis.categories)}
+    sub="product groups"
+  />
+
+</div>
 
       <div className="rounded-[24px] border border-slate-200 bg-white shadow-[0_12px_36px_rgba(15,23,42,0.05)] overflow-hidden">
         <div className="border-b border-slate-100 bg-slate-50/70 px-5 py-4 lg:px-6">
@@ -1986,7 +1996,7 @@ className="w-full rounded-2xl border border-slate-200 bg-white pl-10 pr-4 py-2.5
               </button>
             )}
 
-            <button
+            {/* <button
               type="button"
               onClick={() => setShowArchived((v) => !v)}
               className={`rounded-2xl border px-3.5 py-2.5 text-sm font-semibold transition ${
@@ -1996,7 +2006,7 @@ className="w-full rounded-2xl border border-slate-200 bg-white pl-10 pr-4 py-2.5
               }`}
             >
               {showArchived ? "Showing archived too" : "Show archived"}
-            </button>
+            </button> */}
 
             <span className="ml-auto text-xs text-slate-500 whitespace-nowrap">
               {filtered.length} of {items.length}
