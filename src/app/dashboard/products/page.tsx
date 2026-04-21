@@ -70,6 +70,9 @@ type FormData = {
 
 type FormErrors = Partial<Record<keyof FormData, string>>;
 
+type HistoryFilter = "all" | "add" | "edit" | "archive" | "restore";
+
+
 /* ─────────────────────────────────────────────
    Constants
 ───────────────────────────────────────────── */
@@ -122,6 +125,44 @@ const QUANTITY_PRESETS: Record<QuantityUnit, string[]> = {
 };
 
 // History
+
+function HistoryTypeTabs({
+  value,
+  onChange,
+}: {
+  value: HistoryFilter;
+  onChange: (v: HistoryFilter) => void;
+}) {
+  const tabs: { key: HistoryFilter; label: string }[] = [
+    { key: "all", label: "All" },
+    { key: "add", label: "Added" },
+    { key: "edit", label: "Edited" },
+    { key: "archive", label: "Archived" },
+    { key: "restore", label: "Restored" },
+  ];
+
+  return (
+    <div className="inline-flex flex-wrap items-center rounded-2xl border border-slate-200 bg-white p-1 shadow-sm gap-1">
+      {tabs.map((tab) => {
+        const active = value === tab.key;
+        return (
+          <button
+            key={tab.key}
+            type="button"
+            onClick={() => onChange(tab.key)}
+            className={`rounded-xl px-3.5 py-2 text-sm font-semibold transition ${
+              active
+                ? "bg-slate-900 text-white"
+                : "text-slate-600 hover:bg-slate-100"
+            }`}
+          >
+            {tab.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 function formatHistoryValue(field: string, value: any) {
   if (value === null || value === undefined) return "—";
@@ -1570,6 +1611,8 @@ export default function ProductsPage() {
     type: "success" | "error";
   } | null>(null);
 
+  const [historyFilter, setHistoryFilter] = useState<HistoryFilter>("all");
+
   const [measures, setMeasures] = useState<MeasureLookup[]>([]);
   const [categories, setCategories] = useState<CategoryLookup[]>([]);
   const [suppliers, setSuppliers] = useState<SupplierLookup[]>([]);
@@ -1663,9 +1706,9 @@ export default function ProductsPage() {
     setPage(1);
   }, [search, filterCat, filterStatus, productFilter]);
 
-  useEffect(() => {
-    setHistoryPage(1);
-  }, [historySearch, tab]);
+useEffect(() => {
+  setHistoryPage(1);
+}, [historySearch, historyFilter, tab]);
 
   const allCategories = useMemo(() => {
     return categories
@@ -1730,19 +1773,27 @@ export default function ProductsPage() {
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
   }, [page, totalPages]);
+const filteredHistory = useMemo(() => {
+  const t = historySearch.trim().toLowerCase();
 
-  const filteredHistory = useMemo(() => {
-    const t = historySearch.trim().toLowerCase();
+  return historyItems.filter((h) => {
+    const product = items.find((p) => p.id === h.product_id);
+    const displayName = product ? formatProductDisplayName(product).toLowerCase() : "";
+    const note = (h.note ?? "").toLowerCase();
+    const action = (h.action ?? "").toLowerCase();
 
-    return historyItems.filter((h) => {
-      const product = items.find((p) => p.id === h.product_id);
-      const displayName = product ? formatProductDisplayName(product).toLowerCase() : "";
-      const note = (h.note ?? "").toLowerCase();
-      const action = (h.action ?? "").toLowerCase();
+    const matchesSearch =
+      !t ||
+      displayName.includes(t) ||
+      note.includes(t) ||
+      action.includes(t);
 
-      return !t || displayName.includes(t) || note.includes(t) || action.includes(t);
-    });
-  }, [historyItems, items, historySearch]);
+    const matchesType =
+      historyFilter === "all" || h.action === historyFilter;
+
+    return matchesSearch && matchesType;
+  });
+}, [historyItems, items, historySearch, historyFilter]);
 
   const historyTotalPages = Math.max(
     1,
@@ -2544,7 +2595,13 @@ async function performEdit() {
                     <IconX />
                   </button>
                 )}
+                
               </label>
+
+               <HistoryTypeTabs
+        value={historyFilter}
+        onChange={setHistoryFilter}
+      />
             </div>
           </div>
 
