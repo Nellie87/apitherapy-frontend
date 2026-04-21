@@ -122,7 +122,6 @@ export async function listProducts(
     })(),
   }));
 }
-
 export async function createProduct(
   orgId: string,
   payload: CreateProductPayload
@@ -205,4 +204,66 @@ export async function deleteProductForever(orgId: string, id: string) {
     .eq("id", id);
 
   if (error) throw new Error(error.message);
+}
+
+export type ProductHistoryRow = {
+  id: string;
+  org_id: string;
+  product_id: string;
+  action: "add" | "edit" | "archive" | "restore";
+  note: string;
+  created_at: string;
+  details_json?: {
+    changed_fields?: string[];
+    before?: Record<string, any>;
+    after?: Record<string, any>;
+  } | null;
+};
+
+export async function logProductHistory(args: {
+  org_id: string;
+  product_id: string;
+  action: "add" | "edit" | "archive" | "restore";
+  note: string;
+  details_json?: {
+    changed_fields?: string[];
+    before?: Record<string, any>;
+    after?: Record<string, any>;
+  } | null;
+}) {
+  const supabase = createClient();
+
+  const { error } = await supabase.from("product_history").insert([
+    {
+      org_id: args.org_id,
+      product_id: args.product_id,
+      action: args.action,
+      note: args.note,
+      details_json: args.details_json ?? null,
+    },
+  ]);
+
+  if (error) throw new Error(error.message);
+}
+
+export async function listProductHistory(orgId: string) {
+  const supabase = createClient();
+
+  const { data, error } = await supabase
+    .from("product_history")
+    .select(`
+      id,
+      org_id,
+      product_id,
+      action,
+      note,
+      created_at,
+      details_json
+    `)
+    .eq("org_id", orgId)
+    .order("created_at", { ascending: false });
+
+  if (error) throw new Error(error.message);
+
+  return (data ?? []) as ProductHistoryRow[];
 }
