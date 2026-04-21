@@ -1950,7 +1950,7 @@ export default function ProductsPage() {
 
             <select
               className="rounded-2xl border border-[#EADFC2] bg-white px-3.5 py-2.5 text-sm text-slate-700 focus:border-amber-500 focus:ring-2 focus:ring-amber-100 outline-none transition cursor-pointer"
-              style={S.selectChevronStyle}
+              // style={S.selectChevronStyle}
               value={filterCat}
               onChange={(e) => setFilterCat(e.target.value)}
             >
@@ -1958,13 +1958,13 @@ export default function ProductsPage() {
               {allCategories.map((c) => (
                 <option key={c} value={c}>
                   {c}
-                </option>
+                </option> 
               ))}
             </select>
 
             <select
               className="rounded-2xl border border-[#EADFC2] bg-white px-3.5 py-2.5 text-sm text-slate-700 focus:border-amber-500 focus:ring-2 focus:ring-amber-100 outline-none transition cursor-pointer"
-              style={S.selectChevronStyle}
+                // style={S.selectChevronStyle}
               value={filterStatus}
               onChange={(e) =>
                 setFilterStatus(
