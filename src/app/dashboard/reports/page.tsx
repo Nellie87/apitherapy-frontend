@@ -8,7 +8,7 @@ export default function ReportsHomePage() {
     {
       title: "Sales Summary",
       desc: "Totals by day, date range, downloadable CSV",
-      href: "/dashboard/reports/sales",
+      href: "/dashboard/reports/sales-analytics",
       icon: "🧾",
     },
     // next ones we’ll add:
