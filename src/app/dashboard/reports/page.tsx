@@ -15,6 +15,8 @@ export default function ReportsHomePage() {
     { title: "Inventory Valuation", desc: "Stock value per product + totals", href: "/dashboard/reports/inventory", icon: "📦" },
     { title: "Discount Report", desc: "Which products got discounts", href: "/dashboard/reports/discounts", icon: "🏷️" },
     { title: "Expenses Summary", desc: "Spend by category + totals", href: "/dashboard/reports/expenses-pnl", icon: "💳" },
+        { title: "Balance Sheet", desc: "Assets, liabilities, and equity", href: "/dashboard/reports/balance-sheet", icon: "💳" },
+
   ];
 
   return (

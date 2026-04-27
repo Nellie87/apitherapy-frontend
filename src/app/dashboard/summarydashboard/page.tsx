@@ -326,11 +326,11 @@ function Skeleton({
 function QuickActions() {
   const actions = [
     { href: "/dashboard/sales/new", icon: "🧾", label: "New Sale", primary: true },
-    { href: "/dashboard/expenses", icon: "💸", label: "Add Expense" },
-    { href: "/dashboard/inventory", icon: "📦", label: "Inventory" },
-    { href: "/dashboard/reports", icon: "📊", label: "Reports" },
-    { href: "/dashboard/reports/sales", icon: "📈", label: "Sales Report" },
-    { href: "/dashboard/reports/expenses-pnl", icon: "📉", label: "Expenses P&L" },
+    // { href: "/dashboard/expenses", icon: "💸", label: "Add Expense" },
+    // { href: "/dashboard/inventory", icon: "📦", label: "Inventory" },
+    // { href: "/dashboard/reports", icon: "📊", label: "Reports" },
+    // { href: "/dashboard/reports/sales", icon: "📈", label: "Sales Report" },
+    // { href: "/dashboard/reports/expenses-pnl", icon: "📉", label: "Expenses P&L" },
   ];
 
   return (

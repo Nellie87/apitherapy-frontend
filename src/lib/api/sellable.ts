@@ -10,11 +10,17 @@ export type SellableRow = {
     unit_price: number;
     barcode: string | null;
     sku: string | null;
+    sell_status: string | null;
+    active: boolean;
+    is_sellable?: boolean | null;
+    quantity_value?: number | null;
+    quantity_unit?: string | null;
   } | null;
 };
 
 export async function listSellable(orgId: string) {
   const supabase = createClient();
+
   const { data, error } = await supabase
     .from("inventory")
     .select(`
@@ -28,7 +34,10 @@ export async function listSellable(orgId: string) {
         barcode,
         sku,
         sell_status,
-        active
+        active,
+        is_sellable,
+        quantity_value,
+        quantity_unit
       )
     `)
     .eq("org_id", orgId)
@@ -40,7 +49,10 @@ export async function listSellable(orgId: string) {
 
   return rows
     .map((r) => {
-      const p = Array.isArray(r.products) ? r.products[0] ?? null : r.products ?? null;
+      const p = Array.isArray(r.products)
+        ? r.products[0] ?? null
+        : r.products ?? null;
+
       return {
         product_id: r.product_id,
         qty_on_hand: Number(r.qty_on_hand ?? 0),
@@ -54,23 +66,23 @@ export async function listSellable(orgId: string) {
               sku: p.sku ?? null,
               sell_status: p.sell_status ?? null,
               active: Boolean(p.active),
+              is_sellable: p.is_sellable ?? null,
+              quantity_value: p.quantity_value ?? null,
+              quantity_unit: p.quantity_unit ?? null,
             }
           : null,
       };
     })
-    .filter((r) => r.products)
-    .filter((r: any) => r.products.active === true)
-    .filter((r: any) => r.products.sell_status !== "not_to_be_sold")
-    .map((r: any) => ({
-      product_id: r.product_id,
-      qty_on_hand: r.qty_on_hand,
-      reorder_level: r.reorder_level,
-      products: {
-        id: r.products.id,
-        name: r.products.name,
-        unit_price: r.products.unit_price,
-        barcode: r.products.barcode,
-        sku: r.products.sku,
-      },
-    })) as SellableRow[];
+
+    // MUST have product
+    .filter((r) => r.products !== null)
+
+    // ONLY ACTIVE
+    .filter((r) => r.products!.active === true)
+
+    // ONLY EXPLICITLY SELLABLE
+    .filter((r) => r.products!.is_sellable !== false)
+
+    // ONLY PRODUCTS MEANT TO BE SOLD
+    .filter((r) => r.products!.sell_status === "to_be_sold") as SellableRow[];
 }

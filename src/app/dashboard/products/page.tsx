@@ -7,7 +7,10 @@ import {
   createProduct,
   archiveProduct,
   restoreProduct,
+  listProductHistory,
+  logProductHistory,
   type ProductRow,
+  type ProductHistoryRow,
   type QuantityUnit,
 } from "@/lib/api/products";
 import {
@@ -23,6 +26,8 @@ import * as S from "./page.styles";
    Types
 ───────────────────────────────────────────── */
 type UnitKind = "mass" | "volume" | "count";
+type MainTab = "overview" | "history";
+type ProductFilter = "all" | "archived" | "not_for_sale";
 
 type MeasureLookup = {
   id: string;
@@ -65,6 +70,9 @@ type FormData = {
 
 type FormErrors = Partial<Record<keyof FormData, string>>;
 
+type HistoryFilter = "all" | "add" | "edit" | "archive" | "restore";
+
+
 /* ─────────────────────────────────────────────
    Constants
 ───────────────────────────────────────────── */
@@ -84,7 +92,23 @@ const BLANK_FORM: FormData = {
   isSellable: true,
 };
 
-const PAGE_SIZE = 5;
+const FIELD_LABELS: Record<string, string> = {
+  name: "Name",
+  sku: "SKU",
+  barcode: "Barcode",
+  notes: "Notes",
+  cost_price: "Cost price",
+  unit_price: "Sell price",
+  is_sellable: "Sellable",
+  quantity_value: "Quantity",
+  quantity_unit: "Unit",
+  category_id: "Category",
+  supplier_id: "Supplier",
+  unit_measure_id: "Container",
+};
+
+const PAGE_SIZE = 10;
+const HISTORY_PAGE_SIZE = 12;
 
 const UNIT_OPTIONS_BY_KIND: Record<UnitKind, QuantityUnit[]> = {
   mass: ["g", "kg"],
@@ -100,6 +124,63 @@ const QUANTITY_PRESETS: Record<QuantityUnit, string[]> = {
   pc: ["1", "2", "4", "6", "8", "12", "24", "45"],
 };
 
+// History
+
+function HistoryTypeTabs({
+  value,
+  onChange,
+}: {
+  value: HistoryFilter;
+  onChange: (v: HistoryFilter) => void;
+}) {
+  const tabs: { key: HistoryFilter; label: string }[] = [
+    { key: "all", label: "All" },
+    { key: "add", label: "Added" },
+    { key: "edit", label: "Edited" },
+    { key: "archive", label: "Archived" },
+    { key: "restore", label: "Restored" },
+  ];
+
+  return (
+    <div className="inline-flex flex-wrap items-center rounded-2xl border border-slate-200 bg-white p-1 shadow-sm gap-1">
+      {tabs.map((tab) => {
+        const active = value === tab.key;
+        return (
+          <button
+            key={tab.key}
+            type="button"
+            onClick={() => onChange(tab.key)}
+            className={`rounded-xl px-3.5 py-2 text-sm font-semibold transition ${
+              active
+                ? "bg-slate-900 text-white"
+                : "text-slate-600 hover:bg-slate-100"
+            }`}
+          >
+            {tab.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function formatHistoryValue(field: string, value: any) {
+  if (value === null || value === undefined) return "—";
+
+  if (field === "cost_price" || field === "unit_price") {
+    return fmt(value);
+  }
+
+  if (field === "is_sellable") {
+    return value ? "Yes" : "No";
+  }
+
+  if (field === "quantity_value") {
+    return String(value);
+  }
+
+  return String(value);
+}
 /* ─────────────────────────────────────────────
    Helpers
 ───────────────────────────────────────────── */
@@ -215,49 +296,69 @@ function useBodyScrollLock(locked: boolean) {
   }, [locked]);
 }
 
+function fmtDateTime(s?: string | null) {
+  if (!s) return "—";
+  try {
+    return new Date(s).toLocaleString("en-GB", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return s;
+  }
+}
+
+function isSameDay(a: Date, b: Date) {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
+function groupHistory(items: ProductHistoryRow[]) {
+  const now = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(now.getDate() - 1);
+
+  const groups: Record<string, ProductHistoryRow[]> = {
+    Today: [],
+    Yesterday: [],
+    Earlier: [],
+  };
+
+  for (const item of items) {
+    const d = new Date(item.created_at);
+    if (isSameDay(d, now)) groups.Today.push(item);
+    else if (isSameDay(d, yesterday)) groups.Yesterday.push(item);
+    else groups.Earlier.push(item);
+  }
+
+  return groups;
+}
+
 /* ─────────────────────────────────────────────
    Icons
 ───────────────────────────────────────────── */
 const IconPlus = () => (
-  <svg
-    width="16"
-    height="16"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2.5"
-    strokeLinecap="round"
-  >
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
     <line x1="12" y1="5" x2="12" y2="19" />
     <line x1="5" y1="12" x2="19" y2="12" />
   </svg>
 );
 
 const IconSearch = () => (
-  <svg
-    width="15"
-    height="15"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2.2"
-    strokeLinecap="round"
-  >
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
     <circle cx="11" cy="11" r="8" />
     <line x1="21" y1="21" x2="16.65" y2="16.65" />
   </svg>
 );
 
 const IconTrash = () => (
-  <svg
-    width="15"
-    height="15"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-  >
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
     <path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14z" />
     <line x1="10" y1="11" x2="10" y2="17" />
     <line x1="14" y1="11" x2="14" y2="17" />
@@ -265,74 +366,41 @@ const IconTrash = () => (
 );
 
 const IconEdit = () => (
-  <svg
-    width="15"
-    height="15"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-  >
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
     <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
     <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
   </svg>
 );
 
 const IconCheck = () => (
-  <svg
-    width="15"
-    height="15"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2.5"
-    strokeLinecap="round"
-  >
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
     <polyline points="20 6 9 17 4 12" />
   </svg>
 );
 
 const IconX = () => (
-  <svg
-    width="15"
-    height="15"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2.5"
-    strokeLinecap="round"
-  >
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
     <line x1="18" y1="6" x2="6" y2="18" />
     <line x1="6" y1="6" x2="18" y2="18" />
   </svg>
 );
 
 const IconChevronLeft = () => (
-  <svg
-    width="15"
-    height="15"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2.2"
-    strokeLinecap="round"
-  >
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
     <polyline points="15 18 9 12 15 6" />
   </svg>
 );
 
 const IconChevronRight = () => (
-  <svg
-    width="15"
-    height="15"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2.2"
-    strokeLinecap="round"
-  >
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
     <polyline points="9 18 15 12 9 6" />
+  </svg>
+);
+
+const IconClock = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 7v5l3 2" />
   </svg>
 );
 
@@ -355,20 +423,51 @@ function Toast({
 
   return (
     <div
-      className={`fixed bottom-5 right-5 z-50 flex items-center gap-3 rounded-2xl px-5 py-3.5 shadow-xl text-white text-sm font-semibold transition-all duration-300 ${
+      className={`fixed bottom-5 right-5 z-[140] flex items-center gap-3 rounded-2xl px-5 py-3.5 shadow-xl text-white text-sm font-semibold transition-all duration-300 ${
         type === "success" ? "bg-green-600" : "bg-red-600"
       }`}
     >
-      <span className="shrink-0">
-        {type === "success" ? <IconCheck /> : <IconX />}
-      </span>
+      <span className="shrink-0">{type === "success" ? <IconCheck /> : <IconX />}</span>
       <span>{message}</span>
-      <button
-        onClick={onClose}
-        className="ml-1 text-white/70 hover:text-white"
-      >
+      <button onClick={onClose} className="ml-1 text-white/70 hover:text-white">
         <IconX />
       </button>
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────
+   Tabs
+───────────────────────────────────────────── */
+function TopTabs({
+  value,
+  onChange,
+}: {
+  value: MainTab;
+  onChange: (v: MainTab) => void;
+}) {
+  return (
+    <div className="inline-flex items-center rounded-[22px] border border-slate-200 bg-white p-1 shadow-sm">
+      {[
+        { key: "overview", label: "Overview" },
+        { key: "history", label: "History" },
+      ].map((tab) => {
+        const active = value === tab.key;
+        return (
+          <button
+            key={tab.key}
+            type="button"
+            onClick={() => onChange(tab.key as MainTab)}
+            className={`rounded-[16px] px-5 py-2.5 text-sm font-semibold transition ${
+              active
+                ? "bg-slate-900 text-white shadow-[0_10px_24px_rgba(15,23,42,0.16)]"
+                : "text-slate-500 hover:text-slate-700"
+            }`}
+          >
+            {tab.label}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -382,21 +481,23 @@ function KpiCard({
   value,
   sub,
   variant = "neutral",
+  active = false,
 }: {
   icon: string;
   label: string;
   value: string;
   sub?: string;
   variant?: "neutral" | "success" | "warning" | "info";
+  active?: boolean;
 }) {
   const cfg = {
     neutral: {
-      border: "#F1E4BF",
-      iconBg: "#FFF9E7",
-      iconColor: "#8A6A00",
-      val: "#2A2112",
-      sub: "#9A7A18",
-      shadow: "0 10px 25px rgba(245,197,24,0.06)",
+      border: "#E2E8F0",
+      iconBg: "#F8FAFC",
+      iconColor: "#475569",
+      val: "#0F172A",
+      sub: "#64748B",
+      shadow: "0 10px 25px rgba(15,23,42,0.05)",
     },
     success: {
       border: "#CBE9D2",
@@ -415,21 +516,23 @@ function KpiCard({
       shadow: "0 10px 25px rgba(245,158,11,0.08)",
     },
     info: {
-      border: "#E7D8A7",
-      iconBg: "#FFF7D6",
-      iconColor: "#7A6300",
-      val: "#7A6300",
-      sub: "#A28300",
-      shadow: "0 10px 25px rgba(245,197,24,0.08)",
+      border: "#E2E8F0",
+      iconBg: "#F8FAFC",
+      iconColor: "#475569",
+      val: "#0F172A",
+      sub: "#64748B",
+      shadow: "0 10px 25px rgba(15,23,42,0.05)",
     },
   }[variant];
 
   return (
     <div
-      className="rounded-[22px] p-4 bg-white transition hover:-translate-y-0.5"
+      className={`rounded-[22px] p-4 bg-white transition hover:-translate-y-0.5 ${
+        active ? "ring-2 ring-slate-900/10" : ""
+      }`}
       style={{
-        border: `1.5px solid ${cfg.border}`,
-        boxShadow: cfg.shadow,
+        border: `1.5px solid ${active ? "#0F172A" : cfg.border}`,
+        boxShadow: active ? "0 14px 34px rgba(15,23,42,0.10)" : cfg.shadow,
       }}
     >
       <div className="flex items-center gap-3 mb-3">
@@ -440,16 +543,10 @@ function KpiCard({
           {icon}
         </div>
       </div>
-      <div
-        className="text-[11px] font-semibold uppercase tracking-[0.18em] mb-1"
-        style={{ color: cfg.sub }}
-      >
+      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] mb-1" style={{ color: cfg.sub }}>
         {label}
       </div>
-      <div
-        className="text-[28px] font-bold leading-none"
-        style={{ color: cfg.val }}
-      >
+      <div className="text-[28px] font-bold leading-none" style={{ color: cfg.val }}>
         {value}
       </div>
       {sub && (
@@ -475,9 +572,7 @@ function MarginBadge({ pct }: { pct: number | null }) {
       : "bg-red-100 text-red-700 border border-red-200";
 
   return (
-    <span
-      className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-bold ${color}`}
-    >
+    <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-bold ${color}`}>
       {pct.toFixed(0)}%
     </span>
   );
@@ -503,6 +598,46 @@ function ArchiveBadge({ active }: { active?: boolean }) {
     <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700 border border-amber-200">
       <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
       Archived
+    </span>
+  );
+}
+
+function HistoryActionBadge({
+  action,
+}: {
+  action: ProductHistoryRow["action"];
+}) {
+  if (action === "add") {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700 border border-blue-200">
+        <IconClock />
+        Added
+      </span>
+    );
+  }
+
+  if (action === "edit") {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-violet-50 px-2.5 py-1 text-xs font-semibold text-violet-700 border border-violet-200">
+        <IconClock />
+        Edited
+      </span>
+    );
+  }
+
+  if (action === "archive") {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700 border border-amber-200">
+        <IconClock />
+        Archived
+      </span>
+    );
+  }
+
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full bg-green-50 px-2.5 py-1 text-xs font-semibold text-green-700 border border-green-200">
+      <IconClock />
+      Restored
     </span>
   );
 }
@@ -596,12 +731,10 @@ function InlineCategoryCreator({
         </button>
       ) : (
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 space-y-2">
-          <div className="text-xs font-semibold text-amber-800 mb-1">
-            New category
-          </div>
+          <div className="text-xs font-semibold text-amber-800 mb-1">New category</div>
           <input
             ref={inputRef}
-            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 placeholder-slate-400 focus:border-amber-400 focus:ring-2 focus:ring-amber-100 outline-none"
+            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 placeholder-slate-400 focus:border-slate-400 focus:ring-2 focus:ring-slate-100 outline-none"
             placeholder="e.g. Raw Honey"
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -646,50 +779,54 @@ function InlineCategoryCreator({
 ───────────────────────────────────────────── */
 function ArchiveModal({
   product,
+  note,
+  setNote,
   onConfirm,
   onCancel,
   loading,
 }: {
   product: Product;
+  note: string;
+  setNote: (v: string) => void;
   onConfirm: () => void;
   onCancel: () => void;
   loading: boolean;
 }) {
+  const disabled = !note.trim() || loading;
+
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
-      onClick={onCancel}
-    >
-      <div
-        className="w-full max-w-md rounded-2xl bg-white shadow-2xl p-6"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={onCancel}>
+      <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl p-6" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start gap-4 mb-5">
-          <div className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-amber-100 text-2xl">
-            📦
-          </div>
+          <div className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-amber-100 text-2xl">📦</div>
           <div>
-            <div className="text-lg font-bold text-slate-900">
-              Archive this product?
-            </div>
+            <div className="text-lg font-bold text-slate-900">Archive this product?</div>
             <div className="text-sm text-slate-500 mt-0.5">
-              It will be hidden from sales and new orders, but kept in your
-              records. You can restore it at any time.
+              Add a reason for archiving. This will be stored in history.
             </div>
           </div>
         </div>
 
-        <div className="rounded-xl bg-slate-50 border border-slate-200 px-4 py-3 mb-5">
-          <div className="text-sm font-semibold text-slate-900">
-            {formatProductDisplayName(product)}
-          </div>
+        <div className="rounded-xl bg-slate-50 border border-slate-200 px-4 py-3 mb-4">
+          <div className="text-sm font-semibold text-slate-900">{formatProductDisplayName(product)}</div>
           {(product.sku || product.barcode) && (
             <div className="mt-1 text-xs text-slate-500 font-mono">
-              {product.sku
-                ? `SKU: ${product.sku}`
-                : `Barcode: ${product.barcode}`}
+              {product.sku ? `SKU: ${product.sku}` : `Barcode: ${product.barcode}`}
             </div>
           )}
+        </div>
+
+        <div className="mb-5">
+          <label className="mb-1.5 block text-sm font-semibold text-slate-700">
+            Archive note <span className="text-red-500">*</span>
+          </label>
+          <textarea
+            rows={3}
+            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 placeholder-slate-400 focus:border-slate-400 focus:ring-2 focus:ring-slate-100 outline-none resize-none"
+            placeholder="Why are you archiving this product?"
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+          />
         </div>
 
         <div className="flex gap-3">
@@ -697,14 +834,86 @@ function ArchiveModal({
             onClick={onCancel}
             className="flex-1 rounded-xl border border-slate-200 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition"
           >
-            Keep it active
+            Cancel
           </button>
           <button
             onClick={onConfirm}
-            disabled={loading}
+            disabled={disabled}
             className="flex-1 rounded-xl bg-amber-500 py-2.5 text-sm font-semibold text-white hover:bg-amber-600 disabled:opacity-50 transition"
           >
-            {loading ? "Archiving…" : "Yes, archive it"}
+            {loading ? "Archiving…" : "Confirm archive"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RestoreModal({
+  product,
+  note,
+  setNote,
+  onConfirm,
+  onCancel,
+  loading,
+}: {
+  product: Product;
+  note: string;
+  setNote: (v: string) => void;
+  onConfirm: () => void;
+  onCancel: () => void;
+  loading: boolean;
+}) {
+  const disabled = !note.trim() || loading;
+
+  return (
+    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={onCancel}>
+      <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl p-6" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-start gap-4 mb-5">
+          <div className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-green-100 text-2xl">♻️</div>
+          <div>
+            <div className="text-lg font-bold text-slate-900">Restore this product?</div>
+            <div className="text-sm text-slate-500 mt-0.5">
+              Add a reason for restoring. This will be stored in history.
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-xl bg-slate-50 border border-slate-200 px-4 py-3 mb-4">
+          <div className="text-sm font-semibold text-slate-900">{formatProductDisplayName(product)}</div>
+          {(product.sku || product.barcode) && (
+            <div className="mt-1 text-xs text-slate-500 font-mono">
+              {product.sku ? `SKU: ${product.sku}` : `Barcode: ${product.barcode}`}
+            </div>
+          )}
+        </div>
+
+        <div className="mb-5">
+          <label className="mb-1.5 block text-sm font-semibold text-slate-700">
+            Restore note <span className="text-red-500">*</span>
+          </label>
+          <textarea
+            rows={3}
+            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 placeholder-slate-400 focus:border-slate-400 focus:ring-2 focus:ring-slate-100 outline-none resize-none"
+            placeholder="Why are you restoring this product?"
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+          />
+        </div>
+
+        <div className="flex gap-3">
+          <button
+            onClick={onCancel}
+            className="flex-1 rounded-xl border border-slate-200 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={disabled}
+            className="flex-1 rounded-xl bg-green-600 py-2.5 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50 transition"
+          >
+            {loading ? "Restoring…" : "Confirm restore"}
           </button>
         </div>
       </div>
@@ -759,14 +968,8 @@ function ConfirmSaveModal({
   ];
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
-      onClick={onCancel}
-    >
-      <div
-        className="w-full max-w-md rounded-2xl bg-white shadow-2xl p-6"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={onCancel}>
+      <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl p-6" onClick={(e) => e.stopPropagation()}>
         <div className="text-lg font-bold text-slate-900 mb-1">
           {mode === "add" ? "Add this product?" : "Save changes?"}
         </div>
@@ -778,10 +981,7 @@ function ConfirmSaveModal({
 
         <div className="rounded-xl border border-slate-200 divide-y divide-slate-100 mb-5 overflow-hidden">
           {rows.map((r) => (
-            <div
-              key={r.label}
-              className="flex items-center justify-between px-4 py-2.5 text-sm"
-            >
+            <div key={r.label} className="flex items-center justify-between px-4 py-2.5 text-sm">
               <span className="text-slate-500">{r.label}</span>
               <span className="font-semibold text-slate-900 text-right ml-4 truncate max-w-[60%]">
                 {r.value}
@@ -802,11 +1002,7 @@ function ConfirmSaveModal({
             disabled={loading}
             className="flex-1 rounded-xl bg-amber-500 py-2.5 text-sm font-semibold text-white hover:bg-amber-600 disabled:opacity-50 transition"
           >
-            {loading
-              ? "Saving…"
-              : mode === "add"
-              ? "Confirm & add"
-              : "Confirm & save"}
+            {loading ? "Saving…" : mode === "add" ? "Confirm & add" : "Confirm & save"}
           </button>
         </div>
       </div>
@@ -832,27 +1028,19 @@ function Modal({
   children: React.ReactNode;
 }) {
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
-      onClick={onClose}
-    >
+    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={onClose}>
       <div
-        className="w-full max-w-2xl rounded-2xl bg-white shadow-2xl max-h-[90vh] flex flex-col overflow-hidden"
+        className="w-full max-w-2xl rounded-2xl bg-white shadow-2xl max-h-[calc(100vh-48px)] my-6 flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4 shrink-0">
           <div className="flex items-center gap-3">
-            <div
-              className="grid h-10 w-10 place-items-center rounded-xl text-lg"
-              style={{ background: iconBg, color: iconColor }}
-            >
+            <div className="grid h-10 w-10 place-items-center rounded-xl text-lg" style={{ background: iconBg, color: iconColor }}>
               {icon}
             </div>
             <div>
               <div className="text-base font-bold text-slate-900">{title}</div>
-              {sub && (
-                <div className="text-xs text-slate-500 mt-0.5">{sub}</div>
-              )}
+              {sub && <div className="text-xs text-slate-500 mt-0.5">{sub}</div>}
             </div>
           </div>
           <button
@@ -896,9 +1084,7 @@ function ProductForm({
   saving: boolean;
   mode: "add" | "edit";
 }) {
-  const [touched, setTouched] = useState<
-    Partial<Record<keyof FormData, boolean>>
-  >({});
+  const [touched, setTouched] = useState<Partial<Record<keyof FormData, boolean>>>({});
   const [submitAttempted, setSubmitAttempted] = useState(false);
 
   const errors = validateForm(form);
@@ -917,17 +1103,14 @@ function ProductForm({
   const setField =
     (k: keyof FormData) =>
     (
-      e: React.ChangeEvent<
-        HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
-      >
+      e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
     ) => {
       const value = e.target.value;
       setForm((prev) => ({ ...prev, [k]: value as never }));
       setTouched((t) => ({ ...t, [k]: true }));
     };
 
-  const touch = (k: keyof FormData) =>
-    setTouched((t) => ({ ...t, [k]: true }));
+  const touch = (k: keyof FormData) => setTouched((t) => ({ ...t, [k]: true }));
 
   const showErr = (k: keyof FormData) =>
     errors[k] && (touched[k] || submitAttempted) ? errors[k] : undefined;
@@ -1320,11 +1503,7 @@ function ProductForm({
           Cancel
         </button>
         <button type="submit" disabled={saving} className={S.btnPrimary}>
-          {saving
-            ? "Saving…"
-            : mode === "add"
-            ? "Review & add"
-            : "Review & save"}
+          {saving ? "Saving…" : mode === "add" ? "Review & add" : "Review & save"}
         </button>
       </div>
     </form>
@@ -1340,12 +1519,14 @@ function Pagination({
   totalItems,
   pageSize,
   onPage,
+  itemLabel = "product",
 }: {
   page: number;
   totalPages: number;
   totalItems: number;
   pageSize: number;
   onPage: (p: number) => void;
+  itemLabel?: string;
 }) {
   if (totalPages <= 1) return null;
 
@@ -1370,9 +1551,9 @@ function Pagination({
   }
 
   return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-t border-[#F1E6C9] bg-[#FFFDF8] px-6 py-4">
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-t border-slate-100 bg-slate-50/70 px-6 py-4">
       <span className="text-xs text-slate-500">
-        Showing {start}–{end} of {totalItems} product
+        Showing {start}–{end} of {totalItems} {itemLabel}
         {totalItems !== 1 ? "s" : ""}
       </span>
 
@@ -1380,17 +1561,14 @@ function Pagination({
         <button
           onClick={() => onPage(page - 1)}
           disabled={page === 1}
-          className="grid h-9 w-9 place-items-center rounded-xl border border-[#EADFC2] bg-white text-slate-500 hover:bg-[#FFF8E6] disabled:opacity-40 disabled:cursor-not-allowed transition"
+          className="grid h-9 w-9 place-items-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition"
         >
           <IconChevronLeft />
         </button>
 
         {pages.map((p, i) =>
           p === "…" ? (
-            <span
-              key={`ellipsis-${i}`}
-              className="w-8 text-center text-slate-400 text-sm"
-            >
+            <span key={`ellipsis-${i}`} className="w-8 text-center text-slate-400 text-sm">
               …
             </span>
           ) : (
@@ -1399,8 +1577,8 @@ function Pagination({
               onClick={() => onPage(p as number)}
               className={`h-9 min-w-[36px] px-2 rounded-xl text-sm font-semibold transition ${
                 p === page
-                  ? "bg-amber-500 text-white border border-amber-500 shadow-[0_10px_24px_rgba(245,197,24,0.28)]"
-                  : "border border-[#EADFC2] bg-white text-slate-700 hover:bg-[#FFF8E6]"
+                  ? "bg-slate-900 text-white border border-slate-900 shadow-[0_10px_24px_rgba(15,23,42,0.14)]"
+                  : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
               }`}
             >
               {p}
@@ -1411,7 +1589,7 @@ function Pagination({
         <button
           onClick={() => onPage(page + 1)}
           disabled={page === totalPages}
-          className="grid h-9 w-9 place-items-center rounded-xl border border-[#EADFC2] bg-white text-slate-500 hover:bg-[#FFF8E6] disabled:opacity-40 disabled:cursor-not-allowed transition"
+          className="grid h-9 w-9 place-items-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition"
         >
           <IconChevronRight />
         </button>
@@ -1426,28 +1604,40 @@ function Pagination({
 export default function ProductsPage() {
   const [orgId, setOrgId] = useState<string | null>(null);
   const [items, setItems] = useState<Product[]>([]);
+  const [historyItems, setHistoryItems] = useState<ProductHistoryRow[]>([]);
   const [err, setErr] = useState("");
   const [toast, setToast] = useState<{
     message: string;
     type: "success" | "error";
   } | null>(null);
 
+  const [historyFilter, setHistoryFilter] = useState<HistoryFilter>("all");
+
   const [measures, setMeasures] = useState<MeasureLookup[]>([]);
   const [categories, setCategories] = useState<CategoryLookup[]>([]);
   const [suppliers, setSuppliers] = useState<SupplierLookup[]>([]);
 
+  const [tab, setTab] = useState<MainTab>("overview");
+
   const [search, setSearch] = useState("");
   const [filterCat, setFilterCat] = useState("");
-  const [filterStatus, setFilterStatus] = useState<
-    "" | "sellable" | "not_sellable"
-  >("");
-  const [showArchived, setShowArchived] = useState(false);
+  const [filterStatus, setFilterStatus] = useState<"" | "sellable" | "not_sellable">("");
+  const [productFilter, setProductFilter] = useState<ProductFilter>("all");
   const [page, setPage] = useState(1);
+
+  const [historySearch, setHistorySearch] = useState("");
+  const [historyPage, setHistoryPage] = useState(1);
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deletingProduct, setDeletingProduct] = useState<Product | null>(null);
+  const [archiveNote, setArchiveNote] = useState("");
   const [deleting, setDeleting] = useState(false);
+
+  const [restoringProduct, setRestoringProduct] = useState<Product | null>(null);
+  const [restoreNote, setRestoreNote] = useState("");
+  const [restoring, setRestoring] = useState(false);
+
   const [editProduct, setEditProduct] = useState<Product | null>(null);
 
   const [addForm, setAddForm] = useState<FormData>({ ...BLANK_FORM });
@@ -1460,14 +1650,20 @@ export default function ProductsPage() {
     showAddModal ||
     !!editProduct ||
     !!deletingProduct ||
+    !!restoringProduct ||
     pendingAddConfirm ||
     pendingEditConfirm;
 
   useBodyScrollLock(isAnyModalOpen);
 
   async function refresh(o: string) {
-    const rows = await listProducts(o, !showArchived);
+    const rows = await listProducts(o, false);
     setItems(rows);
+  }
+
+  async function refreshHistory(o: string) {
+    const rows = await listProductHistory(o);
+    setHistoryItems(rows);
   }
 
   useEffect(() => {
@@ -1488,8 +1684,7 @@ export default function ProductsPage() {
         setSuppliers(sups as SupplierLookup[]);
 
         const firstId = typedMeasures?.[0]?.id ?? "";
-        const firstAllowedUnit =
-          getAllowedQuantityUnits(firstId, typedMeasures)[0] ?? "";
+        const firstAllowedUnit = getAllowedQuantityUnits(firstId, typedMeasures)[0] ?? "";
 
         setAddForm((f) => ({
           ...f,
@@ -1500,16 +1695,20 @@ export default function ProductsPage() {
             : "",
         }));
 
-        await refresh(o);
+        await Promise.all([refresh(o), refreshHistory(o)]);
       } catch (e: any) {
         setErr(e.message ?? String(e));
       }
     })();
-  }, [showArchived]);
+  }, []);
 
   useEffect(() => {
     setPage(1);
-  }, [search, filterCat, filterStatus, showArchived]);
+  }, [search, filterCat, filterStatus, productFilter]);
+
+useEffect(() => {
+  setHistoryPage(1);
+}, [historySearch, historyFilter, tab]);
 
   const allCategories = useMemo(() => {
     return categories
@@ -1537,48 +1736,95 @@ export default function ProductsPage() {
         supplierName.includes(t) ||
         catName.includes(t);
 
-      const matchCat = !filterCat || getCategoryName(p) === filterCat;
-      const matchStatus =
-        !filterStatus ||
-        (filterStatus === "sellable" && p.is_sellable !== false) ||
-        (filterStatus === "not_sellable" && p.is_sellable === false);
+      const isArchived = p.active === false;
+      const isActive = p.active === true;
+      const isNotForSale = isActive && p.is_sellable === false;
 
-      return matchText && matchCat && matchStatus;
+      let matchFilter = true;
+
+      if (productFilter === "all") {
+        matchFilter = isActive;
+      } else if (productFilter === "archived") {
+        matchFilter = isArchived;
+      } else if (productFilter === "not_for_sale") {
+        matchFilter = isNotForSale;
+      }
+
+      const matchCat =
+        productFilter === "archived"
+          ? true
+          : !filterCat || getCategoryName(p) === filterCat;
+
+      const matchStatus =
+        productFilter === "archived"
+          ? true
+          : !filterStatus ||
+            (filterStatus === "sellable" && p.is_sellable !== false) ||
+            (filterStatus === "not_sellable" && p.is_sellable === false);
+
+      return matchText && matchCat && matchStatus && matchFilter;
     });
-  }, [items, search, filterCat, filterStatus]);
+  }, [items, search, filterCat, filterStatus, productFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
-  const paginated = filtered.slice(
-    (safePage - 1) * PAGE_SIZE,
-    safePage * PAGE_SIZE
+  const paginated = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
+const filteredHistory = useMemo(() => {
+  const t = historySearch.trim().toLowerCase();
+
+  return historyItems.filter((h) => {
+    const product = items.find((p) => p.id === h.product_id);
+    const displayName = product ? formatProductDisplayName(product).toLowerCase() : "";
+    const note = (h.note ?? "").toLowerCase();
+    const action = (h.action ?? "").toLowerCase();
+
+    const matchesSearch =
+      !t ||
+      displayName.includes(t) ||
+      note.includes(t) ||
+      action.includes(t);
+
+    const matchesType =
+      historyFilter === "all" || h.action === historyFilter;
+
+    return matchesSearch && matchesType;
+  });
+}, [historyItems, items, historySearch, historyFilter]);
+
+  const historyTotalPages = Math.max(
+    1,
+    Math.ceil(filteredHistory.length / HISTORY_PAGE_SIZE)
+  );
+  const safeHistoryPage = Math.min(historyPage, historyTotalPages);
+  const paginatedHistory = filteredHistory.slice(
+    (safeHistoryPage - 1) * HISTORY_PAGE_SIZE,
+    safeHistoryPage * HISTORY_PAGE_SIZE
   );
 
   useEffect(() => {
-    if (page > totalPages) {
-      setPage(totalPages);
-    }
-  }, [page, totalPages]);
+    if (historyPage > historyTotalPages) setHistoryPage(historyTotalPages);
+  }, [historyPage, historyTotalPages]);
+
+  const groupedHistory = useMemo(() => groupHistory(paginatedHistory), [paginatedHistory]);
 
   const kpis = useMemo(() => {
     const total = items.length;
-    const activeSellable = items.filter((p) => p.is_sellable !== false).length;
     const archived = items.filter((p) => p.active === false).length;
-    const margins = items
-      .map((p) => margin(p.cost_price, p.unit_price))
-      .filter((m) => m !== null) as number[];
-    const avgMargin = margins.length
-      ? margins.reduce((a, b) => a + b, 0) / margins.length
-      : 0;
+    const notForSale = items.filter(
+      (p) => p.active !== false && p.is_sellable === false
+    ).length;
     const categoriesCount = new Set(
       items.map((p) => getCategoryName(p)).filter(Boolean)
     ).size;
 
     return {
       total,
-      activeSellable,
       archived,
-      avgMargin,
+      notForSale,
       categories: categoriesCount,
     };
   }, [items]);
@@ -1599,6 +1845,14 @@ export default function ProductsPage() {
     setToast({ message: `Category "${name}" created`, type: "success" });
   }
 
+  function handleStatFilter(next: ProductFilter) {
+    setProductFilter(next);
+    setSearch("");
+    setFilterCat("");
+    setFilterStatus("");
+    setPage(1);
+  }
+
   function handleAdd(e: React.FormEvent) {
     e.preventDefault();
     const errors = validateForm(addForm);
@@ -1606,63 +1860,84 @@ export default function ProductsPage() {
     setPendingAddConfirm(true);
   }
 
-  async function performAdd() {
-    if (!orgId) return;
-    setSaving(true);
-    setErr("");
+async function performAdd() {
+  if (!orgId) return;
+  setSaving(true);
+  setErr("");
 
-    try {
-      const productDisplay = formatProductDisplayName({
-        name: addForm.name.trim(),
-        quantity_value: addForm.quantityValue,
-        quantity_unit: addForm.quantityUnit,
-      });
+  try {
+    const productDisplay = formatProductDisplayName({
+      name: addForm.name.trim(),
+      quantity_value: addForm.quantityValue,
+      quantity_unit: addForm.quantityUnit,
+    });
 
-      await createProduct(orgId, {
-        name: addForm.name.trim(),
-        sku: addForm.sku.trim() || undefined,
-        category_id: addForm.categoryId || null,
-        barcode: addForm.barcode.trim() || undefined,
-        supplier_id: addForm.supplierId || null,
-        notes: addForm.notes.trim() || undefined,
-        cost_price: Number(addForm.costPrice || 0),
-        unit_price: Number(addForm.sellPrice || 0),
-        quantity_value: Number(addForm.quantityValue),
-        quantity_unit: addForm.quantityUnit || null,
-        unit_measure_id: addForm.unitMeasureId || null,
-        is_sellable: addForm.isSellable,
-      });
+    const created = await createProduct(orgId, {
+      name: addForm.name.trim(),
+      sku: addForm.sku.trim() || undefined,
+      category_id: addForm.categoryId || null,
+      barcode: addForm.barcode.trim() || undefined,
+      supplier_id: addForm.supplierId || null,
+      notes: addForm.notes.trim() || undefined,
+      cost_price: Number(addForm.costPrice || 0),
+      unit_price: Number(addForm.sellPrice || 0),
+      quantity_value: Number(addForm.quantityValue),
+      quantity_unit: addForm.quantityUnit || null,
+      unit_measure_id: addForm.unitMeasureId || null,
+      is_sellable: addForm.isSellable,
+    });
 
-      const allowedUnits = getAllowedQuantityUnits(
-        addForm.unitMeasureId,
-        measures
-      );
-      const nextUnit = allowedUnits[0] ?? "";
+    await logProductHistory({
+      org_id: orgId,
+      product_id: created.id,
+      action: "add",
+      note: "Product created",
+      details_json: {
+        after: {
+          name: addForm.name.trim(),
+          sku: addForm.sku.trim() || null,
+          barcode: addForm.barcode.trim() || null,
+          notes: addForm.notes.trim() || null,
+          cost_price: Number(addForm.costPrice || 0),
+          unit_price: Number(addForm.sellPrice || 0),
+          is_sellable: addForm.isSellable,
+          quantity_value: Number(addForm.quantityValue),
+          quantity_unit: addForm.quantityUnit || null,
+          category_id: addForm.categoryId || null,
+          supplier_id: addForm.supplierId || null,
+          unit_measure_id: addForm.unitMeasureId || null,
+        },
+      },
+    });
 
-      setAddForm({
-        ...BLANK_FORM,
-        unitMeasureId: addForm.unitMeasureId,
-        quantityUnit: nextUnit,
-        quantityMode: "preset",
-        quantityValue: nextUnit ? (QUANTITY_PRESETS[nextUnit]?.[0] ?? "") : "",
-      });
+    const allowedUnits = getAllowedQuantityUnits(addForm.unitMeasureId, measures);
+    const nextUnit = allowedUnits[0] ?? "";
 
-      setShowAddModal(false);
-      setPendingAddConfirm(false);
-      await refresh(orgId);
+    setAddForm({
+      ...BLANK_FORM,
+      unitMeasureId: addForm.unitMeasureId,
+      quantityUnit: nextUnit,
+      quantityMode: "preset",
+      quantityValue: nextUnit ? (QUANTITY_PRESETS[nextUnit]?.[0] ?? "") : "",
+    });
 
-      setToast({
-        message: `"${productDisplay}" added successfully`,
-        type: "success",
-      });
-    } catch (e: any) {
-      setErr(e.message ?? String(e));
-      setToast({ message: "Failed to add product", type: "error" });
-      setPendingAddConfirm(false);
-    } finally {
-      setSaving(false);
-    }
+    setShowAddModal(false);
+    setPendingAddConfirm(false);
+
+    await Promise.all([refresh(orgId), refreshHistory(orgId)]);
+
+    setToast({
+      message: `"${productDisplay}" added successfully`,
+      type: "success",
+    });
+  } catch (e: any) {
+    setErr(e.message ?? String(e));
+    setToast({ message: "Failed to add product", type: "error" });
+    setPendingAddConfirm(false);
+  } finally {
+    setSaving(false);
   }
+}
 
   function handleEdit(e: React.FormEvent) {
     e.preventDefault();
@@ -1671,92 +1946,163 @@ export default function ProductsPage() {
     setPendingEditConfirm(true);
   }
 
-  async function performEdit() {
-    if (!orgId || !editProduct) return;
-    setSaving(true);
-    setErr("");
+async function performEdit() {
+  if (!orgId || !editProduct) return;
+  setSaving(true);
+  setErr("");
 
-    try {
-      const updatedDisplay = formatProductDisplayName({
-        name: editForm.name.trim(),
-        quantity_value: editForm.quantityValue,
-        quantity_unit: editForm.quantityUnit,
+  try {
+    const before = editProduct;
+
+    const updatedDisplay = formatProductDisplayName({
+      name: editForm.name.trim(),
+      quantity_value: editForm.quantityValue,
+      quantity_unit: editForm.quantityUnit,
+    });
+
+    const nextPayload = {
+      name: editForm.name.trim(),
+      sku: editForm.sku.trim() || null,
+      category_id: editForm.categoryId || null,
+      barcode: editForm.barcode.trim() || null,
+      supplier_id: editForm.supplierId || null,
+      notes: editForm.notes.trim() || null,
+      cost_price: Number(editForm.costPrice || 0),
+      unit_price: Number(editForm.sellPrice || 0),
+      quantity_value: Number(editForm.quantityValue),
+      quantity_unit: editForm.quantityUnit || null,
+      unit_measure_id: editForm.unitMeasureId || null,
+      is_sellable: editForm.isSellable,
+    };
+
+    const changedFields = [
+      before.name !== nextPayload.name ? "name" : null,
+      (before.sku ?? "") !== (nextPayload.sku ?? "") ? "sku" : null,
+      (before.barcode ?? "") !== (nextPayload.barcode ?? "") ? "barcode" : null,
+      (before.notes ?? "") !== (nextPayload.notes ?? "") ? "notes" : null,
+      Number(before.cost_price ?? 0) !== nextPayload.cost_price ? "cost_price" : null,
+      Number(before.unit_price ?? 0) !== nextPayload.unit_price ? "unit_price" : null,
+      (before.is_sellable ?? true) !== nextPayload.is_sellable ? "is_sellable" : null,
+      Number(before.quantity_value ?? 0) !== nextPayload.quantity_value ? "quantity_value" : null,
+      (before.quantity_unit ?? null) !== nextPayload.quantity_unit ? "quantity_unit" : null,
+      (before.category_id ?? null) !== nextPayload.category_id ? "category_id" : null,
+      (before.supplier_id ?? null) !== nextPayload.supplier_id ? "supplier_id" : null,
+      (before.unit_measure_id ?? null) !== nextPayload.unit_measure_id ? "unit_measure_id" : null,
+    ].filter(Boolean) as string[];
+
+    const supabase = createClient();
+
+    const { error } = await supabase
+      .from("products")
+      .update(nextPayload)
+      .eq("org_id", orgId)
+      .eq("id", editProduct.id);
+
+    if (error) throw new Error(error.message);
+
+    if (changedFields.length > 0) {
+      await logProductHistory({
+        org_id: orgId,
+        product_id: editProduct.id,
+        action: "edit",
+        note: "Product details updated",
+        details_json: {
+          changed_fields: changedFields,
+          before: {
+            name: before.name ?? null,
+            sku: before.sku ?? null,
+            barcode: before.barcode ?? null,
+            notes: before.notes ?? null,
+            cost_price: before.cost_price ?? 0,
+            unit_price: before.unit_price ?? 0,
+            is_sellable: before.is_sellable ?? true,
+            quantity_value: before.quantity_value ?? null,
+            quantity_unit: before.quantity_unit ?? null,
+            category_id: before.category_id ?? null,
+            supplier_id: before.supplier_id ?? null,
+            unit_measure_id: before.unit_measure_id ?? null,
+          },
+          after: nextPayload,
+        },
       });
-
-      const supabase = createClient();
-
-      const { error } = await supabase
-        .from("products")
-        .update({
-          name: editForm.name.trim(),
-          sku: editForm.sku.trim() || null,
-          category_id: editForm.categoryId || null,
-          barcode: editForm.barcode.trim() || null,
-          supplier_id: editForm.supplierId || null,
-          notes: editForm.notes.trim() || null,
-          cost_price: Number(editForm.costPrice || 0),
-          unit_price: Number(editForm.sellPrice || 0),
-          quantity_value: Number(editForm.quantityValue),
-          quantity_unit: editForm.quantityUnit || null,
-          unit_measure_id: editForm.unitMeasureId || null,
-          is_sellable: editForm.isSellable,
-        })
-        .eq("org_id", orgId)
-        .eq("id", editProduct.id);
-
-      if (error) throw new Error(error.message);
-
-      setEditProduct(null);
-      setPendingEditConfirm(false);
-      await refresh(orgId);
-
-      setToast({ message: `"${updatedDisplay}" updated`, type: "success" });
-    } catch (e: any) {
-      setErr(e.message ?? String(e));
-      setToast({ message: "Failed to update product", type: "error" });
-      setPendingEditConfirm(false);
-    } finally {
-      setSaving(false);
     }
+
+    setEditProduct(null);
+    setPendingEditConfirm(false);
+
+    await Promise.all([refresh(orgId), refreshHistory(orgId)]);
+
+    setToast({ message: `"${updatedDisplay}" updated`, type: "success" });
+  } catch (e: any) {
+    setErr(e.message ?? String(e));
+    setToast({ message: "Failed to update product", type: "error" });
+    setPendingEditConfirm(false);
+  } finally {
+    setSaving(false);
   }
+}
 
   async function handleArchive() {
-    if (!orgId || !deletingProduct?.id) return;
+    if (!orgId || !deletingProduct?.id || !archiveNote.trim()) return;
     setDeleting(true);
 
     try {
       const productName = formatProductDisplayName(deletingProduct);
+
       await archiveProduct(orgId, deletingProduct.id);
-      await refresh(orgId);
+
+      await logProductHistory({
+        org_id: orgId,
+        product_id: deletingProduct.id,
+        action: "archive",
+        note: archiveNote.trim(),
+      });
+
+      await Promise.all([refresh(orgId), refreshHistory(orgId)]);
 
       setToast({
         message: productName ? `"${productName}" archived` : "Product archived",
         type: "success",
       });
+
+      setArchiveNote("");
+      setDeletingProduct(null);
     } catch (e: any) {
       setErr(e.message ?? String(e));
       setToast({ message: "Failed to archive", type: "error" });
     } finally {
       setDeleting(false);
-      setDeletingProduct(null);
     }
   }
 
-  async function handleRestore(id: string, product?: Product) {
-    if (!orgId) return;
+  async function handleRestoreConfirm() {
+    if (!orgId || !restoringProduct || !restoreNote.trim()) return;
 
+    setRestoring(true);
     try {
-      await restoreProduct(orgId, id);
-      await refresh(orgId);
+      await restoreProduct(orgId, restoringProduct.id);
+
+      await logProductHistory({
+        org_id: orgId,
+        product_id: restoringProduct.id,
+        action: "restore",
+        note: restoreNote.trim(),
+      });
+
+      await Promise.all([refresh(orgId), refreshHistory(orgId)]);
+
       setToast({
-        message: product
-          ? `"${formatProductDisplayName(product)}" restored`
-          : "Product restored",
+        message: `"${formatProductDisplayName(restoringProduct)}" restored`,
         type: "success",
       });
+
+      setRestoreNote("");
+      setRestoringProduct(null);
     } catch (e: any) {
       setErr(e.message ?? String(e));
       setToast({ message: "Failed to restore", type: "error" });
+    } finally {
+      setRestoring(false);
     }
   }
 
@@ -1800,9 +2146,10 @@ export default function ProductsPage() {
     setSearch("");
     setFilterCat("");
     setFilterStatus("");
+    setProductFilter("all");
   }
 
-  const hasFilters = !!(search || filterCat || filterStatus);
+  const hasFilters = !!(search || filterCat || filterStatus || productFilter !== "all");
 
   const TABLE_COLS = S.tableGridCols;
   const HEADERS = [
@@ -1821,13 +2168,7 @@ export default function ProductsPage() {
     return (
       <div className="flex h-64 items-center justify-center">
         <div className="flex items-center gap-3 text-slate-400 text-sm">
-          <svg
-            className="h-4 w-4 animate-spin"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-          >
+          <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <circle cx="12" cy="12" r="10" strokeOpacity="0.2" />
             <path d="M12 2a10 10 0 0110 10" />
           </svg>
@@ -1860,370 +2201,521 @@ export default function ProductsPage() {
         </div>
       )}
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <div className="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-amber-700">
-            Catalog
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-600">
+              Catalog
+            </div>
+            <h1 className="mt-3 text-[32px] font-bold text-slate-900 tracking-tight">
+              Product Catalog
+            </h1>
+            <p className="mt-1 text-sm text-slate-500">
+              Manage products, sizes, pricing and availability
+            </p>
           </div>
-          <h1 className="mt-3 text-[32px] font-bold text-slate-900 tracking-tight">
-            Product Catalog
-          </h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Manage products, sizes, pricing and availability
-          </p>
-        </div>
 
-        <button
-          className={`${S.btnPrimary} shadow-[0_12px_28px_rgba(245,197,24,0.25)]`}
-          onClick={() => setShowAddModal(true)}
-        >
-          <IconPlus />
-          Add product
-        </button>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-        <KpiCard
-          icon="📦"
-          label="Total products"
-          value={String(kpis.total)}
-          sub={showArchived ? "active + archived" : "active only"}
-        />
-        <KpiCard
-          icon="✅"
-          label="For sale"
-          value={String(kpis.activeSellable)}
-          sub="active listings"
-          variant="success"
-        />
-        <KpiCard
-          icon="🗄️"
-          label="Archived"
-          value={String(kpis.archived)}
-          sub="hidden from sales"
-          variant="warning"
-        />
-        <KpiCard
-          icon="🏷️"
-          label="Categories"
-          value={String(kpis.categories)}
-          sub="product groups"
-          variant="info"
-        />
-        <KpiCard
-          icon="📈"
-          label="Avg margin"
-          value={`${kpis.avgMargin.toFixed(0)}%`}
-          sub="gross margin"
-          variant={
-            kpis.avgMargin >= 30
-              ? "success"
-              : kpis.avgMargin >= 10
-              ? "warning"
-              : "neutral"
-          }
-        />
-      </div>
-
-      <div className="rounded-[24px] border border-[#EADFC2] bg-white shadow-[0_12px_36px_rgba(245,197,24,0.06)] overflow-hidden">
-        <div className="border-b border-[#F1E6C9] bg-[linear-gradient(180deg,#FFFDF8_0%,#FFF9EC_100%)] px-5 py-4 lg:px-6">
-          <div className="flex flex-wrap items-center gap-2">
-            <label className="relative flex-1 min-w-[220px] max-w-sm">
-              <div className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
-                <IconSearch />
-              </div>
-              <input
-                className="w-full rounded-2xl border border-[#EADFC2] bg-white pl-10 pr-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 focus:border-amber-500 focus:ring-2 focus:ring-amber-100 outline-none transition"
-                placeholder="Search products…"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-              {search && (
-                <button
-                  onClick={() => setSearch("")}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                >
-                  <IconX />
-                </button>
-              )}
-            </label>
-
-            <select
-              className="rounded-2xl border border-[#EADFC2] bg-white px-3.5 py-2.5 text-sm text-slate-700 focus:border-amber-500 focus:ring-2 focus:ring-amber-100 outline-none transition cursor-pointer"
-              style={S.selectChevronStyle}
-              value={filterCat}
-              onChange={(e) => setFilterCat(e.target.value)}
-            >
-              <option value="">All categories</option>
-              {allCategories.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
-
-            <select
-              className="rounded-2xl border border-[#EADFC2] bg-white px-3.5 py-2.5 text-sm text-slate-700 focus:border-amber-500 focus:ring-2 focus:ring-amber-100 outline-none transition cursor-pointer"
-              style={S.selectChevronStyle}
-              value={filterStatus}
-              onChange={(e) =>
-                setFilterStatus(
-                  e.target.value as "" | "sellable" | "not_sellable"
-                )
-              }
-            >
-              <option value="">All statuses</option>
-              <option value="sellable">For sale</option>
-              <option value="not_sellable">Not for sale</option>
-            </select>
-
-            {hasFilters && (
-              <button
-                onClick={clearFilters}
-                className="text-sm font-semibold text-amber-600 hover:text-amber-700 transition px-1"
-              >
-                Clear
-              </button>
-            )}
-
-            <button
-              type="button"
-              onClick={() => setShowArchived((v) => !v)}
-              className={`rounded-2xl border px-3.5 py-2.5 text-sm font-semibold transition ${
-                showArchived
-                  ? "border-amber-300 bg-amber-50 text-amber-700 shadow-[0_8px_20px_rgba(245,197,24,0.12)]"
-                  : "border-[#EADFC2] bg-white text-slate-700 hover:bg-[#FFF8E6]"
-              }`}
-            >
-              {showArchived ? "Showing archived too" : "Show archived"}
+          {tab === "overview" && (
+            <button className={S.btnPrimary} onClick={() => setShowAddModal(true)}>
+              <IconPlus />
+              Add product
             </button>
-
-            <span className="ml-auto text-xs text-slate-500 whitespace-nowrap">
-              {filtered.length} of {items.length}
-            </span>
-          </div>
+          )}
         </div>
 
-        <div className="px-3 py-3 sm:px-4 sm:py-4">
-          <div className="hidden lg:block">
-            <div
-              className="grid items-center gap-4 px-6 py-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500"
-              style={{ gridTemplateColumns: TABLE_COLS }}
-            >
-              {HEADERS.map((h, i) => (
-                <div key={i} className={i >= 4 && i <= 6 ? "text-right" : ""}>
-                  {h}
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <TopTabs value={tab} onChange={setTab} />
+        </div>
+      </div>
+
+      {tab === "overview" && (
+        <>
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <div onClick={() => handleStatFilter("all")} className="cursor-pointer">
+              <KpiCard
+                icon="📦"
+                label="All products"
+                value={String(kpis.total)}
+                sub="everything"
+                active={productFilter === "all"}
+              />
+            </div>
+
+            <div onClick={() => handleStatFilter("archived")} className="cursor-pointer">
+              <KpiCard
+                icon="🗄️"
+                label="Archived"
+                value={String(kpis.archived)}
+                sub="hidden from sales"
+                variant="warning"
+                active={productFilter === "archived"}
+              />
+            </div>
+
+            <div onClick={() => handleStatFilter("not_for_sale")} className="cursor-pointer">
+              <KpiCard
+                icon="🚫"
+                label="Not for sale"
+                value={String(kpis.notForSale)}
+                sub="excluded from selling"
+                variant="info"
+                active={productFilter === "not_for_sale"}
+              />
+            </div>
+
+            <KpiCard
+              icon="🏷️"
+              label="Categories"
+              value={String(kpis.categories)}
+              sub="product groups"
+            />
+          </div>
+
+          <div className="rounded-[24px] border border-slate-200 bg-white shadow-[0_12px_36px_rgba(15,23,42,0.05)] overflow-hidden">
+            <div className="border-b border-slate-100 bg-slate-50/70 px-5 py-4 lg:px-6">
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="relative flex-1 min-w-[220px] max-w-sm">
+                  <div className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
+                    <IconSearch />
+                  </div>
+                  <input
+                    className="w-full rounded-2xl border border-slate-200 bg-white pl-10 pr-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 focus:border-slate-400 focus:ring-2 focus:ring-slate-100 outline-none transition"
+                    placeholder="Search products…"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                  />
+                  {search && (
+                    <button
+                      onClick={() => setSearch("")}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    >
+                      <IconX />
+                    </button>
+                  )}
+                </label>
+
+                <select
+                  className="rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-700 focus:border-slate-400 focus:ring-2 focus:ring-slate-100 outline-none transition cursor-pointer"
+                  value={filterCat}
+                  onChange={(e) => setFilterCat(e.target.value)}
+                >
+                  <option value="">All categories</option>
+                  {allCategories.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+
+                <select
+                  className="rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-700 focus:border-slate-400 focus:ring-2 focus:ring-slate-100 outline-none transition cursor-pointer"
+                  value={filterStatus}
+                  onChange={(e) =>
+                    setFilterStatus(e.target.value as "" | "sellable" | "not_sellable")
+                  }
+                >
+                  <option value="">All statuses</option>
+                  <option value="sellable">For sale</option>
+                  <option value="not_sellable">Not for sale</option>
+                </select>
+
+                {hasFilters && (
+                  <button
+                    onClick={clearFilters}
+                    className="text-sm font-semibold text-amber-600 hover:text-amber-700 transition px-1"
+                  >
+                    Clear
+                  </button>
+                )}
+
+                <span className="ml-auto text-xs text-slate-500 whitespace-nowrap">
+                  {filtered.length} of {items.length}
+                </span>
+              </div>
+            </div>
+
+            <div className="px-3 py-3 sm:px-4 sm:py-4">
+              <div className="hidden lg:block">
+                <div
+                  className="grid items-center gap-4 px-6 py-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500"
+                  style={{ gridTemplateColumns: TABLE_COLS }}
+                >
+                  {HEADERS.map((h, i) => (
+                    <div key={i} className={i >= 4 && i <= 6 ? "text-right" : ""}>
+                      {h}
+                    </div>
+                  ))}
                 </div>
-              ))}
+              </div>
+
+              <div className="space-y-3">
+                {paginated.length === 0 ? (
+                  <div className="py-20 text-center">
+                    <div className="text-5xl mb-4">🍯</div>
+                    <p className="text-lg font-semibold text-slate-700">
+                      {items.length === 0
+                        ? "No products yet"
+                        : productFilter === "archived"
+                        ? "No archived products"
+                        : productFilter === "not_for_sale"
+                        ? "No not-for-sale products"
+                        : "No matching products"}
+                    </p>
+                    <p className="text-sm text-slate-400 mt-1">
+                      {items.length === 0
+                        ? 'Click "Add product" to get started'
+                        : "Try adjusting your filters"}
+                    </p>
+                  </div>
+                ) : (
+                  paginated.map((p) => {
+                    const mgn = margin(p.cost_price, p.unit_price);
+                    const categoryName = getCategoryName(p);
+                    const displayName = formatProductDisplayName(p);
+
+                    return (
+                      <div
+                        key={p.id}
+                        className="group rounded-[24px] border border-slate-200 bg-white shadow-[0_8px_30px_rgba(15,23,42,0.04)] transition-all duration-200 hover:-translate-y-px hover:shadow-[0_16px_34px_rgba(15,23,42,0.08)] hover:border-slate-300"
+                      >
+                        <div
+                          className="hidden lg:grid items-center gap-4 px-6 py-5 text-sm"
+                          style={{ gridTemplateColumns: TABLE_COLS }}
+                        >
+                          <div className="min-w-0 space-y-1">
+                            <div className="font-semibold text-slate-900 truncate text-[15px]">
+                              {displayName}
+                            </div>
+                            <div className="text-xs text-slate-500 truncate">
+                              {p.unit_measure?.name || "—"}
+                            </div>
+                            {p.sku && (
+                              <div className="text-[11px] font-mono text-slate-400 truncate">
+                                SKU {p.sku}
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="truncate text-sm text-slate-700">
+                            {categoryName || <span className="text-slate-300">—</span>}
+                          </div>
+
+                          <div className="truncate text-sm text-slate-700">
+                            {p.supplier?.name || <span className="text-slate-300">—</span>}
+                          </div>
+
+                          <div className="truncate font-mono text-xs text-slate-500">
+                            {p.barcode || p.sku || <span className="text-slate-300">—</span>}
+                          </div>
+
+                          <div className="text-right text-slate-700 font-medium">
+                            {fmt(p.cost_price)}
+                          </div>
+
+                          <div className="text-right font-bold text-slate-900">
+                            {fmt(p.unit_price)}
+                          </div>
+
+                          <div className="text-right">
+                            <MarginBadge pct={mgn} />
+                          </div>
+
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <SellBadge isSellable={p.is_sellable} />
+                            <ArchiveBadge active={p.active} />
+                          </div>
+
+                          <div className="flex items-center justify-end gap-2 opacity-0 pointer-events-none transition-all duration-200 group-hover:opacity-100 group-hover:pointer-events-auto">
+                            <button
+                              onClick={() => openEdit(p)}
+                              className="grid h-9 w-9 place-items-center rounded-xl border border-blue-200 bg-blue-50 text-blue-600 hover:bg-blue-100 transition"
+                              title="Edit"
+                            >
+                              <IconEdit />
+                            </button>
+
+                            {p.active === false ? (
+                              <button
+                                onClick={() => setRestoringProduct(p)}
+                                className="rounded-xl border border-green-200 bg-green-50 px-3.5 h-9 text-xs font-semibold text-green-700 hover:bg-green-100 transition whitespace-nowrap"
+                              >
+                                Restore
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => setDeletingProduct(p)}
+                                className="grid h-9 w-9 place-items-center rounded-xl border border-red-200 bg-red-50 text-red-500 hover:bg-red-100 transition"
+                                title="Archive"
+                              >
+                                <IconTrash />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="lg:hidden px-5 py-4 space-y-3">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="font-semibold text-slate-900 truncate">
+                                {displayName}
+                              </div>
+                              {categoryName && (
+                                <div className="mt-0.5 text-xs text-slate-500">
+                                  {categoryName}
+                                </div>
+                              )}
+                              {(p.unit_measure?.name || p.sku) && (
+                                <div className="text-xs text-slate-400 mt-1">
+                                  {p.unit_measure?.name || p.sku}
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="flex items-center gap-2 flex-wrap justify-end">
+                              <SellBadge isSellable={p.is_sellable} />
+                              <ArchiveBadge active={p.active} />
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-3 gap-3 rounded-2xl bg-slate-50 border border-slate-200 p-3 text-sm">
+                            <div>
+                              <div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">
+                                Cost
+                              </div>
+                              <div className="font-medium text-slate-800 mt-0.5">
+                                {fmt(p.cost_price)}
+                              </div>
+                            </div>
+                            <div>
+                              <div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">
+                                Sell
+                              </div>
+                              <div className="font-bold text-slate-900 mt-0.5">
+                                {fmt(p.unit_price)}
+                              </div>
+                            </div>
+                            <div>
+                              <div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">
+                                Margin
+                              </div>
+                              <div className="mt-0.5">
+                                <MarginBadge pct={mgn} />
+                              </div>
+                            </div>
+                          </div>
+
+                          {(p.supplier?.name || p.barcode || p.sku) && (
+                            <div className="text-xs text-slate-500 flex flex-wrap gap-x-4 gap-y-0.5">
+                              {p.supplier?.name && <span>Supplier: {p.supplier.name}</span>}
+                              {p.sku && <span className="font-mono">SKU: {p.sku}</span>}
+                              {p.barcode && (
+                                <span className="font-mono">Barcode: {p.barcode}</span>
+                              )}
+                            </div>
+                          )}
+
+                          <div className="flex gap-2 pt-1">
+                            <button
+                              onClick={() => openEdit(p)}
+                              className="flex-1 flex items-center justify-center gap-2 rounded-2xl border border-blue-200 bg-blue-50 py-2.5 text-xs font-semibold text-blue-700 hover:bg-blue-100 transition"
+                            >
+                              <IconEdit /> Edit
+                            </button>
+
+                            {p.active === false ? (
+                              <button
+                                onClick={() => setRestoringProduct(p)}
+                                className="flex-1 flex items-center justify-center gap-2 rounded-2xl border border-green-200 bg-green-50 py-2.5 text-xs font-semibold text-green-700 hover:bg-green-100 transition"
+                              >
+                                Restore
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => setDeletingProduct(p)}
+                                className="flex-1 flex items-center justify-center gap-2 rounded-2xl border border-red-200 bg-red-50 py-2.5 text-xs font-semibold text-red-600 hover:bg-red-100 transition"
+                              >
+                                <IconTrash /> Archive
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
+            <Pagination
+              page={safePage}
+              totalPages={totalPages}
+              totalItems={filtered.length}
+              pageSize={PAGE_SIZE}
+              onPage={setPage}
+              itemLabel="product"
+            />
+          </div>
+        </>
+      )}
+
+      {tab === "history" && (
+        <div className="rounded-[24px] border border-slate-200 bg-white shadow-[0_12px_36px_rgba(15,23,42,0.05)] overflow-hidden">
+          <div className="border-b border-slate-100 bg-slate-50/70 px-5 py-4 lg:px-6">
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div>
+                  <div className="text-sm font-semibold text-slate-900">
+                    Product history log
+                  </div>
+                  <div className="text-xs text-slate-500 mt-0.5">
+                    Everything happening on this products page
+                  </div>
+                </div>
+
+                <span className="text-xs text-slate-500">
+                  {filteredHistory.length} event{filteredHistory.length !== 1 ? "s" : ""}
+                </span>
+              </div>
+
+              <label className="relative flex-1 min-w-[220px] max-w-sm">
+                <div className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
+                  <IconSearch />
+                </div>
+                <input
+                  className="w-full rounded-2xl border border-slate-200 bg-white pl-10 pr-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 focus:border-slate-400 focus:ring-2 focus:ring-slate-100 outline-none transition"
+                  placeholder="Search product, note or action…"
+                  value={historySearch}
+                  onChange={(e) => setHistorySearch(e.target.value)}
+                />
+                {historySearch && (
+                  <button
+                    onClick={() => setHistorySearch("")}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  >
+                    <IconX />
+                  </button>
+                )}
+                
+              </label>
+
+               <HistoryTypeTabs
+        value={historyFilter}
+        onChange={setHistoryFilter}
+      />
             </div>
           </div>
 
-          <div className="space-y-3">
-            {paginated.length === 0 ? (
-              <div className="py-20 text-center">
-                <div className="text-5xl mb-4">🍯</div>
+          <div className="px-5 py-5 space-y-6">
+            {filteredHistory.length === 0 ? (
+              <div className="py-16 text-center">
+                <div className="text-5xl mb-4">🕘</div>
                 <p className="text-lg font-semibold text-slate-700">
-                  {items.length === 0 ? "No products yet" : "No matching products"}
+                  No product history found
                 </p>
                 <p className="text-sm text-slate-400 mt-1">
-                  {items.length === 0
-                    ? 'Click "Add product" to get started'
-                    : "Try adjusting your filters"}
+                  Try another search or perform an archive/restore action
                 </p>
               </div>
             ) : (
-              paginated.map((p) => {
-                const mgn = margin(p.cost_price, p.unit_price);
-                const categoryName = getCategoryName(p);
-                const displayName = formatProductDisplayName(p);
+              ["Today", "Yesterday", "Earlier"].map((section) => {
+                const itemsInSection = groupedHistory[section] ?? [];
+                if (!itemsInSection.length) return null;
 
                 return (
-                  <div
-                    key={p.id}
-                    className="group rounded-[24px] border border-[#EFE4C6] bg-[linear-gradient(180deg,#FFFFFF_0%,#FFFCF4_100%)] shadow-[0_8px_30px_rgba(15,23,42,0.04)] transition-all duration-200 hover:-translate-y-px hover:shadow-[0_16px_34px_rgba(245,197,24,0.10)] hover:border-[#E5D28D]"
-                  >
-                    <div
-                      className="hidden lg:grid items-center gap-4 px-6 py-5 text-sm"
-                      style={{ gridTemplateColumns: TABLE_COLS }}
-                    >
-                      <div className="min-w-0 space-y-1">
-                        <div className="font-semibold text-slate-900 truncate text-[15px]">
-                          {displayName}
-                        </div>
-                        <div className="text-xs text-slate-500 truncate">
-                          {p.unit_measure?.name || "—"}
-                        </div>
-                        {p.sku && (
-                          <div className="text-[11px] font-mono text-slate-400 truncate">
-                            SKU {p.sku}
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="truncate text-sm text-slate-700">
-                        {categoryName || <span className="text-slate-300">—</span>}
-                      </div>
-
-                      <div className="truncate text-sm text-slate-700">
-                        {p.supplier?.name || (
-                          <span className="text-slate-300">—</span>
-                        )}
-                      </div>
-
-                      <div className="truncate font-mono text-xs text-slate-500">
-                        {p.barcode || p.sku || (
-                          <span className="text-slate-300">—</span>
-                        )}
-                      </div>
-
-                      <div className="text-right text-slate-700 font-medium">
-                        {fmt(p.cost_price)}
-                      </div>
-
-                      <div className="text-right font-bold text-slate-900">
-                        {fmt(p.unit_price)}
-                      </div>
-
-                      <div className="text-right">
-                        <MarginBadge pct={mgn} />
-                      </div>
-
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <SellBadge isSellable={p.is_sellable} />
-                        <ArchiveBadge active={p.active} />
-                      </div>
-
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          onClick={() => openEdit(p)}
-                          className="grid h-9 w-9 place-items-center rounded-xl border border-blue-200 bg-blue-50 text-blue-600 hover:bg-blue-100 transition opacity-0 group-hover:opacity-100"
-                          title="Edit"
-                        >
-                          <IconEdit />
-                        </button>
-
-                        {p.active === false ? (
-                          <button
-                            onClick={() => handleRestore(p.id, p)}
-                            className="rounded-xl border border-green-200 bg-green-50 px-3.5 h-9 text-xs font-semibold text-green-700 hover:bg-green-100 transition opacity-0 group-hover:opacity-100"
-                          >
-                            Restore
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => setDeletingProduct(p)}
-                            className="grid h-9 w-9 place-items-center rounded-xl border border-red-200 bg-red-50 text-red-500 hover:bg-red-100 transition opacity-0 group-hover:opacity-100"
-                            title="Archive"
-                          >
-                            <IconTrash />
-                          </button>
-                        )}
-                      </div>
+                  <div key={section} className="space-y-3">
+                    <div className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">
+                      {section}
                     </div>
 
-                    <div className="lg:hidden px-5 py-4 space-y-3">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="font-semibold text-slate-900 truncate">
-                            {displayName}
-                          </div>
-                          {categoryName && (
-                            <div className="mt-0.5 text-xs text-slate-500">
-                              {categoryName}
-                            </div>
-                          )}
-                          {(p.unit_measure?.name || p.sku) && (
-                            <div className="text-xs text-slate-400 mt-1">
-                              {p.unit_measure?.name || p.sku}
-                            </div>
-                          )}
-                        </div>
+                    <div className="space-y-3">
+                      {itemsInSection.map((h) => {
+  const product = items.find((p) => p.id === h.product_id);
 
-                        <div className="flex items-center gap-2 flex-wrap justify-end">
-                          <SellBadge isSellable={p.is_sellable} />
-                          <ArchiveBadge active={p.active} />
-                        </div>
-                      </div>
+  return (
+    <div
+      key={h.id}
+      className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"
+    >
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <HistoryActionBadge action={h.action} />
+            <span className="text-xs text-slate-400">
+              {fmtDateTime(h.created_at)}
+            </span>
+          </div>
 
-                      <div className="grid grid-cols-3 gap-3 rounded-2xl bg-[#FFF9EC] border border-[#F1E6C9] p-3 text-sm">
-                        <div>
-                          <div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">
-                            Cost
-                          </div>
-                          <div className="font-medium text-slate-800 mt-0.5">
-                            {fmt(p.cost_price)}
-                          </div>
-                        </div>
-                        <div>
-                          <div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">
-                            Sell
-                          </div>
-                          <div className="font-bold text-slate-900 mt-0.5">
-                            {fmt(p.unit_price)}
-                          </div>
-                        </div>
-                        <div>
-                          <div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">
-                            Margin
-                          </div>
-                          <div className="mt-0.5">
-                            <MarginBadge pct={mgn} />
-                          </div>
-                        </div>
-                      </div>
+          <div className="mt-2 font-semibold text-slate-900">
+            {product ? formatProductDisplayName(product) : h.product_id}
+          </div>
 
-                      {(p.supplier?.name || p.barcode || p.sku) && (
-                        <div className="text-xs text-slate-500 flex flex-wrap gap-x-4 gap-y-0.5">
-                          {p.supplier?.name && (
-                            <span>Supplier: {p.supplier.name}</span>
-                          )}
-                          {p.sku && <span className="font-mono">SKU: {p.sku}</span>}
-                          {p.barcode && (
-                            <span className="font-mono">Barcode: {p.barcode}</span>
-                          )}
-                        </div>
-                      )}
+          <div className="mt-1 text-sm text-slate-600">{h.note}</div>
+{h.action === "edit" &&
+  h.details_json?.changed_fields?.length &&
+  h.details_json.before &&
+  h.details_json.after && (
+    <div className="mt-3 space-y-1.5">
+      {h.details_json.changed_fields.map((field) => {
+        const before = h.details_json?.before?.[field];
+        const after = h.details_json?.after?.[field];
 
-                      <div className="flex gap-2 pt-1">
-                        <button
-                          onClick={() => openEdit(p)}
-                          className="flex-1 flex items-center justify-center gap-2 rounded-2xl border border-blue-200 bg-blue-50 py-2.5 text-xs font-semibold text-blue-700 hover:bg-blue-100 transition"
-                        >
-                          <IconEdit /> Edit
-                        </button>
+        // skip if somehow equal
+        if (before === after) return null;
 
-                        {p.active === false ? (
-                          <button
-                            onClick={() => handleRestore(p.id, p)}
-                            className="flex-1 flex items-center justify-center gap-2 rounded-2xl border border-green-200 bg-green-50 py-2.5 text-xs font-semibold text-green-700 hover:bg-green-100 transition"
-                          >
-                            Restore
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => setDeletingProduct(p)}
-                            className="flex-1 flex items-center justify-center gap-2 rounded-2xl border border-red-200 bg-red-50 py-2.5 text-xs font-semibold text-red-600 hover:bg-red-100 transition"
-                          >
-                            <IconTrash /> Archive
-                          </button>
-                        )}
-                      </div>
+        return (
+          <div
+            key={field}
+            className="flex items-center gap-2 text-xs text-slate-600"
+          >
+            <span className="font-semibold text-slate-500 min-w-[90px]">
+              {FIELD_LABELS[field] || field}
+            </span>
+
+            <span className="line-through text-red-400">
+              {formatHistoryValue(field, before)}
+            </span>
+
+            <span className="text-slate-400">→</span>
+
+            <span className="font-semibold text-green-600">
+              {formatHistoryValue(field, after)}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  )}
+
+          {h.action === "add" && h.details_json?.after ? (
+            <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-slate-500">
+              <div>Sell price: <span className="font-semibold text-slate-700">{fmt(h.details_json.after.unit_price)}</span></div>
+              <div>Cost price: <span className="font-semibold text-slate-700">{fmt(h.details_json.after.cost_price)}</span></div>
+              <div>Sellable: <span className="font-semibold text-slate-700">{h.details_json.after.is_sellable ? "Yes" : "No"}</span></div>
+              <div>Quantity: <span className="font-semibold text-slate-700">{formatQuantity(h.details_json.after.quantity_value, h.details_json.after.quantity_unit)}</span></div>
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+})}
                     </div>
                   </div>
                 );
               })
             )}
           </div>
-        </div>
 
-        <Pagination
-          page={safePage}
-          totalPages={totalPages}
-          totalItems={filtered.length}
-          pageSize={PAGE_SIZE}
-          onPage={setPage}
-        />
-      </div>
+          <Pagination
+            page={safeHistoryPage}
+            totalPages={historyTotalPages}
+            totalItems={filteredHistory.length}
+            pageSize={HISTORY_PAGE_SIZE}
+            onPage={setHistoryPage}
+            itemLabel="event"
+          />
+        </div>
+      )}
 
       {showAddModal && orgId && (
         <Modal
@@ -2278,9 +2770,28 @@ export default function ProductsPage() {
       {deletingProduct && (
         <ArchiveModal
           product={deletingProduct}
+          note={archiveNote}
+          setNote={setArchiveNote}
           onConfirm={handleArchive}
-          onCancel={() => setDeletingProduct(null)}
+          onCancel={() => {
+            setDeletingProduct(null);
+            setArchiveNote("");
+          }}
           loading={deleting}
+        />
+      )}
+
+      {restoringProduct && (
+        <RestoreModal
+          product={restoringProduct}
+          note={restoreNote}
+          setNote={setRestoreNote}
+          onConfirm={handleRestoreConfirm}
+          onCancel={() => {
+            setRestoringProduct(null);
+            setRestoreNote("");
+          }}
+          loading={restoring}
         />
       )}
 

@@ -340,7 +340,7 @@ export default function Page() {
 
                   <div className="relative h-[360px] overflow-hidden">
                     <Image
-                      src="/honey-.png"
+                      src="/images/dripper.jpg"
                       alt="Jar of premium Kenyan honey"
                       fill
                       className="object-contain p-6"
