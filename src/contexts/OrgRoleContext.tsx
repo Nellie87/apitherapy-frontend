@@ -1,22 +1,16 @@
 "use client";
 
-import React, { createContext, useContext, useMemo, type ReactNode } from "react";
-
+import React, { createContext, useContext, type ReactNode } from "react";
 import type { OrgRole } from "@/lib/auth/orgRole";
 
-export type OrgRoleContextValue = {
+type Ctx = {
   role: OrgRole | null;
   loading: boolean;
-  isAdmin: boolean;
   isSalesClerk: boolean;
+  isAdmin: boolean;
 };
 
-const OrgRoleContext = createContext<OrgRoleContextValue>({
-  role: null,
-  loading: true,
-  isAdmin: false,
-  isSalesClerk: false,
-});
+const OrgRoleContext = createContext<Ctx | null>(null);
 
 export function OrgRoleProvider({
   role,
@@ -27,21 +21,25 @@ export function OrgRoleProvider({
   loading: boolean;
   children: ReactNode;
 }) {
-  const value = useMemo(
-    (): OrgRoleContextValue => ({
-      role,
-      loading,
-      isAdmin: role === "admin",
-      isSalesClerk: role === "sales_clerk",
-    }),
-    [role, loading]
-  );
+  const value: Ctx = {
+    role,
+    loading,
+    isSalesClerk: !loading && role === "sales_clerk",
+    isAdmin: !loading && role !== "sales_clerk",
+  };
 
-  return (
-    <OrgRoleContext.Provider value={value}>{children}</OrgRoleContext.Provider>
-  );
+  return <OrgRoleContext.Provider value={value}>{children}</OrgRoleContext.Provider>;
 }
 
-export function useOrgRole() {
-  return useContext(OrgRoleContext);
+export function useOrgRole(): Ctx {
+  const v = useContext(OrgRoleContext);
+  if (!v) {
+    return {
+      role: null,
+      loading: true,
+      isSalesClerk: false,
+      isAdmin: false,
+    };
+  }
+  return v;
 }

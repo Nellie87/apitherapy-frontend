@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { setOrgId } from "@/lib/org/org";
+import { fetchMyOrgRole } from "@/lib/auth/orgRole";
 
 export default function OrgPage() {
   const [orgs, setOrgs] = useState<any[]>([]);
@@ -54,7 +55,9 @@ export default function OrgPage() {
       if (error) throw error;
 
       setOrgId(data);
-      window.location.href = "/dashboard/products";
+      const role = await fetchMyOrgRole(String(data));
+      window.location.href =
+        role === "sales_clerk" ? "/dashboard/sales" : "/dashboard/products";
     } catch (e: any) {
       setMsg(e.message ?? "Something went wrong.");
     }
@@ -100,9 +103,15 @@ export default function OrgPage() {
                 <button
                   key={o.id}
                   className="border rounded-2xl p-4 hover:bg-zinc-50 text-left"
-                  onClick={() => {
+                  onClick={async () => {
                     setOrgId(o.id);
-                    window.location.href = "/dashboard/products";
+                    try {
+                      const role = await fetchMyOrgRole(String(o.id));
+                      window.location.href =
+                        role === "sales_clerk" ? "/dashboard/sales" : "/dashboard/products";
+                    } catch {
+                      window.location.href = "/dashboard/products";
+                    }
                   }}
                 >
                   <div className="font-bold">{o.name}</div>

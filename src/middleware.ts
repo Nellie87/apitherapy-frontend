@@ -35,7 +35,7 @@ export async function middleware(request: NextRequest) {
     const pathname = request.nextUrl.pathname;
 
     const isAuthPage = pathname === "/login";
-    const isDashboardRoute = pathname.startsWith("/dashboard/dashboard");
+    const isDashboardRoute = pathname.startsWith("/dashboard");
 
     if (!user && isDashboardRoute) {
       const url = request.nextUrl.clone();

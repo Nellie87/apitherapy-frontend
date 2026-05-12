@@ -11,6 +11,7 @@ import {
   type SaleRow,
   type SaleItemRow,
 } from "@/lib/api/sales";
+import { fetchMyOrgRole } from "@/lib/auth/orgRole";
 import { useOrgRole } from "@/contexts/OrgRoleContext";
 import * as S from "./page.styles";
 
@@ -121,10 +122,8 @@ async function buildAndDownloadPdf(
   sale: SaleRow,
   items: NormalizedItem[],
   kpis: { subtotal: number; discount_total: number; total: number },
-  discountedLines: NormalizedItem[],
-  options?: { includeFinancials?: boolean }
+  discountedLines: NormalizedItem[]
 ) {
-  const includeFinancials = options?.includeFinancials !== false;
   const { default: jsPDF } = await import("jspdf");
   const { default: autoTable } = await import("jspdf-autotable");
 
@@ -185,7 +184,9 @@ async function buildAndDownloadPdf(
   y += 28;
 
   /* Meta panel — slate-50 card with border like dashboard sections */
-  const metaBoxH = 20;
+  const showRecorder = Boolean(sale.recorded_by_name);
+  const metaBoxH = showRecorder ? 30 : 20;
+
   doc.setFillColor(...SLATE50);
   doc.rect(MARGIN, y - 5, CONTENT_W, metaBoxH, "F");
   doc.setDrawColor(...SLATE200);
@@ -208,16 +209,16 @@ async function buildAndDownloadPdf(
     text(m.value, mx, y + 8, { size: 9, color: SLATE900 });
   });
 
-  y += metaBoxH + 6;
-
-  const recordedLabel =
-    sale.recorded_by?.full_name?.trim() ||
-    sale.recorded_by?.email?.trim();
-  if (recordedLabel) {
-    text("RECORDED BY", MARGIN, y, { size: 6.5, color: SLATE500, bold: true });
-    text(recordedLabel, MARGIN + 34, y, { size: 9, color: SLATE900 });
-    y += 7;
+  if (showRecorder && sale.recorded_by_name) {
+    text("RECORDED BY", MARGIN + 4, y + 16, {
+      size: 6.5,
+      color: SLATE500,
+      bold: true,
+    });
+    text(sale.recorded_by_name, MARGIN + 34, y + 16, { size: 9, color: SLATE900 });
   }
+
+  y += metaBoxH + 6;
 
   autoTable(doc, {
     startY: y,
@@ -311,7 +312,7 @@ async function buildAndDownloadPdf(
 
   y = ty + 18;
 
-  if (includeFinancials && discountedLines.length > 0) {
+  if (discountedLines.length > 0) {
     text("Discount detail", MARGIN, y, { size: 8.5, color: SLATE700, bold: true });
     y += 6;
     discountedLines.slice(0, 12).forEach((d) => {
@@ -331,12 +332,6 @@ async function buildAndDownloadPdf(
       y += 5;
     }
     y += 4;
-  } else if (!includeFinancials && discountedLines.length > 0) {
-    text("Items included promotional pricing.", MARGIN, y, {
-      size: 8,
-      color: SLATE600,
-    });
-    y += 6;
   }
 
   const totalPages = (doc.internal as any).getNumberOfPages();
@@ -360,16 +355,9 @@ async function buildAndDownloadPdf(
   doc.save(`invoice-${sale.sale_no ?? "sale"}.pdf`);
 }
 
-const GRID_LINE_ITEMS_FULL =
-  "1.5fr 0.5fr 0.9fr 0.9fr 0.9fr 0.9fr 0.9fr 1fr";
-const GRID_LINE_ITEMS_CLERK = "1.6fr 0.55fr 1fr 1fr 1fr 1.35fr";
-
 export default function SaleDetailsPage() {
   const params = useParams<{ saleId: string }>();
   const saleId = params?.saleId;
-
-  const { isAdmin, loading: roleLoading } = useOrgRole();
-  const showFinancials = !roleLoading && isAdmin;
 
   const [orgId, setOrgId] = useState<string | null>(null);
   const [sale, setSale] = useState<SaleRow | null>(null);
@@ -381,6 +369,9 @@ export default function SaleDetailsPage() {
   const [voidNote, setVoidNote] = useState("");
   const [voidSubmitting, setVoidSubmitting] = useState(false);
   const [successMsg, setSuccessMsg] = useState("");
+
+  const { isSalesClerk, loading: roleLoading } = useOrgRole();
+  const hideSensitive = !roleLoading && isSalesClerk;
 
   useEffect(() => {
     (async () => {
@@ -400,9 +391,11 @@ export default function SaleDetailsPage() {
       setErr("");
 
       try {
+        const role = await fetchMyOrgRole(orgId);
+        const hideCost = role === "sales_clerk";
         const [s, it] = await Promise.all([
           getSale(orgId, saleId),
-          listSaleItems(orgId, saleId),
+          listSaleItems(orgId, saleId, { hideCostFields: hideCost }),
         ]);
         setSale(s);
         setItems(it);
@@ -465,6 +458,12 @@ export default function SaleDetailsPage() {
     [sale, normalizedItems]
   );
 
+  const itemGridStyle = hideSensitive
+    ? { gridTemplateColumns: "1.5fr 0.5fr 0.9fr 0.9fr 0.9fr 1fr" }
+    : { gridTemplateColumns: "1.5fr 0.5fr 0.9fr 0.9fr 0.9fr 0.9fr 0.9fr 1fr" };
+
+  const tableMinClass = hideSensitive ? "min-w-[620px]" : "min-w-[760px]";
+
   async function handleDownload() {
     if (!sale) return;
 
@@ -472,9 +471,7 @@ export default function SaleDetailsPage() {
     setErr("");
 
     try {
-      await buildAndDownloadPdf(sale, normalizedItems, kpis, discountedLines, {
-        includeFinancials: showFinancials,
-      });
+      await buildAndDownloadPdf(sale, normalizedItems, kpis, discountedLines);
     } catch (e: any) {
       setErr("PDF generation failed: " + (e.message ?? String(e)));
     } finally {
@@ -496,9 +493,11 @@ export default function SaleDetailsPage() {
       setVoidNote("");
       setSuccessMsg("Sale voided and stock restored to inventory.");
 
+      const role = await fetchMyOrgRole(orgId);
+      const hideCost = role === "sales_clerk";
       const [s, it] = await Promise.all([
         getSale(orgId, saleId),
-        listSaleItems(orgId, saleId),
+        listSaleItems(orgId, saleId, { hideCostFields: hideCost }),
       ]);
       setSale(s);
       setItems(it);
@@ -540,9 +539,9 @@ export default function SaleDetailsPage() {
             Sale Details
           </h1>
           <p className="mt-1 text-sm text-slate-500">
-            {showFinancials
-              ? "View items, totals, payment and cost snapshot"
-              : "View items, totals and payment for this sale"}
+            {hideSensitive
+              ? "Items, totals and payment for this sale"
+              : "View items, totals, payment and cost snapshot"}
           </p>
         </div>
 
@@ -552,11 +551,7 @@ export default function SaleDetailsPage() {
           <Link href="/dashboard/sales" className={S.btnGhost}>
             ← Back
           </Link>
-          {!loading &&
-            !roleLoading &&
-            sale &&
-            isAdmin &&
-            saleCanBeVoided(sale.status) && (
+          {!loading && sale && saleCanBeVoided(sale.status) && !hideSensitive && (
             <button
               type="button"
               className={S.btnDanger}
@@ -687,16 +682,12 @@ export default function SaleDetailsPage() {
                 </span>
               </div>
 
-              {(sale?.recorded_by?.full_name || sale?.recorded_by?.email) && (
-                <div className="flex items-center gap-2 pt-1">
+              {sale?.recorded_by_name?.trim() && (
+                <div className="flex items-center gap-2">
                   <span className="w-20 text-xs font-semibold uppercase tracking-wider text-slate-400">
                     Recorded by
                   </span>
-                  <span className="text-slate-700 font-medium">
-                    {sale.recorded_by?.full_name?.trim() ||
-                      sale.recorded_by?.email ||
-                      "—"}
-                  </span>
+                  <span className="text-slate-700 font-medium">{sale.recorded_by_name.trim()}</span>
                 </div>
               )}
             </div>
@@ -717,7 +708,7 @@ export default function SaleDetailsPage() {
 
       <div
         className={`grid grid-cols-2 gap-3 sm:gap-4 ${
-          showFinancials ? "lg:grid-cols-3 xl:grid-cols-5" : "lg:grid-cols-3"
+          hideSensitive ? "lg:grid-cols-3" : "lg:grid-cols-3 xl:grid-cols-5"
         }`}
       >
         <StatCard label="Subtotal" value={fmtMoney(kpis.subtotal)} loading={loading} />
@@ -732,7 +723,7 @@ export default function SaleDetailsPage() {
           }
         />
         <StatCard label="Total" value={fmtMoney(kpis.total)} loading={loading} highlight />
-        {showFinancials && (
+        {!hideSensitive && (
           <>
             <StatCard label="Cost at Sale" value={fmtMoney(kpis.totalCost)} loading={loading} />
             <StatCard
@@ -757,19 +748,15 @@ export default function SaleDetailsPage() {
 
         <div className="overflow-x-auto border-b border-slate-100">
           <div
-            className={`${S.tableHead} items-center gap-4 px-5 py-3 ${showFinancials ? "min-w-[760px]" : "min-w-[520px]"}`}
-            style={{
-              gridTemplateColumns: showFinancials
-                ? GRID_LINE_ITEMS_FULL
-                : GRID_LINE_ITEMS_CLERK,
-            }}
+            className={`${S.tableHead} ${tableMinClass} items-center gap-4 px-5 py-3`}
+            style={itemGridStyle}
           >
             <div>Product</div>
             <div className="text-center">Qty</div>
             <div className="text-right">Base</div>
             <div className="text-right">Discount</div>
             <div className="text-right">Unit Price</div>
-            {showFinancials && (
+            {!hideSensitive && (
               <>
                 <div className="text-right">Cost</div>
                 <div className="text-right">Profit</div>
@@ -801,12 +788,8 @@ export default function SaleDetailsPage() {
             normalizedItems.map((x) => (
               <div
                 key={x.id}
-                className={`grid items-center gap-4 px-5 py-3.5 text-sm transition-colors hover:bg-slate-50 ${showFinancials ? "min-w-[760px]" : "min-w-[520px]"}`}
-                style={{
-                  gridTemplateColumns: showFinancials
-                    ? GRID_LINE_ITEMS_FULL
-                    : GRID_LINE_ITEMS_CLERK,
-                }}
+                className={`grid ${tableMinClass} items-center gap-4 px-5 py-3.5 text-sm transition-colors hover:bg-slate-50`}
+                style={itemGridStyle}
               >
                 <div className="min-w-0 font-semibold text-slate-900 truncate">
                   {x.product_name}
@@ -823,7 +806,7 @@ export default function SaleDetailsPage() {
                 <div className="text-right font-medium text-slate-800">
                   {fmtMoney(x.final)}
                 </div>
-                {showFinancials && (
+                {!hideSensitive && (
                   <>
                     <div className="text-right text-slate-600">
                       {fmtMoney(x.lineCost)}
@@ -856,13 +839,11 @@ export default function SaleDetailsPage() {
               </div>
             )}
 
-            {showFinancials && (
+            {!hideSensitive && (
               <>
                 <div className="flex items-center justify-between text-slate-500">
                   <span>Cost at sale</span>
-                  <span className="font-medium text-slate-700">
-                    {fmtMoney(kpis.totalCost)}
-                  </span>
+                  <span className="font-medium text-slate-700">{fmtMoney(kpis.totalCost)}</span>
                 </div>
 
                 <div className="flex items-center justify-between text-emerald-700">
@@ -923,11 +904,9 @@ export default function SaleDetailsPage() {
                   <span className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-bold text-amber-900">
                     -{fmtMoney(x.discountPerUnit)} / unit
                   </span>
-                  {showFinancials && (
-                    <div className="mt-1 text-sm font-bold text-emerald-700">
-                      Saved {fmtMoney(x.discountPerUnit * x.qty)}
-                    </div>
-                  )}
+                  <div className="mt-1 text-sm font-bold text-emerald-700">
+                    Saved {fmtMoney(x.discountPerUnit * x.qty)}
+                  </div>
                 </div>
               </div>
             ))}

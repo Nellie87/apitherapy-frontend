@@ -13,6 +13,12 @@ export type SaleRow = {
   discount_total: number;
   total: number;
   created_at: string;
+  /** Who completed the sale (auth user id) — same as session when recorded from the app. */
+  sold_by_user_id?: string | null;
+  /** Profile id (matches auth user id) for display name join. */
+  created_by?: string | null;
+  /** Resolved from `profiles` via `created_by`. */
+  recorded_by_name?: string | null;
 };
 
 export type SaleItemProduct = {
@@ -68,6 +74,11 @@ export async function listSales(orgId: string) {
       discount_total,
       total,
       created_at,
+      sold_by_user_id,
+      created_by,
+      recorded_by_profile:profiles!sales_created_by_fkey (
+        full_name
+      ),
       sale_items:sale_items (
         id,
         qty,
@@ -80,21 +91,36 @@ export async function listSales(orgId: string) {
 
   if (error) throw new Error(error.message);
 
-  return (data ?? []).map((r: any) => ({
-    ...r,
-    subtotal: Number(r.subtotal ?? 0),
-    discount_total: Number(r.discount_total ?? 0),
-    total: Number(r.total ?? 0),
-    sale_items: (r.sale_items ?? []).map((it: any) => {
-      const p = Array.isArray(it.products) ? it.products[0] ?? null : it.products ?? null;
-      return {
-        id: String(it.id),
-        qty: Number(it.qty ?? 0),
-        product_id: String(it.product_id),
-        products: p ? { id: String(p.id), name: String(p.name) } : null,
-      };
-    }),
-  })) as SaleRowWithItems[];
+  return (data ?? []).map((r: any) => {
+    const prof = Array.isArray(r.recorded_by_profile)
+      ? r.recorded_by_profile[0]
+      : r.recorded_by_profile;
+
+    return {
+      id: String(r.id),
+      org_id: String(r.org_id),
+      sale_no: String(r.sale_no ?? ""),
+      customer_name: r.customer_name ?? null,
+      payment_method: r.payment_method ?? null,
+      status: String(r.status ?? ""),
+      subtotal: Number(r.subtotal ?? 0),
+      discount_total: Number(r.discount_total ?? 0),
+      total: Number(r.total ?? 0),
+      created_at: r.created_at,
+      sold_by_user_id: r.sold_by_user_id ?? null,
+      created_by: r.created_by ?? null,
+      recorded_by_name: prof?.full_name ? String(prof.full_name) : null,
+      sale_items: (r.sale_items ?? []).map((it: any) => {
+        const p = Array.isArray(it.products) ? it.products[0] ?? null : it.products ?? null;
+        return {
+          id: String(it.id),
+          qty: Number(it.qty ?? 0),
+          product_id: String(it.product_id),
+          products: p ? { id: String(p.id), name: String(p.name) } : null,
+        };
+      }),
+    };
+  }) as SaleRowWithItems[];
 }
 
 export async function getSale(orgId: string, saleId: string) {
@@ -112,7 +138,12 @@ export async function getSale(orgId: string, saleId: string) {
       subtotal,
       discount_total,
       total,
-      created_at
+      created_at,
+      sold_by_user_id,
+      created_by,
+      recorded_by_profile:profiles!sales_created_by_fkey (
+        full_name
+      )
     `)
     .eq("org_id", orgId)
     .eq("id", saleId)
@@ -121,20 +152,35 @@ export async function getSale(orgId: string, saleId: string) {
   if (error) throw new Error(error.message);
 
   const r: any = data;
+  const prof = Array.isArray(r.recorded_by_profile)
+    ? r.recorded_by_profile[0]
+    : r.recorded_by_profile;
+
   return {
-    ...r,
+    id: String(r.id),
+    org_id: String(r.org_id),
+    sale_no: String(r.sale_no ?? ""),
+    customer_name: r.customer_name ?? null,
+    payment_method: r.payment_method ?? null,
+    status: String(r.status ?? ""),
     subtotal: Number(r.subtotal ?? 0),
     discount_total: Number(r.discount_total ?? 0),
     total: Number(r.total ?? 0),
+    created_at: r.created_at,
+    sold_by_user_id: r.sold_by_user_id ?? null,
+    created_by: r.created_by ?? null,
+    recorded_by_name: prof?.full_name ? String(prof.full_name) : null,
   } as SaleRow;
 }
 
-export async function listSaleItems(orgId: string, saleId: string) {
+export async function listSaleItems(
+  orgId: string,
+  saleId: string,
+  opts?: { hideCostFields?: boolean }
+) {
   const supabase = createClient();
 
-  const { data, error } = await supabase
-    .from("sale_items")
-    .select(`
+  const baseFields = `
       id,
       org_id,
       sale_id,
@@ -143,11 +189,20 @@ export async function listSaleItems(orgId: string, saleId: string) {
       unit_price,
       unit_price_base,
       discount_per_unit,
-      cost_price_at_sale,
       line_total,
       created_at,
       products:products ( id, name )
-    `)
+    `;
+
+  const select = opts?.hideCostFields
+    ? baseFields
+    : `${baseFields.trim()},
+      cost_price_at_sale
+    `;
+
+  const { data, error } = await supabase
+    .from("sale_items")
+    .select(select)
     .eq("org_id", orgId)
     .eq("sale_id", saleId)
     .order("created_at", { ascending: true });
@@ -163,7 +218,9 @@ export async function listSaleItems(orgId: string, saleId: string) {
       unit_price: Number(r.unit_price ?? 0),
       unit_price_base: Number(r.unit_price_base ?? 0),
       discount_per_unit: Number(r.discount_per_unit ?? 0),
-      cost_price_at_sale: Number(r.cost_price_at_sale ?? 0),
+      cost_price_at_sale: opts?.hideCostFields
+        ? 0
+        : Number(r.cost_price_at_sale ?? 0),
       line_total: Number(r.line_total ?? 0),
       products: p ? { id: String(p.id), name: String(p.name) } : null,
     };
@@ -192,13 +249,34 @@ export async function createSaleStrict(
   if (error) throw new Error(error.message);
 
   const r: any = data;
-  return {
+  const out = {
     sale_id: String(r.sale_id),
     sale_no: String(r.sale_no),
     subtotal: Number(r.subtotal ?? 0),
     discount_total: Number(r.discount_total ?? 0),
     total: Number(r.total ?? 0),
   };
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (user?.id) {
+    const { error: upErr } = await supabase
+      .from("sales")
+      .update({
+        sold_by_user_id: user.id,
+        created_by: user.id,
+      })
+      .eq("org_id", orgId)
+      .eq("id", out.sale_id);
+
+    if (upErr) {
+      console.warn("createSaleStrict: could not stamp seller on sale row:", upErr.message);
+    }
+  }
+
+  return out;
 }
 
 /** Void sale and restore stock (see supabase/migrations `void_sale_restore_inventory`). */

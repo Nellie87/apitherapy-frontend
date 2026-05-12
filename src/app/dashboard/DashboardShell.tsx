@@ -20,6 +20,7 @@ const ADMIN_NAV: NavItem[] = [
   { href: "/dashboard/reports", label: "Reports", icon: "◧" },
   { href: "/dashboard/expenses", label: "Expenses", icon: "◨" },
   { href: "/dashboard/suppliers", label: "Suppliers", icon: "◎" },
+  { href: "/dashboard/team", label: "Team", icon: "⎔" },
 ];
 
 const SALES_ONLY_NAV: NavItem[] = [
@@ -70,7 +71,8 @@ export default function DashboardShell({
     if (roleLoading || orgRole !== "sales_clerk") return;
     const allowed =
       pathname.startsWith("/dashboard/sales") ||
-      pathname.startsWith("/dashboard/org");
+      pathname.startsWith("/dashboard/org") ||
+      pathname.startsWith("/dashboard/settings");
     if (!allowed) {
       router.replace("/dashboard/sales");
     }
@@ -223,7 +225,7 @@ export default function DashboardShell({
             </Link>
           )}
 
-          {!roleLoading && orgRole !== "sales_clerk" && (
+          {!roleLoading && (
           <Link
             href="/dashboard/settings"
             className={`nav-link ${
@@ -293,6 +295,39 @@ export default function DashboardShell({
               </Link>
             );
           })}
+          {!roleLoading && orgRole === "sales_clerk" && (
+            <>
+              <Link
+                href="/dashboard/org"
+                className={`mobile-chip ${
+                  pathname.startsWith("/dashboard/org") ? "active" : "idle"
+                }`}
+              >
+                <span className="nav-icon">🏢</span>
+                <span>Org</span>
+              </Link>
+              <Link
+                href="/dashboard/settings"
+                className={`mobile-chip ${
+                  pathname.startsWith("/dashboard/settings") ? "active" : "idle"
+                }`}
+              >
+                <span className="nav-icon">⚙</span>
+                <span>Settings</span>
+              </Link>
+            </>
+          )}
+          {!roleLoading && orgRole !== "sales_clerk" && (
+            <Link
+              href="/dashboard/settings"
+              className={`mobile-chip ${
+                pathname.startsWith("/dashboard/settings") ? "active" : "idle"
+              }`}
+            >
+              <span className="nav-icon">⚙</span>
+              <span>Settings</span>
+            </Link>
+          )}
         </div>
       </div>
 
