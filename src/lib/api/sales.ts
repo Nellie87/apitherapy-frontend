@@ -200,3 +200,22 @@ export async function createSaleStrict(
     total: Number(r.total ?? 0),
   };
 }
+
+/** Void sale and restore stock (see supabase/migrations `void_sale_restore_inventory`). */
+export async function voidSaleRestoreInventory(
+  orgId: string,
+  saleId: string,
+  args?: { note?: string | null }
+) {
+  const supabase = createClient();
+
+  const { data, error } = await supabase.rpc("void_sale_restore_inventory", {
+    p_org_id: orgId,
+    p_sale_id: saleId,
+    p_note: args?.note ?? null,
+  });
+
+  if (error) throw new Error(error.message);
+
+  return data as Record<string, unknown>;
+}

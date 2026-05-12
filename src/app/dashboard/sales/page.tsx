@@ -530,6 +530,13 @@ export default function SalesPage() {
                           <span className="text-slate-400 italic">Walk-in</span>
                         )}
                       </div>
+                      {(s.recorded_by?.full_name || s.recorded_by?.email) && (
+                        <div className="mt-1 text-[11px] text-slate-400 truncate">
+                          Recorded by{" "}
+                          {s.recorded_by?.full_name?.trim() ||
+                            s.recorded_by?.email}
+                        </div>
+                      )}
                       {pv.list.length > 0 && (
                         <div className="mt-1 flex flex-wrap gap-1">
                           {pv.list.slice(0, 3).map((x) => (
@@ -598,6 +605,13 @@ export default function SalesPage() {
                           {s.customer_name || <span className="italic">Walk-in</span>} ·{" "}
                           {fmtDate(s.created_at)}
                         </div>
+                        {(s.recorded_by?.full_name || s.recorded_by?.email) && (
+                          <div className="text-[11px] text-slate-400 mt-1">
+                            By{" "}
+                            {s.recorded_by?.full_name?.trim() ||
+                              s.recorded_by?.email}
+                          </div>
+                        )}
 
                         {pv.list.length > 0 && (
                           <div className="mt-2 flex flex-wrap gap-1">

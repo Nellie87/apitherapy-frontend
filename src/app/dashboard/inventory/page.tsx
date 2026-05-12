@@ -5,14 +5,14 @@ import { bootstrapOrg } from "@/lib/org/bootstrapOrg";
 import {
   listInventory,
   updateInventory,
-  createInventoryRow,
+  adjustInventoryDelta,
+  createInventoryInitial,
   listInventoryMovements,
   type InventoryRow,
   type InventoryMovementRow,
   type QuantityUnit,
 } from "@/lib/api/inventory";
 import { listProducts } from "@/lib/api/products";
-import { createClient } from "@/lib/supabase/client";
 import * as S from "./page.styles";
 
 /* ─────────────────────────────────────────────
@@ -32,7 +32,14 @@ type ProductLite = {
 
 type StockFilter = "all" | "low" | "out";
 type MainTab = "overview" | "history";
-type HistoryTypeFilter = "all" | "add" | "restock" | "remove" | "set" | "sale";
+type HistoryTypeFilter =
+  | "all"
+  | "add"
+  | "restock"
+  | "remove"
+  | "set"
+  | "sale"
+  | "sale_void";
 
 type ToastState = {
   message: string;
@@ -111,6 +118,8 @@ function movementLabel(type: InventoryMovementRow["type"]) {
       return "Set";
     case "sale":
       return "Sold";
+    case "sale_void":
+      return "Sale void";
     default:
       return type;
   }
@@ -127,6 +136,8 @@ function movementColor(type: InventoryMovementRow["type"]) {
       return "bg-blue-100 text-blue-700 border-blue-200";
     case "sale":
       return "bg-violet-100 text-violet-700 border-violet-200";
+    case "sale_void":
+      return "bg-amber-100 text-amber-800 border-amber-200";
     default:
       return "bg-slate-100 text-slate-700 border-slate-200";
   }
@@ -455,6 +466,7 @@ function HistoryTypeTabs({
     { key: "remove", label: "Removed" },
     { key: "set", label: "Set" },
     { key: "sale", label: "Sold" },
+    { key: "sale_void", label: "Sale void" },
   ];
 
   return (
@@ -671,28 +683,6 @@ function Pagination({
       </div>
     </div>
   );
-}
-
-/* ─────────────────────────────────────────────
-   Movement logging
-───────────────────────────────────────────── */
-async function logMovement(payload: {
-  org_id: string;
-  product_id: string;
-  ref_sale_id?: string | null;
-  type: "add" | "remove" | "set" | "restock";
-  qty_delta: number;
-  qty_before: number;
-  qty_after: number;
-  note?: string | null;
-}) {
-  const supabase = createClient();
-
-  const { error } = await supabase.from("inventory_movements").insert([payload]);
-
-  if (error) {
-    throw new Error(`Stock updated, but movement log failed: ${error.message}`);
-  }
 }
 
 /* ─────────────────────────────────────────────
@@ -1000,19 +990,10 @@ export default function InventoryPage() {
     try {
       const selectedProduct = addCandidates.find((p) => p.id === addProductId);
 
-      await createInventoryRow(orgId, {
+      await createInventoryInitial(orgId, {
         product_id: addProductId,
         qty_on_hand: qty,
         reorder_level: reorder,
-      });
-
-      await logMovement({
-        org_id: orgId,
-        product_id: addProductId,
-        type: "add",
-        qty_delta: qty,
-        qty_before: 0,
-        qty_after: qty,
         note: "Initial stock entry",
       });
 
@@ -1043,22 +1024,12 @@ export default function InventoryPage() {
     setErr("");
 
     try {
-      const before = Number(row.qty_on_hand ?? 0);
-      const after = before + amount;
-
-      await updateInventory(orgId, row.product_id, {
-        qty_on_hand: after,
+      await adjustInventoryDelta(orgId, row.product_id, {
+        mode: "add",
+        amount,
         reorder_level: row.reorder_level,
-      });
-
-      await logMovement({
-        org_id: orgId,
-        product_id: row.product_id,
-        type: "restock",
-        qty_delta: amount,
-        qty_before: before,
-        qty_after: after,
         note: `Quick restock +${amount}`,
+        recordAs: "restock",
       });
 
       setRestockQty((prev) => ({ ...prev, [row.product_id]: "" }));
@@ -1141,34 +1112,14 @@ export default function InventoryPage() {
     setSavingId(adjustRow.product_id);
 
     try {
-      const before = Number(adjustRow.qty_on_hand ?? 0);
-      let after = before;
-      let delta = 0;
-
-      if (adjustMode === "add") {
-        after = before + n;
-        delta = n;
-      } else if (adjustMode === "remove") {
-        after = Math.max(0, before - n);
-        delta = before - after;
-      } else {
-        after = Math.max(0, n);
-        delta = after - before;
-      }
-
-      await updateInventory(orgId, adjustRow.product_id, {
-        qty_on_hand: after,
+      await adjustInventoryDelta(orgId, adjustRow.product_id, {
+        mode: adjustMode,
+        amount: n,
         reorder_level: adjustRow.reorder_level,
-      });
-
-      await logMovement({
-        org_id: orgId,
-        product_id: adjustRow.product_id,
-        type: adjustMode,
-        qty_delta: delta,
-        qty_before: before,
-        qty_after: after,
-        note: adjustNote.trim() || null,
+        note:
+          adjustMode === "add" && !adjustNote.trim()
+            ? null
+            : adjustNote.trim() || null,
       });
 
       await Promise.all([refresh(orgId), loadAllHistory(orgId)]);
@@ -1388,7 +1339,7 @@ export default function InventoryPage() {
                       >
                         <button
                           type="button"
-                          // onClick={() => openProductHistory(r)}
+                          onClick={() => openProductHistory(r)}
                           className="min-w-0 space-y-1 text-left"
                         >
                           <div className="font-semibold text-slate-900 truncate text-[15px] hover:text-blue-700 transition">

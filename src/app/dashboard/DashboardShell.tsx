@@ -1,12 +1,18 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { bootstrapOrg } from "@/lib/org/bootstrapOrg";
+import { getOrgId } from "@/lib/org/org";
+import { fetchMyOrgRole, type OrgRole } from "@/lib/auth/orgRole";
+import { OrgRoleProvider } from "@/contexts/OrgRoleContext";
 import "./dashboard-shell.css";
 
-const navItems = [
+type NavItem = { href: string; label: string; icon: string };
+
+const ADMIN_NAV: NavItem[] = [
   { href: "/dashboard/summarydashboard", label: "Dashboard", icon: "⊞" },
   { href: "/dashboard/inventory", label: "Our Stock", icon: "◫" },
   { href: "/dashboard/products", label: "Products", icon: "◈" },
@@ -14,6 +20,10 @@ const navItems = [
   { href: "/dashboard/reports", label: "Reports", icon: "◧" },
   { href: "/dashboard/expenses", label: "Expenses", icon: "◨" },
   { href: "/dashboard/suppliers", label: "Suppliers", icon: "◎" },
+];
+
+const SALES_ONLY_NAV: NavItem[] = [
+  { href: "/dashboard/sales", label: "Sales", icon: "◉" },
 ];
 
 export default function DashboardShell({
@@ -24,10 +34,47 @@ export default function DashboardShell({
   const pathname = usePathname();
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
+  const [orgRole, setOrgRole] = useState<OrgRole | null>(null);
+  const [roleLoading, setRoleLoading] = useState(true);
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        await bootstrapOrg();
+        if (cancelled) return;
+        const oid = getOrgId();
+        const r = await fetchMyOrgRole(oid);
+        if (!cancelled) setOrgRole(r);
+      } catch {
+        if (!cancelled) setOrgRole("admin");
+      } finally {
+        if (!cancelled) setRoleLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const navItems = useMemo(() => {
+    if (roleLoading) return [];
+    return orgRole === "sales_clerk" ? SALES_ONLY_NAV : ADMIN_NAV;
+  }, [orgRole, roleLoading]);
+
+  useEffect(() => {
+    if (roleLoading || orgRole !== "sales_clerk") return;
+    const allowed =
+      pathname.startsWith("/dashboard/sales") ||
+      pathname.startsWith("/dashboard/org");
+    if (!allowed) {
+      router.replace("/dashboard/sales");
+    }
+  }, [roleLoading, orgRole, pathname, router]);
 
   async function handleLogout() {
     const supabase = createClient();
@@ -46,6 +93,7 @@ export default function DashboardShell({
     : "";
 
   return (
+    <OrgRoleProvider role={orgRole} loading={roleLoading}>
     <div className="shell-bg min-h-screen flex flex-col lg:flex-row">
       <aside
         className="sidebar hidden lg:flex flex-col flex-shrink-0"
@@ -114,7 +162,19 @@ export default function DashboardShell({
         </div>
 
         <nav style={{ padding: "0 14px", flex: 1 }}>
-          {navItems.map((item) => {
+          {roleLoading && (
+            <div
+              style={{
+                padding: "12px 14px",
+                color: "var(--sidebar-text-dim)",
+                fontSize: 13,
+              }}
+            >
+              Loading menu…
+            </div>
+          )}
+          {!roleLoading &&
+            navItems.map((item) => {
             const isActive =
               pathname === item.href || pathname.startsWith(item.href + "/");
 
@@ -150,6 +210,20 @@ export default function DashboardShell({
             </span>
           </div>
 
+          {!roleLoading && orgRole === "sales_clerk" && (
+            <Link
+              href="/dashboard/org"
+              className={`nav-link ${
+                pathname.startsWith("/dashboard/org") ? "active" : ""
+              }`}
+              style={{ marginBottom: 6 }}
+            >
+              <span className="nav-icon">🏢</span>
+              <span>Organization</span>
+            </Link>
+          )}
+
+          {!roleLoading && orgRole !== "sales_clerk" && (
           <Link
             href="/dashboard/settings"
             className={`nav-link ${
@@ -160,6 +234,7 @@ export default function DashboardShell({
             <span className="nav-icon">⚙</span>
             <span>Settings</span>
           </Link>
+          )}
 
           <button
             onClick={handleLogout}
@@ -203,7 +278,7 @@ export default function DashboardShell({
         </div>
 
         <div className="mobile-nav">
-          {navItems.map((item) => {
+          {(roleLoading ? [] : navItems).map((item) => {
             const isActive =
               pathname === item.href || pathname.startsWith(item.href + "/");
 
@@ -242,5 +317,6 @@ export default function DashboardShell({
         </div>
       </main>
     </div>
+    </OrgRoleProvider>
   );
 }

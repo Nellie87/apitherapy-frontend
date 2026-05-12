@@ -28,7 +28,7 @@ export type InventoryMovementRow = {
   org_id: string;
   product_id: string;
   ref_sale_id?: string | null;
-  type: "add" | "remove" | "set" | "restock" | "sale";
+  type: "add" | "remove" | "set" | "restock" | "sale" | "sale_void";
   qty_delta: number;
   qty_before: number;
   qty_after: number;
@@ -128,6 +128,69 @@ export async function createInventoryRow(
       reorder_level: payload.reorder_level,
     },
   ]);
+
+  if (error) throw new Error(error.message);
+}
+
+/** Atomic qty change + movement row (see supabase/migrations). Preferred over updateInventory + manual log. */
+export async function adjustInventoryDelta(
+  orgId: string,
+  productId: string,
+  args: {
+    mode: "add" | "remove" | "set";
+    amount: number;
+    reorder_level?: number | null;
+    note?: string | null;
+    /** Log movement as `restock` while applying an `add` (quick restock). */
+    recordAs?: "restock" | null;
+  }
+) {
+  const supabase = createClient();
+
+  const { data, error } = await supabase.rpc("adjust_inventory_delta", {
+    p_org_id: orgId,
+    p_product_id: productId,
+    p_mode: args.mode,
+    p_amount: args.amount,
+    p_reorder_level: args.reorder_level ?? null,
+    p_note: args.note ?? null,
+    p_record_as: args.recordAs ?? null,
+  });
+
+  if (error) throw new Error(error.message);
+
+  const r = data as {
+    qty_before?: unknown;
+    qty_after?: unknown;
+    qty_delta?: unknown;
+  };
+
+  return {
+    qty_before: Number(r?.qty_before ?? 0),
+    qty_after: Number(r?.qty_after ?? 0),
+    qty_delta: Number(r?.qty_delta ?? 0),
+  };
+}
+
+/** Insert first inventory row + initial movement in one transaction (see supabase/migrations). */
+export async function createInventoryInitial(
+  orgId: string,
+  payload: {
+    product_id: string;
+    qty_on_hand: number;
+    reorder_level: number;
+    note?: string | null;
+  }
+) {
+  const supabase = createClient();
+
+  const { error } = await supabase.rpc("create_inventory_initial", {
+    p_org_id: orgId,
+    p_product_id: payload.product_id,
+    p_qty_on_hand: payload.qty_on_hand,
+    p_reorder_level: payload.reorder_level,
+    p_note: payload.note ?? null,
+  });
 
   if (error) throw new Error(error.message);
 }
