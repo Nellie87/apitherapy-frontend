@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { bootstrapOrg } from "@/lib/org/bootstrapOrg";
 import { listSuppliers, createSupplier } from "@/lib/api/lookups";
 import { createClient } from "@/lib/supabase/client";
+import * as S from "./page.styles";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -63,7 +64,7 @@ function FieldError({ message }: { message?: string }) {
 function Label({ children, required, hint }: { children: React.ReactNode; required?: boolean; hint?: string }) {
   return (
     <div className="mb-2">
-      <label className="block text-xs font-bold uppercase tracking-widest text-slate-500">
+      <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500">
         {children}
         {required && <span className="ml-0.5 text-rose-500">*</span>}
       </label>
@@ -101,33 +102,18 @@ function Toast({ message, type = "success", onClose }: { message: string; type?:
 
   return (
     <div
-      className={`fixed bottom-6 right-6 z-[100] flex items-start gap-3 rounded-2xl px-4 py-3.5 shadow-2xl ring-1 ${
-        isSuccess
-          ? "bg-[#0D2A4A] ring-[#123861] text-white"
-          : "bg-rose-600 ring-rose-700 text-white"
+      className={`fixed bottom-5 right-5 z-[100] flex max-w-sm items-center gap-3 rounded-2xl px-5 py-3.5 text-sm font-semibold text-white shadow-xl ${
+        isSuccess ? "bg-emerald-600" : "bg-red-600"
       }`}
-      style={{ maxWidth: 360, minWidth: 260 }}
     >
-      <div className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${isSuccess ? "bg-emerald-400/20" : "bg-white/20"}`}>
-        {isSuccess ? (
-          <svg className="h-3 w-3 text-emerald-400" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2">
-            <polyline points="2,6 5,9 10,3" />
-          </svg>
-        ) : (
-          <svg className="h-3 w-3 text-white" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2">
-            <line x1="3" y1="3" x2="9" y2="9" /><line x1="9" y1="3" x2="3" y2="9" />
-          </svg>
-        )}
-      </div>
-      <p className="flex-1 text-sm font-medium leading-snug">{message}</p>
+      <p className="flex-1 leading-snug">{message}</p>
       <button
         type="button"
         onClick={onClose}
-        className="mt-0.5 shrink-0 opacity-60 hover:opacity-100 transition-opacity"
+        className="shrink-0 text-white/70 transition hover:text-white"
+        aria-label="Dismiss"
       >
-        <svg className="h-4 w-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
-          <line x1="4" y1="4" x2="12" y2="12" /><line x1="12" y1="4" x2="4" y2="12" />
-        </svg>
+        ×
       </button>
     </div>
   );
@@ -256,18 +242,18 @@ function SupplierModal({
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="border-b border-slate-100 bg-gradient-to-br from-[#0D2A4A] to-[#123861] px-6 py-5">
+        <div className={S.modalHeader}>
           <div className="flex items-start justify-between gap-4">
             <div>
-              <h2 className="text-base font-bold text-white">Add new supplier</h2>
-              <p className="mt-1 text-sm text-slate-300">
+              <h2 className="text-base font-bold text-slate-900">Add new supplier</h2>
+              <p className="mt-1 text-sm text-slate-600">
                 Supplier records can be linked to products and orders.
               </p>
             </div>
             <button
               type="button"
               onClick={onClose}
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white/10 text-white/70 transition hover:bg-white/20 hover:text-white"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 hover:text-slate-800"
             >
               <svg className="h-4 w-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
                 <line x1="4" y1="4" x2="12" y2="12" /><line x1="12" y1="4" x2="4" y2="12" />
@@ -297,7 +283,7 @@ function SupplierModal({
                   className={`w-full rounded-xl border bg-slate-50 px-3.5 py-2.5 text-sm font-medium text-slate-900 placeholder:text-slate-400 outline-none transition focus:bg-white ${
                     errors.name && submitAttempted
                       ? "border-rose-400 focus:border-rose-400 focus:ring-2 focus:ring-rose-100"
-                      : "border-slate-200 focus:border-[#0D2A4A] focus:ring-2 focus:ring-[#0D2A4A]/10"
+                      : "border-slate-200 focus:border-amber-500 focus:ring-2 focus:ring-amber-100"
                   }`}
                   placeholder="e.g. Highlands Honey Distributors"
                   value={form.name}
@@ -309,7 +295,7 @@ function SupplierModal({
               <div>
                 <Label>Contact person</Label>
                 <input
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm font-medium text-slate-900 placeholder:text-slate-400 outline-none transition focus:bg-white focus:border-[#0D2A4A] focus:ring-2 focus:ring-[#0D2A4A]/10"
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm font-medium text-slate-900 placeholder:text-slate-400 outline-none transition focus:bg-white focus:border-amber-500 focus:ring-2 focus:ring-amber-100"
                   placeholder="e.g. Jane Wanjiku"
                   value={form.contact_person}
                   onChange={(e) => setForm((f) => ({ ...f, contact_person: e.target.value }))}
@@ -319,7 +305,7 @@ function SupplierModal({
               <div>
                 <Label>Phone number</Label>
                 <input
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm font-medium text-slate-900 placeholder:text-slate-400 outline-none transition focus:bg-white focus:border-[#0D2A4A] focus:ring-2 focus:ring-[#0D2A4A]/10"
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm font-medium text-slate-900 placeholder:text-slate-400 outline-none transition focus:bg-white focus:border-amber-500 focus:ring-2 focus:ring-amber-100"
                   placeholder="e.g. +254 7XX XXX XXX"
                   value={form.phone}
                   onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
@@ -332,7 +318,7 @@ function SupplierModal({
                   className={`w-full rounded-xl border bg-slate-50 px-3.5 py-2.5 text-sm font-medium text-slate-900 placeholder:text-slate-400 outline-none transition focus:bg-white ${
                     errors.email && submitAttempted
                       ? "border-rose-400 focus:border-rose-400 focus:ring-2 focus:ring-rose-100"
-                      : "border-slate-200 focus:border-[#0D2A4A] focus:ring-2 focus:ring-[#0D2A4A]/10"
+                      : "border-slate-200 focus:border-amber-500 focus:ring-2 focus:ring-amber-100"
                   }`}
                   placeholder="e.g. supplies@example.com"
                   value={form.email}
@@ -345,7 +331,7 @@ function SupplierModal({
             <div>
               <Label hint="Helps your team know what this supplier provides.">What they supply</Label>
               <input
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm font-medium text-slate-900 placeholder:text-slate-400 outline-none transition focus:bg-white focus:border-[#0D2A4A] focus:ring-2 focus:ring-[#0D2A4A]/10"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm font-medium text-slate-900 placeholder:text-slate-400 outline-none transition focus:bg-white focus:border-amber-500 focus:ring-2 focus:ring-amber-100"
                 placeholder="e.g. Raw honey, bottles, labels, packaging materials"
                 value={form.what_they_supply}
                 onChange={(e) => setForm((f) => ({ ...f, what_they_supply: e.target.value }))}
@@ -356,7 +342,7 @@ function SupplierModal({
               <Label hint="Delivery terms, payment notes, reliability observations…">Notes</Label>
               <textarea
                 rows={3}
-                className="w-full resize-none rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm font-medium text-slate-900 placeholder:text-slate-400 outline-none transition focus:bg-white focus:border-[#0D2A4A] focus:ring-2 focus:ring-[#0D2A4A]/10"
+                className="w-full resize-none rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm font-medium text-slate-900 placeholder:text-slate-400 outline-none transition focus:bg-white focus:border-amber-500 focus:ring-2 focus:ring-amber-100"
                 placeholder="Any relevant notes about this supplier…"
                 value={form.notes}
                 onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
@@ -369,14 +355,14 @@ function SupplierModal({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+              className={S.btnGhost}
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={saving}
-              className="rounded-xl bg-[#0D2A4A] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#123861] disabled:opacity-50"
+              className={`${S.btnPrimary} disabled:opacity-50`}
             >
               {saving ? (
                 <span className="flex items-center gap-2">
@@ -397,26 +383,28 @@ function SupplierModal({
 
 // ─── KPI Cards ───────────────────────────────────────────────────────────────
 
-function KpiCard({ label, value, accent }: { label: string; value: number; accent: "slate" | "emerald" | "navy" }) {
+function KpiCard({ label, value, accent }: { label: string; value: number; accent: "slate" | "emerald" | "amber" }) {
   const styles = {
-    navy: "border-[#0D2A4A]/20 bg-[#0D2A4A] text-white",
+    amber: "border-amber-200/80 bg-gradient-to-br from-amber-50 to-white text-slate-900 shadow-sm",
     emerald: "border-emerald-200 bg-white text-slate-900",
     slate: "border-slate-200 bg-white text-slate-900",
   };
   const labelStyles = {
-    navy: "text-slate-300",
+    amber: "text-amber-700",
     emerald: "text-emerald-600",
     slate: "text-slate-400",
   };
   const valueStyles = {
-    navy: "text-white",
+    amber: "text-amber-900",
     emerald: "text-emerald-700",
     slate: "text-slate-700",
   };
 
   return (
     <div className={`rounded-2xl border px-5 py-4 ${styles[accent]}`}>
-      <div className={`text-[10px] font-bold uppercase tracking-widest ${labelStyles[accent]}`}>{label}</div>
+      <div className={`text-[11px] font-semibold uppercase tracking-[0.18em] ${labelStyles[accent]}`}>
+        {label}
+      </div>
       <div className={`mt-1.5 text-3xl font-bold tabular-nums ${valueStyles[accent]}`}>{value}</div>
     </div>
   );
@@ -439,7 +427,7 @@ function SupplyTags({ value }: { value?: string | null }) {
       {tags.map((tag, i) => (
         <span
           key={i}
-          className="rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600"
+          className={S.supplyTag}
         >
           {tag}
         </span>
@@ -458,13 +446,17 @@ function SupplierAvatar({ name, active }: { name: string; active?: boolean }) {
     .join("")
     .toUpperCase();
 
+  if (active === false) {
+    return <div className={S.avatarArchived}>{initials}</div>;
+  }
+
   return (
     <div
-      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-xs font-bold ${
-        active === false
-          ? "bg-slate-100 text-slate-400"
-          : "bg-[#0D2A4A]/10 text-[#0D2A4A]"
-      }`}
+      className={S.avatarActive}
+      style={{
+        background: "linear-gradient(135deg, #F8D54A 0%, #E2B11A 55%, #C9920A 100%)",
+        boxShadow: "0 4px 12px rgba(245,197,24,0.18)",
+      }}
     >
       {initials}
     </div>
@@ -476,13 +468,15 @@ function SupplierAvatar({ name, active }: { name: string; active?: boolean }) {
 function EmptyState({ hasItems, onAdd }: { hasItems: boolean; onAdd: () => void }) {
   return (
     <div className="flex flex-col items-center justify-center px-6 py-20 text-center">
-      <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-100">
-        <svg className="h-8 w-8 text-slate-400" viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.5">
-          <rect x="4" y="8" width="24" height="18" rx="3" />
-          <path d="M4 13h24M11 8V6a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v2" strokeLinecap="round" />
-          <line x1="11" y1="18" x2="21" y2="18" strokeLinecap="round" />
-          <line x1="11" y1="22" x2="17" y2="22" strokeLinecap="round" />
-        </svg>
+      <div
+        className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl text-2xl text-[#2B2100]"
+        style={{
+          background: "linear-gradient(135deg, #F8D54A 0%, #E2B11A 55%, #C9920A 100%)",
+          boxShadow: "0 8px 18px rgba(245,197,24,0.2)",
+        }}
+        aria-hidden
+      >
+        ◎
       </div>
       <h3 className="text-base font-bold text-slate-800">
         {hasItems ? "No matching suppliers" : "No suppliers yet"}
@@ -496,7 +490,7 @@ function EmptyState({ hasItems, onAdd }: { hasItems: boolean; onAdd: () => void 
         <button
           type="button"
           onClick={onAdd}
-          className="mt-5 rounded-xl bg-[#0D2A4A] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#123861]"
+          className={`mt-5 ${S.btnPrimary} w-auto`}
         >
           Add first supplier
         </button>
@@ -658,7 +652,7 @@ export default function SuppliersPage() {
   }
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-6">
       {/* Toast */}
       {toast && (
         <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />
@@ -682,21 +676,27 @@ export default function SuppliersPage() {
         <div className="border-b border-slate-100 px-6 py-5">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#0D2A4A]">
-                <svg className="h-5 w-5 text-white" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <rect x="2" y="5" width="16" height="13" rx="2" />
-                  <path d="M2 9h16M7 5V3.5a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 .5.5V5" strokeLinecap="round" />
-                </svg>
+              <div
+                className={`${S.iconBadge} text-[#2B2100]`}
+                style={{
+                  background:
+                    "linear-gradient(135deg, #F8D54A 0%, #E2B11A 55%, #C9920A 100%)",
+                  boxShadow: "0 8px 18px rgba(245,197,24,0.22)",
+                }}
+                aria-hidden
+              >
+                ◎
               </div>
               <div>
-                <h1 className="text-xl font-bold tracking-tight text-slate-900">Suppliers</h1>
-                <p className="text-sm text-slate-500">Manage suppliers and their contact details.</p>
+                <p className={S.sectionTitle}>Procurement</p>
+                <h1 className={S.pageTitle}>Suppliers</h1>
+                <p className={S.pageSubtitle}>Manage suppliers and their contact details.</p>
               </div>
             </div>
             <button
               onClick={openCreateModal}
               type="button"
-              className="inline-flex items-center gap-2 rounded-xl bg-[#0D2A4A] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#123861]"
+              className={S.btnPrimary}
             >
               <svg className="h-3.5 w-3.5" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2">
                 <line x1="7" y1="2" x2="7" y2="12" strokeLinecap="round" />
@@ -709,7 +709,7 @@ export default function SuppliersPage() {
 
         {/* KPI Cards */}
         <div className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-3">
-          <KpiCard label="Total suppliers" value={counts.total} accent="navy" />
+          <KpiCard label="Total suppliers" value={counts.total} accent="amber" />
           <KpiCard label="Active" value={counts.active} accent="emerald" />
           <KpiCard label="Archived" value={counts.archived} accent="slate" />
         </div>
@@ -725,7 +725,7 @@ export default function SuppliersPage() {
               <line x1="10.5" y1="10.5" x2="14" y2="14" strokeLinecap="round" />
             </svg>
             <input
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-9 pr-3.5 text-sm text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#0D2A4A] focus:bg-white focus:ring-2 focus:ring-[#0D2A4A]/10"
+              className={`${S.input} py-2.5 pl-9 pr-3.5`}
               placeholder="Search name, contact, email, supply…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -750,8 +750,8 @@ export default function SuppliersPage() {
             onClick={() => setShowArchived((v) => !v)}
             className={`inline-flex items-center gap-2 rounded-xl px-3.5 py-2.5 text-sm font-semibold transition ${
               showArchived
-                ? "bg-slate-900 text-white"
-                : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                ? "bg-amber-500 text-[#2E2200] shadow-sm"
+                : "border border-slate-200 bg-white text-slate-600 hover:bg-amber-50"
             }`}
           >
             <svg className="h-3.5 w-3.5" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -771,7 +771,7 @@ export default function SuppliersPage() {
         {/* Desktop header */}
         <div className="hidden border-b border-slate-100 bg-slate-50 px-5 py-3 lg:grid lg:grid-cols-[minmax(0,1.8fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.5fr)_80px]">
           {["Supplier", "Contact", "Phone", "Email", "What they supply", ""].map((col, i) => (
-            <div key={i} className={`text-[10px] font-bold uppercase tracking-widest text-slate-400 ${i === 5 ? "text-right" : ""}`}>
+            <div key={i} className={`${S.tableHead} ${i === 5 ? "text-right" : ""}`}>
               {col}
             </div>
           ))}

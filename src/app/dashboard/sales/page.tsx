@@ -14,6 +14,35 @@ function fmtMoney(v: number) {
   })}`;
 }
 
+function formatQuantity(value?: number | string | null, unit?: string | null) {
+  if (value === null || value === undefined || value === "") return "";
+  if (!unit) return "";
+
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "";
+
+  const formatted = Number.isInteger(n)
+    ? String(n)
+    : n.toLocaleString("en-KE", {
+        maximumFractionDigits: 3,
+      });
+
+  return `${formatted} ${unit}`;
+}
+
+function formatProductDisplayName(product: {
+  name?: string | null;
+  quantity_value?: number | string | null;
+  quantity_unit?: string | null;
+}) {
+  const base = (product.name ?? "").trim();
+  const qty = formatQuantity(product.quantity_value, product.quantity_unit);
+
+  if (!base) return qty || "Unknown";
+  if (!qty) return base;
+  return `${base} ${qty}`;
+}
+
 function fmtDate(d: string) {
   try {
     return new Date(d).toLocaleDateString("en-GB", {
@@ -159,7 +188,7 @@ function saleProductsPreview(sale: any): ProductPreview {
 
   for (const it of items) {
     const p = Array.isArray(it.products) ? it.products[0] : it.products;
-    const name = p?.name ? String(p.name).trim() : "Unknown";
+const name = p ? formatProductDisplayName(p) : "Unknown";
     const qty = Number(it.qty ?? 0);
 
     if (qty <= 0 || name === "Unknown") continue;

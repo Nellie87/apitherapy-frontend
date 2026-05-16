@@ -13,17 +13,16 @@ export type SaleRow = {
   discount_total: number;
   total: number;
   created_at: string;
-  /** Who completed the sale (auth user id) — same as session when recorded from the app. */
   sold_by_user_id?: string | null;
-  /** Profile id (matches auth user id) for display name join. */
   created_by?: string | null;
-  /** Resolved from `profiles` via `created_by`. */
   recorded_by_name?: string | null;
 };
 
 export type SaleItemProduct = {
   id: string;
   name: string;
+  quantity_value?: number | null;
+  quantity_unit?: string | null;
 };
 
 export type SaleItemRow = {
@@ -38,7 +37,7 @@ export type SaleItemRow = {
   cost_price_at_sale: number;
   line_total: number;
   created_at: string;
-  products?: { id: string; name: string } | null;
+  products?: SaleItemProduct | null;
 };
 
 export type CreateSaleItemInput = {
@@ -51,12 +50,23 @@ export type SaleItemLite = {
   id: string;
   qty: number;
   product_id: string;
-  products?: { id: string; name: string } | null;
+  products?: SaleItemProduct | null;
 };
 
 export type SaleRowWithItems = SaleRow & {
   sale_items?: SaleItemLite[];
 };
+
+function normalizeProduct(p: any): SaleItemProduct | null {
+  if (!p) return null;
+
+  return {
+    id: String(p.id),
+    name: String(p.name ?? ""),
+    quantity_value: p.quantity_value == null ? null : Number(p.quantity_value),
+    quantity_unit: p.quantity_unit ?? null,
+  };
+}
 
 export async function listSales(orgId: string) {
   const supabase = createClient();
@@ -83,7 +93,12 @@ export async function listSales(orgId: string) {
         id,
         qty,
         product_id,
-        products:products ( id, name )
+        products:products (
+          id,
+          name,
+          quantity_value,
+          quantity_unit
+        )
       )
     `)
     .eq("org_id", orgId)
@@ -111,12 +126,15 @@ export async function listSales(orgId: string) {
       created_by: r.created_by ?? null,
       recorded_by_name: prof?.full_name ? String(prof.full_name) : null,
       sale_items: (r.sale_items ?? []).map((it: any) => {
-        const p = Array.isArray(it.products) ? it.products[0] ?? null : it.products ?? null;
+        const p = Array.isArray(it.products)
+          ? it.products[0] ?? null
+          : it.products ?? null;
+
         return {
           id: String(it.id),
           qty: Number(it.qty ?? 0),
           product_id: String(it.product_id),
-          products: p ? { id: String(p.id), name: String(p.name) } : null,
+          products: normalizeProduct(p),
         };
       }),
     };
@@ -181,18 +199,23 @@ export async function listSaleItems(
   const supabase = createClient();
 
   const baseFields = `
+    id,
+    org_id,
+    sale_id,
+    product_id,
+    qty,
+    unit_price,
+    unit_price_base,
+    discount_per_unit,
+    line_total,
+    created_at,
+    products:products (
       id,
-      org_id,
-      sale_id,
-      product_id,
-      qty,
-      unit_price,
-      unit_price_base,
-      discount_per_unit,
-      line_total,
-      created_at,
-      products:products ( id, name )
-    `;
+      name,
+      quantity_value,
+      quantity_unit
+    )
+  `;
 
   const select = opts?.hideCostFields
     ? baseFields
@@ -210,10 +233,15 @@ export async function listSaleItems(
   if (error) throw new Error(error.message);
 
   return (data ?? []).map((r: any) => {
-    const p = Array.isArray(r.products) ? r.products[0] ?? null : r.products ?? null;
+    const p = Array.isArray(r.products)
+      ? r.products[0] ?? null
+      : r.products ?? null;
 
     return {
-      ...r,
+      id: String(r.id),
+      org_id: String(r.org_id),
+      sale_id: String(r.sale_id),
+      product_id: String(r.product_id),
       qty: Number(r.qty ?? 0),
       unit_price: Number(r.unit_price ?? 0),
       unit_price_base: Number(r.unit_price_base ?? 0),
@@ -222,7 +250,8 @@ export async function listSaleItems(
         ? 0
         : Number(r.cost_price_at_sale ?? 0),
       line_total: Number(r.line_total ?? 0),
-      products: p ? { id: String(p.id), name: String(p.name) } : null,
+      created_at: r.created_at,
+      products: normalizeProduct(p),
     };
   }) as SaleItemRow[];
 }
@@ -237,49 +266,25 @@ export async function createSaleStrict(
 ) {
   const supabase = createClient();
 
-  const payload = {
+  const { data, error } = await supabase.rpc("create_sale_strict", {
     p_org_id: orgId,
     p_customer_name: args.customer_name ?? null,
     p_payment_method: args.payment_method,
     p_items: args.items,
-  };
-
-  const { data, error } = await supabase.rpc("create_sale_strict", payload);
+  });
 
   if (error) throw new Error(error.message);
 
   const r: any = data;
-  const out = {
+  return {
     sale_id: String(r.sale_id),
     sale_no: String(r.sale_no),
     subtotal: Number(r.subtotal ?? 0),
     discount_total: Number(r.discount_total ?? 0),
     total: Number(r.total ?? 0),
   };
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (user?.id) {
-    const { error: upErr } = await supabase
-      .from("sales")
-      .update({
-        sold_by_user_id: user.id,
-        created_by: user.id,
-      })
-      .eq("org_id", orgId)
-      .eq("id", out.sale_id);
-
-    if (upErr) {
-      console.warn("createSaleStrict: could not stamp seller on sale row:", upErr.message);
-    }
-  }
-
-  return out;
 }
 
-/** Void sale and restore stock (see supabase/migrations `void_sale_restore_inventory`). */
 export async function voidSaleRestoreInventory(
   orgId: string,
   saleId: string,

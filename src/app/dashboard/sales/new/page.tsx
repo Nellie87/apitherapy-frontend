@@ -53,6 +53,36 @@ function fmtMoney(v: number) {
   })}`;
 }
 
+function formatQuantity(value?: number | string | null, unit?: string | null) {
+  if (value === null || value === undefined || value === "") return "";
+  if (!unit) return "";
+
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "";
+
+  const formatted = Number.isInteger(n)
+    ? String(n)
+    : n.toLocaleString("en-KE", {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 3,
+    });
+
+  return `${formatted} ${unit}`;
+}
+
+function formatProductDisplayName(product: {
+  name?: string | null;
+  quantity_value?: number | string | null;
+  quantity_unit?: string | null;
+}) {
+  const base = (product.name ?? "").trim();
+  const qty = formatQuantity(product.quantity_value, product.quantity_unit);
+
+  if (!base) return qty || "Unnamed product";
+  if (!qty) return base;
+  return `${base} ${qty}`;
+}
+
 function hasProduct(
   r: SellableRow
 ): r is SellableRow & { products: NonNullable<SellableRow["products"]> } {
@@ -153,9 +183,8 @@ function Toast({
 
   return (
     <div
-      className={`fixed bottom-5 right-5 z-[70] flex items-center gap-3 rounded-2xl px-5 py-3.5 shadow-xl text-white text-sm font-semibold ${
-        type === "success" ? "bg-green-600" : "bg-red-600"
-      }`}
+      className={`fixed bottom-5 right-5 z-[70] flex items-center gap-3 rounded-2xl px-5 py-3.5 shadow-xl text-white text-sm font-semibold ${type === "success" ? "bg-green-600" : "bg-red-600"
+        }`}
     >
       <span>{type === "success" ? <IconCheck /> : <IconX />}</span>
       <span>{message}</span>
@@ -190,11 +219,10 @@ function PaymentSelector({
           key={key}
           type="button"
           onClick={() => onChange(key)}
-          className={`flex flex-col items-center gap-1 rounded-xl border py-2.5 text-xs font-semibold transition ${
-            value === key
+          className={`flex flex-col items-center gap-1 rounded-xl border py-2.5 text-xs font-semibold transition ${value === key
               ? "border-slate-900 bg-slate-900 text-white shadow-sm"
               : "border-slate-200 text-slate-500 hover:border-slate-300 hover:bg-slate-50"
-          }`}
+            }`}
         >
           <span className="text-base">{icon}</span>
           {label}
@@ -300,7 +328,7 @@ export default function NewSalePage() {
           {
             available: Number(r.qty_on_hand ?? 0),
             base_price: Number(r.products.unit_price ?? 0),
-            activeName: r.products.name,
+            activeName: formatProductDisplayName(r.products),
           },
         ])
     );
@@ -312,7 +340,7 @@ export default function NewSalePage() {
 
       for (const line of prev) {
         const live = map.get(line.product_id);
-        if (!live) {
+        if (!live || live.available <= 0) {
           removed = true;
           continue;
         }
@@ -345,7 +373,7 @@ export default function NewSalePage() {
       .filter((r) => {
         if (!t) return true;
 
-        const name = (r.products.name ?? "").toLowerCase();
+        const name = formatProductDisplayName(r.products).toLowerCase();
         const sku = (r.products.sku ?? "").toLowerCase();
         const barcode = (r.products.barcode ?? "").toLowerCase();
         const cat = ((r.products as any).category ?? "").toLowerCase();
@@ -355,6 +383,14 @@ export default function NewSalePage() {
           sku.includes(t) ||
           barcode.includes(t) ||
           cat.includes(t)
+        );
+      })
+      .sort((a, b) => {
+        const aIn = Number(a.qty_on_hand ?? 0) > 0 ? 1 : 0;
+        const bIn = Number(b.qty_on_hand ?? 0) > 0 ? 1 : 0;
+        if (aIn !== bIn) return bIn - aIn;
+        return formatProductDisplayName(a.products).localeCompare(
+          formatProductDisplayName(b.products)
         );
       })
       .slice(0, 30);
@@ -379,7 +415,7 @@ export default function NewSalePage() {
         ...prev,
         {
           product_id: r.product_id,
-          name: r.products.name,
+          name: formatProductDisplayName(r.products),
           category: (r.products as any).category ?? null,
           available,
           base_price: Number(r.products.unit_price ?? 0),
@@ -605,7 +641,7 @@ export default function NewSalePage() {
                 const available = Number(r.qty_on_hand ?? 0);
                 const outOfStock = available <= 0;
                 const cartLine = cart.find((x) => x.product_id === r.product_id);
-                const inCart = !!cartLine;
+                const inCart = !!cartLine && !outOfStock;
 
                 return (
                   <button
@@ -613,28 +649,38 @@ export default function NewSalePage() {
                     type="button"
                     onClick={() => !outOfStock && addToCart(r)}
                     disabled={outOfStock}
-                    className={`w-full text-left px-4 py-3.5 transition-colors flex items-center gap-4 group ${
-                      outOfStock
-                        ? "opacity-40 cursor-not-allowed"
+                    className={`w-full text-left px-4 py-3.5 transition-colors flex items-center gap-4 group ${outOfStock
+                        ? "cursor-not-allowed bg-slate-50/90"
                         : inCart
-                        ? "bg-slate-50 hover:bg-slate-100"
-                        : "hover:bg-slate-50"
-                    }`}
+                          ? "bg-slate-50 hover:bg-slate-100"
+                          : "hover:bg-slate-50"
+                      }`}
                   >
                     <div
-                      className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl text-lg ${
-                        inCart ? "bg-slate-900 text-white" : "bg-slate-100"
-                      }`}
+                      className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl text-lg ${outOfStock
+                          ? "bg-slate-200 text-slate-400"
+                          : inCart
+                            ? "bg-slate-900 text-white"
+                            : "bg-slate-100"
+                        }`}
                     >
                       🍯
                     </div>
 
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className="text-sm font-semibold text-slate-900 truncate">
-                          {p.name}
+                        <span
+                          className={`text-sm font-semibold truncate ${outOfStock ? "text-slate-500" : "text-slate-900"
+                            }`}
+                        >
+                          {formatProductDisplayName(p)}
                         </span>
-                        {inCart && (
+                        {outOfStock && (
+                          <span className="shrink-0 rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-red-700">
+                            Out of stock
+                          </span>
+                        )}
+                        {inCart && cartLine && (
                           <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-slate-900 px-2 py-0.5 text-xs font-bold text-white">
                             ✓ {cartLine.qty}
                           </span>
@@ -652,10 +698,13 @@ export default function NewSalePage() {
                     </div>
 
                     <div className="text-right shrink-0">
-                      <div className="text-sm font-bold text-slate-900">
+                      <div
+                        className={`text-sm font-bold ${outOfStock ? "text-slate-400" : "text-slate-900"
+                          }`}
+                      >
                         {fmtMoney(Number(p.unit_price ?? 0))}
                       </div>
-                      <StockBadge available={available} />
+                      {!outOfStock && <StockBadge available={available} />}
                     </div>
 
                     {!outOfStock && !inCart && (
@@ -787,9 +836,8 @@ export default function NewSalePage() {
                   return (
                     <div
                       key={line.product_id}
-                      className={`grid gap-2 items-start px-4 py-3 transition-colors ${
-                        overQty ? "bg-red-50" : "hover:bg-slate-50"
-                      }`}
+                      className={`grid gap-2 items-start px-4 py-3 transition-colors ${overQty ? "bg-red-50" : "hover:bg-slate-50"
+                        }`}
                       style={{ gridTemplateColumns: "1fr 64px 72px 28px" }}
                     >
                       <div className="min-w-0">
@@ -809,11 +857,10 @@ export default function NewSalePage() {
 
                       <div>
                         <input
-                          className={`w-full rounded-lg border text-center text-sm font-semibold py-1.5 outline-none transition text-slate-900 ${
-                            overQty
+                          className={`w-full rounded-lg border text-center text-sm font-semibold py-1.5 outline-none transition text-slate-900 ${overQty
                               ? "border-red-400 bg-red-50 focus:ring-2 focus:ring-red-100"
                               : "border-slate-300 bg-white focus:border-slate-400 focus:ring-2 focus:ring-slate-100"
-                          }`}
+                            }`}
                           type="number"
                           min={0}
                           max={line.available}
@@ -827,11 +874,10 @@ export default function NewSalePage() {
 
                       <div>
                         <input
-                          className={`w-full rounded-lg border text-right text-sm py-1.5 px-2 outline-none transition text-slate-900 ${
-                            isDiscounted
+                          className={`w-full rounded-lg border text-right text-sm py-1.5 px-2 outline-none transition text-slate-900 ${isDiscounted
                               ? "border-slate-400 bg-slate-50 focus:ring-2 focus:ring-slate-100"
                               : "border-slate-300 bg-white focus:border-slate-400 focus:ring-2 focus:ring-slate-100"
-                          }`}
+                            }`}
                           type="number"
                           min={0}
                           step="1"

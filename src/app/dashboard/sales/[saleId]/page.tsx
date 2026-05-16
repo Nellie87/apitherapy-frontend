@@ -23,6 +23,36 @@ function fmtMoney(v: number) {
   })}`;
 }
 
+function formatQuantity(value?: number | string | null, unit?: string | null) {
+  if (value === null || value === undefined || value === "") return "";
+  if (!unit) return "";
+
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "";
+
+  const formatted = Number.isInteger(n)
+    ? String(n)
+    : n.toLocaleString("en-KE", {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 3,
+      });
+
+  return `${formatted} ${unit}`;
+}
+
+function formatProductDisplayName(product: {
+  name?: string | null;
+  quantity_value?: number | string | null;
+  quantity_unit?: string | null;
+}) {
+  const base = (product.name ?? "").trim();
+  const qty = formatQuantity(product.quantity_value, product.quantity_unit);
+
+  if (!base) return qty || "Unknown product";
+  if (!qty) return base;
+  return `${base} ${qty}`;
+}
+
 function fmtDate(d: string) {
   try {
     return new Date(d).toLocaleString("en-GB", {
@@ -428,8 +458,7 @@ export default function SaleDetailsPage() {
 
         return {
           id: x.id,
-          product_name: p?.name ?? "Unknown product",
-          qty,
+product_name: formatProductDisplayName(p),          qty,
           base,
           discountPerUnit,
           final,

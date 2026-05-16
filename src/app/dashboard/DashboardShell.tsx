@@ -111,21 +111,9 @@ export default function DashboardShell({
         <div style={{ padding: "28px 20px 20px" }}>
           <div className="flex items-center gap-3">
             <div
-              style={{
-                width: 44,
-                height: 44,
-                borderRadius: 14,
-                background:
-                  "linear-gradient(135deg, #F8D54A 0%, #E2B11A 55%, #C9920A 100%)",
-                display: "grid",
-                placeItems: "center",
-                fontSize: 22,
-                color: "#2B2100",
-                boxShadow:
-                  "0 10px 24px rgba(245,197,24,0.22), inset 0 1px 0 rgba(255,255,255,0.35)",
-              }}
+              
             >
-              🐝
+              
             </div>
             <div>
               <div
@@ -143,7 +131,6 @@ export default function DashboardShell({
                   textTransform: "uppercase",
                 }}
               >
-                Apitherapy
               </div>
             </div>
           </div>
