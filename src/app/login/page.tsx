@@ -878,80 +878,17 @@ export default function LoginPage() {
                 Pure Honey · Beekeeping · Apitherapy
               </div>
 
-              <h1 className="hero-title">
-                Welcome back
-                <br />
-                to the <span className="accent">hive</span>
-                <br />
-                in <span className="cool">Ruiru</span>
-              </h1>
+              <h2 className="hero-title">
+                Welcome
+               
+              </h2>
 
-              <p className="hero-desc">
-                Sign in to manage your account and stay connected to Pollinators
-                Apitherapy — a growing Kenyan honey and bee-products brand built
-                with warmth, care, and a local identity.
-              </p>
-
-              <div className="stats">
-                <div className="stat">
-                  <strong>Kenya</strong>
-                  <span>local brand</span>
-                </div>
-                <div className="stat">
-                  <strong>Ruiru</strong>
-                  <span>physical shop</span>
-                </div>
-                <div className="stat">
-                  <strong>Honey+</strong>
-                  <span>bee products</span>
-                </div>
-              </div>
+              
             </div>
 
-            <div className="showcase-card">
-              <div className="product-panel">
-                <div className="product-badge">Local Favourite</div>
+            
 
-                <div className="product-visual">
-                  <div className="product-shadow" />
-                  <img
-                    src="/honey-.png"
-                    alt="Jar of honey"
-                    className="jar"
-                  />
-                </div>
-
-                <div className="product-meta">
-                  <div>
-                    <div className="kicker">Kenyan Honey · Natural</div>
-                    <h3 className="product-title">
-                      Pure Raw
-                      <br />
-                      Honey
-                    </h3>
-                  </div>
-                  <div className="price-wrap">
-                    <div className="price-label">from</div>
-                    <div className="price">KSh 850</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="floating-note note-one">
-              <h4 style={{ color: "#d97706" }}>Natural taste</h4>
-              <p>Golden, rich, and made for tea, breakfast, and daily use.</p>
-            </div>
-
-            <div className="floating-note note-two">
-              <h4 style={{ color: "#d97706" }}>Apitherapy</h4>
-              <p>Explore honey, propolis, and bee-based products in one local brand.</p>
-            </div>
-
-            <div className="floating-note note-three">
-              <h4 style={{ color: "#2563eb" }}>Location</h4>
-              <p>Visit the Ruiru shop for a closer look at available products.</p>
-            </div>
+            
           </section>
 
           <section className="auth-card">
@@ -963,14 +900,13 @@ export default function LoginPage() {
             </div>
 
             <div className="card-brand">
-              <BeeSVG />
               <div className="card-brand-text">
                 <div className="card-mini">Kenya · Ruiru</div>
-                <h2 className="card-title">Pollinators Apitherapy</h2>
+                <h4 className="card-title">Pollinator Beekeeping & Apitherapy</h4>
                 <p className="card-subtitle">
                   {mode === "login"
                     ? "Sign in to continue your journey with us."
-                    : "Create an account and join our growing community."}
+                    : "Create an account "}
                 </p>
               </div>
             </div>

@@ -718,12 +718,7 @@ export default function Page() {
                 >
                   View products
                 </a>
-                <Link
-                  href="/login"
-                  className="inline-flex items-center justify-center rounded-xl border border-black bg-white px-10 py-4 text-[14px] font-medium text-stone-700"
-                >
-                  Sign in to your account
-                </Link>
+                
               </div>
             </div>
           </div>
