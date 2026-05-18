@@ -246,18 +246,18 @@ export default function Page() {
             </button>
 
             <Link
-              href="/login"
-              className="hidden rounded-xl border border-black bg-white px-4 py-2 text-[13px] font-medium text-stone-700 md:block"
-            >
-              Log in
-            </Link>
+  href="/login"
+  className="rounded-xl border border-black bg-white px-3 py-2 text-[12px] font-medium text-stone-700 sm:px-4 sm:text-[13px]"
+>
+  Log in
+</Link>
 
-            <a
-              href="#products"
-              className="rounded-xl border border-black bg-amber-500 px-5 py-2.5 text-[13px] font-bold text-black transition hover:bg-amber-400"
-            >
-              View products
-            </a>
+           <a
+  href="#products"
+  className="hidden rounded-xl border border-black bg-amber-500 px-5 py-2.5 text-[13px] font-bold text-black transition hover:bg-amber-400 sm:inline-flex"
+>
+  View products
+</a>
           </div>
         </div>
       </header>
