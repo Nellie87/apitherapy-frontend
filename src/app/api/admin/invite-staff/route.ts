@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+const ADMIN_ROLES = new Set(["owner", "admin", "manager"]);
 const CLERK_ROLES = new Set(["sales_clerk", "cashier", "pos"]);
 
 type Body = {
@@ -56,11 +57,15 @@ export async function POST(req: Request) {
       );
     }
 
-    if (membership?.role !== "owner") {
+    const currentRole = String(membership?.role ?? "").trim().toLowerCase();
+
+    if (!ADMIN_ROLES.has(currentRole)) {
       return NextResponse.json(
         {
           step: "permission",
-          error: `Only owner can invite staff. Current role: ${membership?.role ?? "none"}`,
+          error: `Only owner/admin/manager can invite staff. Current role: ${
+            membership?.role ?? "none"
+          }`,
         },
         { status: 403 }
       );

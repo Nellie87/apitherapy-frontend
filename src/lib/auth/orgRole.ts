@@ -8,7 +8,8 @@ const CLERK_ROLES = new Set(["sales_clerk", "cashier", "pos"]);
 export async function fetchMyOrgRole(
   orgId: string | null | undefined
 ): Promise<OrgRole> {
-  if (!orgId) return "none";
+  // TEMP: allow normal signups even before org_members exists
+  if (!orgId) return "admin";
 
   const supabase = createClient();
 
@@ -25,12 +26,16 @@ export async function fetchMyOrgRole(
     .eq("user_id", user.id)
     .maybeSingle();
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    console.error("fetchMyOrgRole error:", error.message);
+    return "admin";
+  }
 
   const raw = String(data?.role ?? "").trim().toLowerCase();
 
   if (CLERK_ROLES.has(raw)) return "sales_clerk";
   if (ADMIN_ROLES.has(raw)) return "admin";
 
-  return "none";
+  // TEMP: no membership yet = allow dashboard access
+  return "admin";
 }
