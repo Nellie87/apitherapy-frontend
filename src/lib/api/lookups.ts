@@ -1,26 +1,44 @@
 import { createClient } from "@/lib/supabase/client";
 
-export async function listUnitMeasures(orgId: string) {
+export async function listUnitMeasures(orgId?: string) {
   const supabase = createClient();
-  const { data, error } = await supabase
+
+  const query = supabase
     .from("unit_measures")
-    .select("id,name,allowed_kinds")
-    .eq("org_id", orgId)
+    .select("*")
     .order("name");
 
+  if (orgId) {
+    query.or(`org_id.is.null,org_id.eq.${orgId}`);
+  } else {
+    query.is("org_id", null);
+  }
+
+  const { data, error } = await query;
+
   if (error) throw new Error(error.message);
+
   return data ?? [];
 }
 
-export async function listUnitSizes(orgId: string) {
+export async function listUnitSizes(orgId?: string) {
   const supabase = createClient();
-  const { data, error } = await supabase
+
+  const query = supabase
     .from("unit_sizes")
     .select("id,label,kind,grams,ml,count")
-    .eq("org_id", orgId)
     .order("label");
 
+  if (orgId) {
+    query.or(`org_id.is.null,org_id.eq.${orgId}`);
+  } else {
+    query.is("org_id", null);
+  }
+
+  const { data, error } = await query;
+
   if (error) throw new Error(error.message);
+
   return data ?? [];
 }
 
