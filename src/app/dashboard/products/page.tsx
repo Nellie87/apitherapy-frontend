@@ -1047,7 +1047,7 @@ function ProductForm({
             <InlineCategoryCreator orgId={orgId} onCreated={onCategoryCreated} />
           </div>
 
-          <div>
+          {/* <div>
             <Label>Supplier</Label>
             <select
               className={S.selectCls}
@@ -1062,7 +1062,7 @@ function ProductForm({
                 </option>
               ))}
             </select>
-          </div>
+          </div> */}
         </div>
       </FormSection>
 

@@ -54,16 +54,14 @@ export default function DashboardShell({
       try {
         await bootstrapOrg();
 
-        if (cancelled) return;
+if (cancelled) return;
 
-        const oid = getOrgId();
-        const role = await fetchMyOrgRole(oid);
+const oid = await getOrgId();
+const role = await fetchMyOrgRole(oid);
 
-        if (cancelled) return;
+if (cancelled) return;
 
-        // TEMP FIX:
-        // If user has no org_members role, allow them as admin for now.
-        setOrgRole(role === "none" ? "admin" : role);
+setOrgRole(role === "none" ? "admin" : role);
       } catch (error) {
         console.error("DashboardShell role bootstrap error:", error);
 

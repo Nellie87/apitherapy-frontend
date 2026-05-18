@@ -42,15 +42,24 @@ export async function listUnitSizes(orgId?: string) {
   return data ?? [];
 }
 
-export async function listCategories(orgId: string) {
+export async function listCategories(orgId?: string) {
   const supabase = createClient();
-  const { data, error } = await supabase
+
+  const query = supabase
     .from("categories")
-    .select("id,name")
-    .eq("org_id", orgId)
-    .order("name");
+    .select("*")
+    .order("name", { ascending: true });
+
+  if (orgId) {
+    query.or(`org_id.is.null,org_id.eq.${orgId}`);
+  } else {
+    query.is("org_id", null);
+  }
+
+  const { data, error } = await query;
 
   if (error) throw new Error(error.message);
+
   return data ?? [];
 }
 
