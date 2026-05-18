@@ -98,8 +98,7 @@ export default function SettingsPage() {
         if (!cancelled) setOrgName(data?.name ?? null);
       } catch {
         if (!cancelled) {
-          setOrgId(getOrgId());
-          setOrgName(null);
+setOrgId(await getOrgId());          setOrgName(null);
         }
       }
     })();
