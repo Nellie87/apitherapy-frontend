@@ -49,11 +49,47 @@ type NavTab    = "overview" | "expenses" | "pnl";
 ════════════════════════════════════════════════════════════════ */
 function Spinner({ h = 120 }: { h?: number }) {
   return (
-    <div className="flex items-center justify-center gap-3 text-slate-400" style={{ height: h }}>
-      <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <circle cx="12" cy="12" r="10" strokeOpacity="0.2"/><path d="M12 2a10 10 0 0110 10"/>
-      </svg>
-      <span className="text-sm">Loading…</span>
+    <div className="flex items-center justify-center text-sm text-slate-400" style={{ height: h }}>
+      Loading...
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════════
+   DATE RANGE CONTROL
+════════════════════════════════════════════════════════════════ */
+function DateRangeControl({
+  from,
+  to,
+  onFromChange,
+  onToChange,
+}: {
+  from: string;
+  to: string;
+  onFromChange: (value: string) => void;
+  onToChange: (value: string) => void;
+}) {
+  return (
+    <div className="flex w-full flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm sm:w-auto sm:flex-row">
+      <label className="flex flex-1 flex-col gap-1 px-3 py-2 sm:min-w-[145px]">
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">From</span>
+        <input
+          type="date"
+          value={from}
+          onChange={(e) => onFromChange(e.target.value)}
+          className="w-full bg-transparent text-sm font-semibold text-slate-700 outline-none"
+        />
+      </label>
+      <div className="hidden w-px bg-slate-200 sm:block" />
+      <label className="flex flex-1 flex-col gap-1 border-t border-slate-200 px-3 py-2 sm:min-w-[145px] sm:border-t-0">
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">To</span>
+        <input
+          type="date"
+          value={to}
+          onChange={(e) => onToChange(e.target.value)}
+          className="w-full bg-transparent text-sm font-semibold text-slate-700 outline-none"
+        />
+      </label>
     </div>
   );
 }
@@ -430,46 +466,65 @@ export default function ExpensesPnLReportPage() {
   return (
     <div className="flex flex-col gap-6">
 
-      {/* ── Header ── */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Expenses + P&L</h1>
-          <p className="mt-1 text-sm text-slate-500">Expense trends, category breakdown, and profit snapshot</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Link href="/dashboard/reports" className={S.btnGhost}>← Reports</Link>
-
-          <div className="flex rounded-xl border border-slate-200 bg-white overflow-hidden">
-            {QUICK.map(q => (
-              <button key={q.label} onClick={() => applyQuick(q.days)}
-                className="px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors border-r border-slate-200 last:border-r-0">
-                {q.label}
-              </button>
-            ))}
+      {/* Header */}
+      <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+          <div className="min-w-0">
+            <Link href="/dashboard/reports" className="mb-3 inline-flex text-sm font-semibold text-slate-500 hover:text-slate-800">
+              Reports
+            </Link>
+            <h1 className="text-xl font-bold text-slate-900 sm:text-2xl">Expenses and P&L</h1>
+            <p className="mt-1 text-sm text-slate-500">
+              Clear view of expense movement, category spend, revenue, and profit.
+            </p>
           </div>
 
-          <input className={S.input} type="date" value={range.from} style={{width:150}}
-            onChange={e => setRange(r => ({ ...r, from: e.target.value }))}/>
-          <input className={S.input} type="date" value={range.to} style={{width:150}}
-            onChange={e => setRange(r => ({ ...r, to: e.target.value }))}/>
+          <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-[auto_auto_auto_auto] xl:w-auto">
+            <div className="flex overflow-hidden rounded-xl border border-slate-200 bg-slate-50 p-1">
+              {QUICK.map((q) => (
+                <button
+                  key={q.label}
+                  onClick={() => applyQuick(q.days)}
+                  className="flex-1 rounded-lg px-3 py-2 text-xs font-semibold text-slate-600 transition-colors hover:bg-white hover:text-slate-900"
+                >
+                  {q.label}
+                </button>
+              ))}
+            </div>
 
-          <select className={S.input} style={{width:120}} value={g}
-            onChange={e => setG(e.target.value as Granularity)}>
-            <option value="day">Daily</option>
-            <option value="month">Monthly</option>
-          </select>
+            <DateRangeControl
+              from={range.from}
+              to={range.to}
+              onFromChange={(value) => setRange((r) => ({ ...r, from: value }))}
+              onToChange={(value) => setRange((r) => ({ ...r, to: value }))}
+            />
 
-          <button className={S.btnPrimary} onClick={load} disabled={loading}>
-            {loading ? "Loading…" : "Refresh"}
-          </button>
+            <select
+              className="h-full min-h-[48px] rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 shadow-sm outline-none"
+              value={g}
+              onChange={(e) => setG(e.target.value as Granularity)}
+            >
+              <option value="day">Daily</option>
+              <option value="month">Monthly</option>
+            </select>
+
+            <button
+              className="min-h-[48px] rounded-xl bg-slate-900 px-4 text-sm font-bold text-white shadow-sm transition-colors hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+              onClick={load}
+              disabled={loading}
+            >
+              {loading ? "Loading..." : "Refresh"}
+            </button>
+          </div>
         </div>
       </div>
 
       {err && (
-        <div className={S.alert}>
-          <span className="shrink-0 mt-0.5">⚠️</span>
+        <div className="flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           <span className="flex-1">{err}</span>
-          <button onClick={() => setErr("")} className="ml-auto text-red-400 hover:text-red-600">✕</button>
+          <button onClick={() => setErr("")} className="font-bold text-red-400 hover:text-red-600">
+            Close
+          </button>
         </div>
       )}
 
@@ -522,7 +577,7 @@ export default function ExpensesPnLReportPage() {
                 <div className="text-xs text-slate-500 mt-0.5">{g === "day" ? "Daily" : "Monthly"} totals</div>
               </div>
               <button onClick={() => downloadCSV("expense-trend.csv", trend.map(t => ({ period: t.period, total: t.total })))}
-                className={S.btnGhost + " !py-1.5 !text-xs"}>↓ CSV</button>
+                className={S.btnGhost + " !py-1.5 !text-xs"}>Export CSV</button>
             </div>
             <div className="p-4">
               {loading ? <Spinner h={220}/> : <ExpenseTrendChart trend={trend} height={220}/>}
@@ -601,7 +656,7 @@ export default function ExpensesPnLReportPage() {
                 <div className="text-xs text-slate-500 mt-0.5">{trend.length} period{trend.length !== 1 ? "s" : ""}</div>
               </div>
               <button onClick={() => downloadCSV("expenses.csv", trend.map(t => ({ period: t.period, total: t.total })))}
-                className={S.btnGhost + " !py-1.5 !text-xs"}>↓ CSV</button>
+                className={S.btnGhost + " !py-1.5 !text-xs"}>Export CSV</button>
             </div>
             <div className={`${S.tableHead}`} style={{ gridTemplateColumns: "1fr 1fr 1fr" }}>
               <div>Period</div><div className="text-right">Total Expenses</div><div className="text-right">Share</div>
@@ -644,7 +699,7 @@ export default function ExpensesPnLReportPage() {
                 <div className="text-xs text-slate-500 mt-0.5">{topCats.length} categories</div>
               </div>
               <button onClick={() => downloadCSV("categories.csv", topCats.map(c => ({ category: c.category, amount: c.amount })))}
-                className={S.btnGhost + " !py-1.5 !text-xs"}>↓ CSV</button>
+                className={S.btnGhost + " !py-1.5 !text-xs"}>Export CSV</button>
             </div>
             <div className={`${S.tableHead}`} style={{ gridTemplateColumns: "1fr 1fr 1fr" }}>
               <div>Category</div><div className="text-right">Amount</div><div className="text-right">Share</div>
@@ -713,7 +768,7 @@ export default function ExpensesPnLReportPage() {
                 <div className="text-xs text-slate-500 mt-0.5">{pnlRows.length} period{pnlRows.length !== 1 ? "s" : ""}</div>
               </div>
               <button onClick={() => downloadCSV("pnl.csv", pnlRows)}
-                className={S.btnGhost + " !py-1.5 !text-xs"}>↓ CSV</button>
+                className={S.btnGhost + " !py-1.5 !text-xs"}>Export CSV</button>
             </div>
             <div className="overflow-x-auto">
               <div className={`${S.tableHead} min-w-[700px]`}

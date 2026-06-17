@@ -262,7 +262,6 @@ function CoverageBar({ data }: { data: { name: string; count: number }[] }) {
     </svg>
   );
 }
-
 /* ════════════════════════════════════════════════════════════════
    SVG HORIZONTAL BAR — Category value
 ════════════════════════════════════════════════════════════════ */

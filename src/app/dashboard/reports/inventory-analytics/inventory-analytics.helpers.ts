@@ -25,7 +25,6 @@ export function coverageRatio(r: InventoryValuationRow): number {
   if (!r.reorder_level) return r.qty_on_hand > 0 ? 99 : 0;
   return parseFloat((r.qty_on_hand / r.reorder_level).toFixed(2));
 }
-
 export function downloadCSV(filename: string, rows: Record<string, unknown>[]) {
   if (!rows.length) return;
 
