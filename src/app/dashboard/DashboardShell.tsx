@@ -15,12 +15,29 @@ type NavItem = {
   label: string;
 };
 
-const ADMIN_NAV: NavItem[] = [
+type NavGroup = {
+  label: string;
+  href: string;
+  children: NavItem[];
+};
+
+const REPORT_NAV: NavItem[] = [
+  { href: "/dashboard/reports/sales-analytics", label: "Sales Summary" },
+  { href: "/dashboard/reports/inventory", label: "Inventory Valuation" },
+  { href: "/dashboard/reports/discounts", label: "Discount Report" },
+  { href: "/dashboard/reports/expenses-pnl", label: "Expenses Summary" },
+];
+
+const ADMIN_NAV: (NavItem | NavGroup)[] = [
   { href: "/dashboard/summarydashboard", label: "Dashboard" },
   { href: "/dashboard/inventory", label: "Our Stock" },
   { href: "/dashboard/products", label: "Products" },
   { href: "/dashboard/sales", label: "Sales" },
-  { href: "/dashboard/reports", label: "Reports" },
+  {
+    href: "/dashboard/reports",
+    label: "Reports",
+    children: REPORT_NAV,
+  },
   { href: "/dashboard/expenses", label: "Expenses" },
   { href: "/dashboard/suppliers", label: "Suppliers" },
   { href: "/dashboard/team", label: "Team" },
@@ -30,6 +47,10 @@ const SALES_ONLY_NAV: NavItem[] = [
   { href: "/dashboard/sales", label: "Sales" },
 ];
 
+function isGroup(item: NavItem | NavGroup): item is NavGroup {
+  return "children" in item;
+}
+
 export default function DashboardShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -38,10 +59,17 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
   const [orgRole, setOrgRole] = useState<OrgRole>("admin");
   const [roleLoading, setRoleLoading] = useState(true);
   const [collapsed, setCollapsed] = useState(false);
+  const [reportsOpen, setReportsOpen] = useState(true);
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    if (pathname.startsWith("/dashboard/reports")) {
+      setReportsOpen(true);
+    }
+  }, [pathname]);
 
   useEffect(() => {
     let cancelled = false;
@@ -102,11 +130,14 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
     window.location.href = "/login";
   }
 
-  const allNav = [...ADMIN_NAV, ...SALES_ONLY_NAV];
+  const flatAdminNav = ADMIN_NAV.flatMap((item) =>
+    isGroup(item) ? [item, ...item.children] : [item]
+  );
+
+  const allNav = [...flatAdminNav, ...SALES_ONLY_NAV];
 
   const pageTitle =
-    allNav.find((item) => pathname.startsWith(item.href))?.label ??
-    "Dashboard";
+    allNav.find((item) => pathname.startsWith(item.href))?.label ?? "Dashboard";
 
   const today = mounted
     ? {
@@ -145,7 +176,6 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
               type="button"
               onClick={() => setCollapsed((value) => !value)}
               className="collapse-btn"
-              aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
             >
               {collapsed ? "Open" : "Collapse"}
             </button>
@@ -157,6 +187,55 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
                 </div>
               ) : (
                 navItems.map((item) => {
+                  if (isGroup(item)) {
+                    const groupActive = pathname.startsWith(item.href);
+
+                    return (
+                      <div key={item.href} className="nav-group">
+                        <button
+                          type="button"
+                          onClick={() => setReportsOpen((v) => !v)}
+                          className={`nav-link nav-group-trigger ${
+                            groupActive ? "active" : ""
+                          }`}
+                          title={collapsed ? item.label : undefined}
+                        >
+                          <span className="nav-dot" />
+                          {!collapsed && (
+                            <>
+                              <span className="nav-label">{item.label}</span>
+                              <span className="nav-caret">
+                                {reportsOpen ? "Open" : "Closed"}
+                              </span>
+                            </>
+                          )}
+                        </button>
+
+                        {!collapsed && reportsOpen && (
+                          <div className="nav-submenu">
+                            {item.children.map((child) => {
+                              const isActive =
+                                pathname === child.href ||
+                                pathname.startsWith(child.href + "/");
+
+                              return (
+                                <Link
+                                  key={child.href}
+                                  href={child.href}
+                                  className={`nav-sub-link ${
+                                    isActive ? "active" : ""
+                                  }`}
+                                >
+                                  {child.label}
+                                </Link>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  }
+
                   const isActive =
                     pathname === item.href || pathname.startsWith(item.href + "/");
 
@@ -180,7 +259,6 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
                   className={`nav-link ${
                     pathname.startsWith("/dashboard/org") ? "active" : ""
                   }`}
-                  title={collapsed ? "Organization" : undefined}
                 >
                   <span className="nav-dot" />
                   {!collapsed && <span className="nav-label">Organization</span>}
@@ -193,7 +271,6 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
                   className={`nav-link ${
                     pathname.startsWith("/dashboard/settings") ? "active" : ""
                   }`}
-                  title={collapsed ? "Settings" : undefined}
                 >
                   <span className="nav-dot" />
                   {!collapsed && <span className="nav-label">Settings</span>}
@@ -241,7 +318,9 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
         </main>
 
         <nav className="mobile-nav">
-          {(roleLoading ? [] : navItems).map((item) => {
+          {(roleLoading ? [] : navItems).flatMap((item) =>
+            isGroup(item) ? item.children : [item]
+          ).map((item) => {
             const isActive =
               pathname === item.href || pathname.startsWith(item.href + "/");
 
@@ -255,17 +334,6 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
               </Link>
             );
           })}
-
-          {!roleLoading && orgRole === "sales_clerk" && (
-            <Link
-              href="/dashboard/org"
-              className={`mobile-chip ${
-                pathname.startsWith("/dashboard/org") ? "active" : "idle"
-              }`}
-            >
-              Org
-            </Link>
-          )}
 
           {!roleLoading && (
             <Link

@@ -351,19 +351,7 @@ export default function SalesPage() {
       )}
 
       <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-        <div>
-          <div className="inline-flex rounded-full border border-[#EADFC2] bg-white px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">
-            Sales
-          </div>
-
-          <h1 className="mt-3 text-[30px] font-black tracking-tight text-slate-950 sm:text-[34px]">
-            Sales History
-          </h1>
-
-          <p className="mt-1 max-w-2xl text-sm text-slate-500">
-            Track completed transactions, payment methods, discounts, and totals.
-          </p>
-        </div>
+     
 
         <Link href="/dashboard/sales/new" className={S.btnPrimary}>
           New Sale
