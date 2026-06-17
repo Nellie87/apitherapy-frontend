@@ -1,6 +1,12 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import Link from "next/link";
 import { DayPicker, type DateRange } from "react-day-picker";
 import "react-day-picker/dist/style.css";
@@ -312,7 +318,8 @@ function Skeleton({
         width: w,
         height: h,
         borderRadius: radius,
-        background: "linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%)",
+        background:
+          "linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%)",
         backgroundSize: "200% 100%",
         animation: "shimmer 1.4s infinite",
       }}
@@ -325,27 +332,26 @@ function Skeleton({
 ───────────────────────────────────────────── */
 function QuickActions() {
   const actions = [
-    { href: "/dashboard/sales/new", icon: "🧾", label: "New Sale", primary: true },
-    { href: "/dashboard/expenses", icon: "💸", label: "Add Expense" },
-    { href: "/dashboard/inventory", icon: "📦", label: "Inventory" },
-    { href: "/dashboard/reports", icon: "📊", label: "Reports" },
-    { href: "/dashboard/reports/sales", icon: "📈", label: "Sales Report" },
-    { href: "/dashboard/reports/expenses-pnl", icon: "📉", label: "Expenses P&L" },
+    { href: "/dashboard/sales/new", label: "New Sale", primary: true },
+    { href: "/dashboard/expenses", label: "Add Expense" },
+    { href: "/dashboard/inventory", label: "Inventory" },
+    { href: "/dashboard/reports", label: "Reports" },
+    { href: "/dashboard/reports/sales", label: "Sales Report" },
+    { href: "/dashboard/reports/expenses-pnl", label: "Expenses P&L" },
   ];
 
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="flex gap-2 overflow-x-auto pb-1 sm:flex-wrap">
       {actions.map((a) => (
         <Link
           key={a.href}
           href={a.href}
-          className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md ${
+          className={`whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-bold transition-all duration-150 hover:-translate-y-0.5 hover:shadow-sm ${
             a.primary
-              ? "bg-amber-500 text-white hover:bg-amber-600 shadow-sm"
-              : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-300"
+              ? "bg-slate-950 text-white hover:bg-slate-800"
+              : "border border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50"
           }`}
         >
-          <span>{a.icon}</span>
           {a.label}
         </Link>
       ))}
@@ -360,7 +366,6 @@ function KpiCard({
   label,
   rawValue,
   sub,
-  icon,
   variant = "neutral",
   loading,
   spark,
@@ -370,7 +375,6 @@ function KpiCard({
   label: string;
   rawValue: number;
   sub?: string;
-  icon: string;
   variant?: "neutral" | "success" | "warning" | "danger";
   loading?: boolean;
   spark?: number[];
@@ -379,73 +383,69 @@ function KpiCard({
 }) {
   const cfg = {
     neutral: {
-      border: "#e2e8f0",
+      border: "#e5e7eb",
       bg: "#ffffff",
       val: "#0f172a",
       sub: "#64748b",
-      iconBg: "#f8fafc",
-      accent: "#64748b",
+      accent: "#94a3b8",
     },
     success: {
-      border: "#a7f3d0",
-      bg: "#f0fdf4",
-      val: "#064e3b",
-      sub: "#059669",
-      iconBg: "#d1fae5",
-      accent: "#10b981",
+      border: "#bbf7d0",
+      bg: "#f7fef9",
+      val: "#166534",
+      sub: "#16a34a",
+      accent: "#22c55e",
     },
     warning: {
-      border: "#fcd34d",
-      bg: "#fffbeb",
-      val: "#78350f",
-      sub: "#b45309",
-      iconBg: "#fef3c7",
+      border: "#fde68a",
+      bg: "#fffdf4",
+      val: "#92400e",
+      sub: "#d97706",
       accent: "#f59e0b",
     },
     danger: {
-      border: "#fca5a5",
-      bg: "#fff5f5",
-      val: "#7f1d1d",
-      sub: "#dc2626",
-      iconBg: "#fee2e2",
+      border: "#fecaca",
+      bg: "#fffafa",
+      val: "#991b1b",
+      sub: "#ef4444",
       accent: "#ef4444",
     },
   }[variant];
 
   return (
     <div
-      className="rounded-2xl p-5 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg"
-      style={{ background: cfg.bg, border: `1.5px solid ${cfg.border}` }}
+      className="rounded-2xl p-5 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md"
+      style={{ background: cfg.bg, border: `1px solid ${cfg.border}` }}
     >
-      <div className="mb-3 flex items-start justify-between gap-2">
-        <div
-          className="grid h-10 w-10 shrink-0 place-items-center rounded-xl text-lg"
-          style={{ background: cfg.iconBg }}
-        >
-          {icon}
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div
+            className="mb-1.5 text-xs font-bold uppercase tracking-widest"
+            style={{ color: cfg.sub }}
+          >
+            {label}
+          </div>
+
+          <div
+            className="text-2xl font-extrabold leading-tight"
+            style={{ color: cfg.val }}
+          >
+            {loading ? (
+              <Skeleton w="80%" h={28} />
+            ) : isCurrency ? (
+              <span>
+                Ksh <Counter to={rawValue} />
+              </span>
+            ) : (
+              <Counter to={rawValue} />
+            )}
+          </div>
         </div>
 
         {spark && spark.length > 1 && !loading && (
-          <Sparkline data={spark} color={sparkColor ?? cfg.accent} />
-        )}
-      </div>
-
-      <div
-        className="mb-1.5 text-xs font-bold uppercase tracking-widest"
-        style={{ color: cfg.sub }}
-      >
-        {label}
-      </div>
-
-      <div className="text-2xl font-extrabold leading-tight" style={{ color: cfg.val }}>
-        {loading ? (
-          <Skeleton w="80%" h={28} />
-        ) : isCurrency ? (
-          <span>
-            Ksh <Counter to={rawValue} />
-          </span>
-        ) : (
-          <Counter to={rawValue} />
+          <div className="shrink-0 pt-1">
+            <Sparkline data={spark} color={sparkColor ?? cfg.accent} />
+          </div>
         )}
       </div>
 
@@ -481,7 +481,11 @@ function Card({
       <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
         <div>
           <div className="text-base font-bold text-slate-900">{title}</div>
-          {sub && <div className="mt-0.5 text-xs font-medium text-slate-400">{sub}</div>}
+          {sub && (
+            <div className="mt-0.5 text-xs font-medium text-slate-400">
+              {sub}
+            </div>
+          )}
         </div>
         {action}
       </div>
@@ -491,7 +495,7 @@ function Card({
 }
 
 /* ─────────────────────────────────────────────
-   Screenshot-style date picker
+   Clean date range picker
 ───────────────────────────────────────────── */
 function SummaryDateRangePicker({
   valuePreset,
@@ -517,11 +521,11 @@ function SummaryDateRangePicker({
   const presetItems: { id: RangePreset; label: string }[] = [
     { id: "today", label: "Today" },
     { id: "yesterday", label: "Yesterday" },
-    { id: "7d", label: "Last 7 Days" },
-    { id: "30d", label: "Last 30 Days" },
-    { id: "month", label: "This Month" },
-    { id: "lastMonth", label: "Last Month" },
-    { id: "custom", label: "Custom Range" },
+    { id: "7d", label: "Last 7 days" },
+    { id: "30d", label: "Last 30 days" },
+    { id: "month", label: "This month" },
+    { id: "lastMonth", label: "Last month" },
+    { id: "custom", label: "Custom" },
   ];
 
   useEffect(() => {
@@ -536,25 +540,21 @@ function SummaryDateRangePicker({
     const handler = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) onClose();
     };
+
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, [onClose]);
 
-  const applyPresetToTemp = (preset: Exclude<RangePreset, "custom">) => {
-    const next = getPresetRange(preset);
-    setTempPreset(preset);
-    setTempRange({
-      from: localIsoToDate(next.from),
-      to: localIsoToDate(next.to),
-    });
-  };
-
   const handlePresetClick = (preset: RangePreset) => {
-    if (preset === "custom") {
-      setTempPreset("custom");
-      return;
+    setTempPreset(preset);
+
+    if (preset !== "custom") {
+      const next = getPresetRange(preset);
+      setTempRange({
+        from: localIsoToDate(next.from),
+        to: localIsoToDate(next.to),
+      });
     }
-    applyPresetToTemp(preset);
   };
 
   const handleApply = () => {
@@ -576,31 +576,33 @@ function SummaryDateRangePicker({
     onClose();
   };
 
-  const footerLabel =
-    tempRange?.from && tempRange?.to
-      ? `${dateToLocalIso(tempRange.from)} - ${dateToLocalIso(tempRange.to)}`
-      : tempRange?.from
-      ? `${dateToLocalIso(tempRange.from)} - ${dateToLocalIso(tempRange.from)}`
-      : "Select range";
+  const footerLabel = tempRange?.from
+    ? `${dateToLocalIso(tempRange.from)} → ${dateToLocalIso(tempRange.to ?? tempRange.from)}`
+    : "Select a date range";
 
   return (
     <div
       ref={ref}
-      className="absolute right-0 top-full z-50 mt-2 overflow-hidden rounded-md border border-slate-300 bg-white shadow-2xl"
-      style={{ width: 660, boxShadow: "0 20px 50px rgba(15, 23, 42, 0.18)" }}
+      className="absolute right-0 top-full z-50 mt-3 overflow-hidden rounded-3xl border border-amber-100 bg-white shadow-2xl"
+      style={{
+        width: 700,
+        maxWidth: "calc(100vw - 32px)",
+        boxShadow: "0 24px 70px rgba(15, 23, 42, 0.14)",
+      }}
     >
-      <div className="flex">
-        <div className="w-36 border-r border-slate-200 bg-slate-50">
+      <div className="grid grid-cols-1 md:grid-cols-[170px_1fr]">
+        <div className="border-b border-slate-100 bg-amber-50/40 p-2 md:border-b-0 md:border-r">
           {presetItems.map((item) => {
             const active = tempPreset === item.id;
+
             return (
               <button
                 key={item.id}
                 onClick={() => handlePresetClick(item.id)}
-                className={`flex w-full items-center px-4 py-3 text-left text-sm transition ${
+                className={`mb-1 flex w-full rounded-xl px-3 py-2.5 text-left text-sm font-bold transition ${
                   active
-                    ? "bg-sky-600 font-semibold text-white"
-                    : "text-slate-700 hover:bg-slate-100"
+                    ? "bg-slate-950 text-white shadow-sm"
+                    : "text-slate-600 hover:bg-white hover:text-slate-950"
                 }`}
               >
                 {item.label}
@@ -609,75 +611,65 @@ function SummaryDateRangePicker({
           })}
         </div>
 
-        <div className="flex-1 bg-white p-4">
+        <div className="bg-white p-5">
           <DayPicker
             mode="range"
             selected={tempRange}
             onSelect={(nextRange) => {
               setTempPreset("custom");
-
-              if (!nextRange?.from) {
-                setTempRange(undefined);
-                return;
-              }
-
-              if (nextRange.from && !nextRange.to) {
-                setTempRange({ from: nextRange.from, to: undefined });
-                return;
-              }
-
               setTempRange(nextRange);
             }}
             numberOfMonths={2}
             defaultMonth={tempRange?.from ?? new Date()}
-            month={tempRange?.from ?? new Date()}
             showOutsideDays
             disabled={{ after: new Date() }}
             className="rdp-summary"
             classNames={{
               months: "flex flex-col gap-8 sm:flex-row",
-              month: "space-y-3",
+              month: "space-y-4",
               caption: "relative flex items-center justify-center",
-              caption_label: "text-base font-semibold text-slate-800",
+              caption_label: "text-sm font-black text-slate-900",
               nav: "flex items-center gap-2",
               nav_button:
-                "h-8 w-8 rounded-md text-slate-700 hover:bg-slate-100 transition",
+                "h-8 w-8 rounded-full text-slate-500 transition hover:bg-amber-50 hover:text-slate-900",
               table: "w-full border-collapse",
               head_row: "flex",
               head_cell:
-                "w-10 text-center text-xs font-semibold text-slate-700",
+                "w-10 text-center text-[11px] font-black uppercase text-slate-400",
               row: "mt-1 flex w-full",
               cell: "relative h-10 w-10 p-0 text-center text-sm",
-              day: "h-10 w-10 rounded-none text-sm font-medium text-slate-800 hover:bg-sky-50",
-              day_selected: "bg-sky-600 text-white hover:bg-sky-600",
-              day_today: "text-slate-900 font-bold",
+              day: "h-10 w-10 rounded-xl text-sm font-bold text-slate-700 transition hover:bg-amber-50 hover:text-slate-950",
+              day_selected:
+                "bg-slate-950 text-white hover:bg-slate-950 hover:text-white",
+              day_today: "border border-amber-300 bg-amber-50 text-amber-800",
               day_outside: "text-slate-300",
               day_disabled: "text-slate-300 opacity-40",
               day_range_middle:
-                "bg-sky-100 text-slate-900 rounded-none hover:bg-sky-100",
+                "rounded-none bg-amber-100 text-slate-900 hover:bg-amber-100",
               day_range_start:
-                "bg-sky-600 text-white rounded-none hover:bg-sky-600",
+                "rounded-l-xl rounded-r-none bg-slate-950 text-white hover:bg-slate-950",
               day_range_end:
-                "bg-sky-600 text-white rounded-none hover:bg-sky-600",
+                "rounded-l-none rounded-r-xl bg-slate-950 text-white hover:bg-slate-950",
             }}
           />
         </div>
       </div>
 
-      <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50 px-4 py-2.5">
-        <div className="text-sm text-slate-700">{footerLabel}</div>
+      <div className="flex flex-col gap-3 border-t border-slate-100 bg-slate-50/80 px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="text-sm font-bold text-slate-600">{footerLabel}</div>
 
         <div className="flex items-center gap-2">
           <button
             onClick={handleCancel}
-            className="rounded-md border border-slate-300 bg-white px-4 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+            className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-600 transition hover:bg-slate-50"
           >
             Cancel
           </button>
+
           <button
             onClick={handleApply}
             disabled={!tempRange?.from}
-            className="rounded-md bg-sky-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-sky-700 disabled:opacity-50"
+            className="rounded-xl bg-slate-950 px-4 py-2 text-sm font-bold text-white transition hover:bg-slate-800 disabled:opacity-50"
           >
             Apply
           </button>
@@ -710,7 +702,7 @@ function AreaChart({
 
   const maxV = useMemo(
     () => Math.max(...points.map((p) => Math.max(p.revenue, p.expenses)), 1),
-    [points]
+    [points],
   );
 
   const niceMax = useMemo(() => {
@@ -719,23 +711,30 @@ function AreaChart({
   }, [maxV]);
 
   const xs = useCallback(
-    (i: number) => P.l + (points.length < 2 ? iW / 2 : (i / (points.length - 1)) * iW),
-    [points.length, iW]
+    (i: number) =>
+      P.l + (points.length < 2 ? iW / 2 : (i / (points.length - 1)) * iW),
+    [points.length, iW],
   );
 
-  const ys = useCallback((v: number) => P.t + iH - (v / niceMax) * iH, [niceMax, iH]);
+  const ys = useCallback(
+    (v: number) => P.t + iH - (v / niceMax) * iH,
+    [niceMax, iH],
+  );
 
   const linePath = (key: "revenue" | "expenses") =>
     points
-      .map((p, i) => `${i === 0 ? "M" : "L"}${xs(i).toFixed(1)},${ys(p[key]).toFixed(1)}`)
+      .map(
+        (p, i) =>
+          `${i === 0 ? "M" : "L"}${xs(i).toFixed(1)},${ys(p[key]).toFixed(1)}`,
+      )
       .join(" ");
 
   const areaPath = (key: "revenue" | "expenses") =>
     points.length === 0
       ? ""
-      : `${linePath(key)} L${xs(points.length - 1).toFixed(1)},${(P.t + iH).toFixed(
-          1
-        )} L${xs(0).toFixed(1)},${(P.t + iH).toFixed(1)} Z`;
+      : `${linePath(key)} L${xs(points.length - 1).toFixed(1)},${(
+          P.t + iH
+        ).toFixed(1)} L${xs(0).toFixed(1)},${(P.t + iH).toFixed(1)} Z`;
 
   const onMove = useCallback(
     (e: React.MouseEvent<SVGSVGElement>) => {
@@ -756,16 +755,21 @@ function AreaChart({
 
       setHover(best);
     },
-    [points, xs]
+    [points, xs],
   );
 
   const gridCount = 5;
-  const gridVals = Array.from({ length: gridCount + 1 }, (_, i) => (niceMax / gridCount) * i);
+  const gridVals = Array.from(
+    { length: gridCount + 1 },
+    (_, i) => (niceMax / gridCount) * i,
+  );
 
   const xLabels = useMemo(() => {
     if (!points.length) return [];
     const step = Math.max(1, Math.floor(points.length / 6));
-    return points.map((p, i) => ({ p, i })).filter(({ i }) => i % step === 0 || i === points.length - 1);
+    return points
+      .map((p, i) => ({ p, i }))
+      .filter(({ i }) => i % step === 0 || i === points.length - 1);
   }, [points]);
 
   if (loading) {
@@ -780,7 +784,10 @@ function AreaChart({
 
   if (!points.length) {
     return (
-      <div className="flex flex-col items-center justify-center gap-2 text-slate-400" style={{ height }}>
+      <div
+        className="flex flex-col items-center justify-center gap-2 text-slate-400"
+        style={{ height }}
+      >
         <span className="text-3xl">📭</span>
         <span className="text-sm font-semibold">No data for this period</span>
       </div>
@@ -881,7 +888,7 @@ function AreaChart({
               strokeWidth="2.5"
               filter="url(#shadow-dot-summary)"
             />
-          ) : null
+          ) : null,
         )}
 
         {hover !== null && hp && (
@@ -910,7 +917,14 @@ function AreaChart({
           </text>
         ))}
 
-        <line x1={P.l} y1={P.t + iH} x2={W - P.r} y2={P.t + iH} stroke="#e2e8f0" strokeWidth="1.5" />
+        <line
+          x1={P.l}
+          y1={P.t + iH}
+          x2={W - P.r}
+          y2={P.t + iH}
+          stroke="#e2e8f0"
+          strokeWidth="1.5"
+        />
       </svg>
 
       {hover !== null && hp && (
@@ -927,7 +941,9 @@ function AreaChart({
               <span className="h-2 w-2 rounded-full bg-amber-400" />
               Revenue
             </span>
-            <span className="text-sm font-bold text-slate-900">{fmtMoney(hp.revenue)}</span>
+            <span className="text-sm font-bold text-slate-900">
+              {fmtMoney(hp.revenue)}
+            </span>
           </div>
 
           <div className="mb-3 flex items-center justify-between">
@@ -935,7 +951,9 @@ function AreaChart({
               <span className="h-2 w-2 rounded-full bg-red-400" />
               Expenses
             </span>
-            <span className="text-sm font-bold text-slate-900">{fmtMoney(hp.expenses)}</span>
+            <span className="text-sm font-bold text-slate-900">
+              {fmtMoney(hp.expenses)}
+            </span>
           </div>
 
           <div
@@ -998,9 +1016,15 @@ export default function DashboardPage() {
   const [err, setErr] = useState("");
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
 
-  const [pnl, setPnl] = useState<Awaited<ReturnType<typeof reportPnL>> | null>(null);
-  const [expData, setExpData] = useState<Awaited<ReturnType<typeof reportExpenses>> | null>(null);
-  const [inventory, setInventory] = useState<Awaited<ReturnType<typeof getInventoryValuation>> | null>(null);
+  const [pnl, setPnl] = useState<Awaited<ReturnType<typeof reportPnL>> | null>(
+    null,
+  );
+  const [expData, setExpData] = useState<Awaited<
+    ReturnType<typeof reportExpenses>
+  > | null>(null);
+  const [inventory, setInventory] = useState<Awaited<
+    ReturnType<typeof getInventoryValuation>
+  > | null>(null);
   const [recentSales, setRecentSales] = useState<RecentSale[]>([]);
   const [recentExpenses, setRecentExpenses] = useState<RecentExpense[]>([]);
 
@@ -1038,27 +1062,36 @@ export default function DashboardPage() {
 
       try {
         const [pl, inv, ex] = await Promise.all([
-          reportPnL(orgId, { from: range.from, to: range.to, granularity: "day" }),
+          reportPnL(orgId, {
+            from: range.from,
+            to: range.to,
+            granularity: "day",
+          }),
           getInventoryValuation(orgId),
-          reportExpenses(orgId, { from: range.from, to: range.to, granularity: "day" }),
+          reportExpenses(orgId, {
+            from: range.from,
+            to: range.to,
+            granularity: "day",
+          }),
         ]);
 
         const supabase = createClient();
 
-        const [{ data: sData, error: sErr }, { data: eData, error: eErr }] = await Promise.all([
-          supabase
-            .from("sales")
-            .select("id,sale_no,customer_name,total,created_at")
-            .eq("org_id", orgId)
-            .order("created_at", { ascending: false })
-            .limit(6),
-          supabase
-            .from("expenses")
-            .select("id,category,amount,expense_date,created_at")
-            .eq("org_id", orgId)
-            .order("created_at", { ascending: false })
-            .limit(6),
-        ]);
+        const [{ data: sData, error: sErr }, { data: eData, error: eErr }] =
+          await Promise.all([
+            supabase
+              .from("sales")
+              .select("id,sale_no,customer_name,total,created_at")
+              .eq("org_id", orgId)
+              .order("created_at", { ascending: false })
+              .limit(6),
+            supabase
+              .from("expenses")
+              .select("id,category,amount,expense_date,created_at")
+              .eq("org_id", orgId)
+              .order("created_at", { ascending: false })
+              .limit(6),
+          ]);
 
         if (sErr) throw new Error(sErr.message);
         if (eErr) throw new Error(eErr.message);
@@ -1076,7 +1109,7 @@ export default function DashboardPage() {
         setRefreshing(false);
       }
     },
-    [orgId, range.from, range.to]
+    [orgId, range.from, range.to],
   );
 
   useEffect(() => {
@@ -1092,12 +1125,16 @@ export default function DashboardPage() {
       lowCount: Number(inventory?.totals?.low_count ?? 0),
       outCount: Number(inventory?.totals?.out_count ?? 0),
     }),
-    [pnl, inventory]
+    [pnl, inventory],
   );
 
   const areaPoints = useMemo(() => {
-    const rM = new Map((pnl?.points ?? []).map((p: any) => [p.period, Number(p.revenue ?? 0)]));
-    const eM = new Map((expData?.trend ?? []).map((t: any) => [t.period, Number(t.total ?? 0)]));
+    const rM = new Map(
+      (pnl?.points ?? []).map((p: any) => [p.period, Number(p.revenue ?? 0)]),
+    );
+    const eM = new Map(
+      (expData?.trend ?? []).map((t: any) => [t.period, Number(t.total ?? 0)]),
+    );
     return Array.from(new Set([...rM.keys(), ...eM.keys()]))
       .sort()
       .map((period) => ({
@@ -1108,13 +1145,15 @@ export default function DashboardPage() {
   }, [pnl, expData]);
 
   const revSpark = useMemo(
-    () => (pnl?.points ?? []).slice(-10).map((p: any) => Number(p.revenue ?? 0)),
-    [pnl]
+    () =>
+      (pnl?.points ?? []).slice(-10).map((p: any) => Number(p.revenue ?? 0)),
+    [pnl],
   );
 
   const expSpark = useMemo(
-    () => (expData?.trend ?? []).slice(-10).map((t: any) => Number(t.total ?? 0)),
-    [expData]
+    () =>
+      (expData?.trend ?? []).slice(-10).map((t: any) => Number(t.total ?? 0)),
+    [expData],
   );
 
   const alertRows = useMemo(() => {
@@ -1177,12 +1216,22 @@ export default function DashboardPage() {
     <>
       <style jsx global>{`
         @keyframes shimmer {
-          0% { background-position: -200% 0; }
-          100% { background-position: 200% 0; }
+          0% {
+            background-position: -200% 0;
+          }
+          100% {
+            background-position: 200% 0;
+          }
         }
         @keyframes fadeIn {
-          from { opacity: 0; transform: translateY(6px); }
-          to { opacity: 1; transform: translateY(0); }
+          from {
+            opacity: 0;
+            transform: translateY(6px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
         }
 
         .fade-in {
@@ -1246,9 +1295,9 @@ export default function DashboardPage() {
 
         <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
           <div>
-            <h1 className="text-3xl font-extrabold tracking-tight text-slate-900">Dashboard</h1>
+            
             <p className="mt-1 text-sm font-medium text-slate-400">
-              {range.label} · {fmtRangeLabel(range.from, range.to)}
+              {/* {range.label} · {fmtRangeLabel(range.from, range.to)} */}
               {lastRefreshed && (
                 <span className="ml-2 text-slate-300">
                   · Updated{" "}
@@ -1265,9 +1314,8 @@ export default function DashboardPage() {
             <div className="relative">
               <button
                 onClick={() => setShowDatePicker((v) => !v)}
-                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
+                className="inline-flex items-center rounded-2xl border border-amber-100 bg-white px-4 py-3 text-sm font-bold text-slate-700 shadow-sm transition hover:border-amber-200 hover:bg-amber-50/40"
               >
-                <span>📅</span>
                 <span>{fmtRangeLabel(range.from, range.to)}</span>
               </button>
 
@@ -1289,27 +1337,8 @@ export default function DashboardPage() {
             <button
               onClick={() => loadAll(true)}
               disabled={loading || refreshing}
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
+              className="inline-flex items-center rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
             >
-              <svg
-                className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`}
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.5"
-              >
-                {refreshing ? (
-                  <>
-                    <circle cx="12" cy="12" r="10" strokeOpacity="0.2" />
-                    <path d="M12 2a10 10 0 0110 10" />
-                  </>
-                ) : (
-                  <path
-                    d="M4 4v6h6M20 20v-6h-6M4 10A9 9 0 0114 4.5M20 14a9 9 0 01-10 5.5"
-                    strokeLinecap="round"
-                  />
-                )}
-              </svg>
               {refreshing ? "Refreshing…" : "Refresh"}
             </button>
           </div>
@@ -1321,7 +1350,6 @@ export default function DashboardPage() {
           <KpiCard
             label="Revenue"
             rawValue={kpis.revenue}
-            icon="📈"
             loading={loading}
             spark={revSpark}
             sparkColor="#f59e0b"
@@ -1330,7 +1358,6 @@ export default function DashboardPage() {
           <KpiCard
             label="Net profit"
             rawValue={kpis.net}
-            icon="💰"
             variant={kpis.net < 0 ? "danger" : "success"}
             loading={loading}
             sub={kpis.net < 0 ? "Loss this period" : "Profit this period"}
@@ -1338,7 +1365,6 @@ export default function DashboardPage() {
           <KpiCard
             label="Expenses"
             rawValue={kpis.expenses}
-            icon="💸"
             variant="warning"
             loading={loading}
             spark={expSpark}
@@ -1348,14 +1374,12 @@ export default function DashboardPage() {
           <KpiCard
             label="Inventory value"
             rawValue={kpis.invValue}
-            icon="📦"
             loading={loading}
             sub="Qty × cost price"
           />
           <KpiCard
             label="Low / critical"
             rawValue={kpis.lowCount}
-            icon="📉"
             variant={kpis.lowCount > 0 ? "warning" : "neutral"}
             loading={loading}
             isCurrency={false}
@@ -1364,7 +1388,6 @@ export default function DashboardPage() {
           <KpiCard
             label="Out of stock"
             rawValue={kpis.outCount}
-            icon="🚫"
             variant={kpis.outCount > 0 ? "danger" : "neutral"}
             loading={loading}
             isCurrency={false}
@@ -1423,8 +1446,16 @@ export default function DashboardPage() {
             {!loading && areaPoints.length > 0 && (
               <div className="grid grid-cols-3 divide-x divide-slate-100 border-t border-slate-100">
                 {[
-                  { label: "Total Revenue", value: fmtMoney(kpis.revenue), color: "#0f172a" },
-                  { label: "Total Expenses", value: fmtMoney(kpis.expenses), color: "#0f172a" },
+                  {
+                    label: "Total Revenue",
+                    value: fmtMoney(kpis.revenue),
+                    color: "#0f172a",
+                  },
+                  {
+                    label: "Total Expenses",
+                    value: fmtMoney(kpis.expenses),
+                    color: "#0f172a",
+                  },
                   {
                     label: "Net Profit / Loss",
                     value: fmtMoney(kpis.net),
@@ -1435,7 +1466,10 @@ export default function DashboardPage() {
                     <div className="text-xs font-bold uppercase tracking-wider text-slate-400">
                       {label}
                     </div>
-                    <div className="mt-1 text-base font-extrabold" style={{ color }}>
+                    <div
+                      className="mt-1 text-base font-extrabold"
+                      style={{ color }}
+                    >
                       {value}
                     </div>
                   </div>
@@ -1467,9 +1501,12 @@ export default function DashboardPage() {
               </div>
             ) : alertRows.length === 0 ? (
               <div className="py-16 text-center">
-                <div className="mb-3 text-4xl">✅</div>
-                <p className="text-sm font-bold text-slate-600">All stocked up</p>
-                <p className="mt-1 text-xs text-slate-400">No urgent stock alerts</p>
+                <p className="text-sm font-bold text-slate-600">
+                  All stocked up
+                </p>
+                <p className="mt-1 text-xs text-slate-400">
+                  No urgent stock alerts
+                </p>
               </div>
             ) : (
               <div className="divide-y divide-slate-100">
@@ -1479,13 +1516,19 @@ export default function DashboardPage() {
                     className="flex items-start justify-between gap-3 px-5 py-4 transition-colors duration-150 hover:bg-slate-50"
                   >
                     <div className="min-w-0">
-                      <div className="truncate text-sm font-bold text-slate-900">{r.name}</div>
+                      <div className="truncate text-sm font-bold text-slate-900">
+                        {r.name}
+                      </div>
                       <div className="mt-1 text-xs font-medium text-slate-400">
                         On hand:{" "}
-                        <span className="font-extrabold text-slate-700">{r.qty_on_hand}</span>
+                        <span className="font-extrabold text-slate-700">
+                          {r.qty_on_hand}
+                        </span>
                         <span className="mx-1.5 text-slate-200">·</span>
                         Reorder at:{" "}
-                        <span className="font-extrabold text-slate-700">{r.reorder_level}</span>
+                        <span className="font-extrabold text-slate-700">
+                          {r.reorder_level}
+                        </span>
                       </div>
                       {r.category && (
                         <div className="mt-0.5 text-xs text-slate-400">
@@ -1512,91 +1555,86 @@ export default function DashboardPage() {
         </div>
 
         <Card
-  title="Recent Activity"
-  sub="Sales and expenses — newest first"
-  action={
-    <div className="flex items-center gap-4">
-      <Link
-        href="/dashboard/sales"
-        className="text-xs font-bold text-amber-500 transition-colors hover:text-amber-600"
-      >
-        Sales →
-      </Link>
-      <Link
-        href="/dashboard/expenses"
-        className="text-xs font-bold text-amber-500 transition-colors hover:text-amber-600"
-      >
-        Expenses →
-      </Link>
-    </div>
-  }
->
-  {loading ? (
-    <div className="flex flex-col gap-4 p-5">
-      {[1, 2, 3, 4].map((i) => (
-        <div key={i} className="flex items-center gap-3">
-          <Skeleton w={36} h={36} radius={10} />
-          <div className="flex flex-1 flex-col gap-2">
-            <Skeleton w="55%" h={14} />
-            <Skeleton w="35%" h={11} />
-          </div>
-          <Skeleton w={80} h={20} />
-        </div>
-      ))}
-    </div>
-  ) : activity.length === 0 ? (
-    <div className="py-14 text-center text-sm font-semibold text-slate-400">
-      No recent activity.
-    </div>
-  ) : (
-    <div className="divide-y divide-slate-100">
-      {[...activity]
-        .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())
-        .slice(0, 10)
-        .map((a) => (
-          <Link
-            key={a.id}
-            href={a.href}
-            className={`grid items-center gap-4 px-6 py-4 transition-colors duration-150 ${
-              a.type === "sale" ? "hover:bg-amber-50" : "hover:bg-slate-50"
-            }`}
-            style={{ gridTemplateColumns: "40px 1fr auto" }}
-          >
-            <div
-              className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl text-base ${
-                a.type === "sale" ? "bg-amber-100" : "bg-slate-100"
-              }`}
-            >
-              {a.type === "sale" ? "🧾" : "💸"}
-            </div>
-
-            <div className="min-w-0">
-              <div className="truncate text-sm font-bold text-slate-900">
-                {a.title}
-              </div>
-              <div className="mt-0.5 truncate text-xs font-medium text-slate-400">
-                {a.sub}
-              </div>
-            </div>
-
-            <div className="shrink-0 text-right">
-              <div
-                className={`text-sm font-extrabold ${
-                  a.type === "sale" ? "text-slate-900" : "text-red-500"
-                }`}
+          title="Recent Activity"
+          sub="Sales and expenses — newest first"
+          action={
+            <div className="flex items-center gap-4">
+              <Link
+                href="/dashboard/sales"
+                className="text-xs font-bold text-amber-500 transition-colors hover:text-amber-600"
               >
-                {a.type === "expense" ? "−" : "+"}
-                {fmtMoney(a.amount)}
-              </div>
-              <div className="mt-0.5 text-xs font-medium text-slate-400">
-                {fmtDateTime(a.at)}
-              </div>
+                Sales →
+              </Link>
+              <Link
+                href="/dashboard/expenses"
+                className="text-xs font-bold text-amber-500 transition-colors hover:text-amber-600"
+              >
+                Expenses →
+              </Link>
             </div>
-          </Link>
-        ))}
-    </div>
-  )}
-</Card>
+          }
+        >
+          {loading ? (
+            <div className="flex flex-col gap-4 p-5">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="flex items-center gap-3">
+                  <div className="flex flex-1 flex-col gap-2">
+                    <Skeleton w="55%" h={14} />
+                    <Skeleton w="35%" h={11} />
+                  </div>
+                  <Skeleton w={80} h={20} />
+                </div>
+              ))}
+            </div>
+          ) : activity.length === 0 ? (
+            <div className="py-14 text-center text-sm font-semibold text-slate-400">
+              No recent activity.
+            </div>
+          ) : (
+            <div className="divide-y divide-slate-100">
+              {[...activity]
+                .sort(
+                  (a, b) => new Date(b.at).getTime() - new Date(a.at).getTime(),
+                )
+                .slice(0, 10)
+                .map((a) => (
+                  <Link
+                    key={a.id}
+                    href={a.href}
+                    className={`grid items-center gap-4 px-6 py-4 transition-colors duration-150 ${
+                      a.type === "sale"
+                        ? "hover:bg-amber-50"
+                        : "hover:bg-slate-50"
+                    }`}
+                    style={{ gridTemplateColumns: "1fr auto" }}
+                  >
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-bold text-slate-900">
+                        {a.title}
+                      </div>
+                      <div className="mt-0.5 truncate text-xs font-medium text-slate-400">
+                        {a.sub}
+                      </div>
+                    </div>
+
+                    <div className="shrink-0 text-right">
+                      <div
+                        className={`text-sm font-extrabold ${
+                          a.type === "sale" ? "text-slate-900" : "text-red-500"
+                        }`}
+                      >
+                        {a.type === "expense" ? "−" : "+"}
+                        {fmtMoney(a.amount)}
+                      </div>
+                      <div className="mt-0.5 text-xs font-medium text-slate-400">
+                        {fmtDateTime(a.at)}
+                      </div>
+                    </div>
+                  </Link>
+                ))}
+            </div>
+          )}
+        </Card>
       </div>
     </>
   );

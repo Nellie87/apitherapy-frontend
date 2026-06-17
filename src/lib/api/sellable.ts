@@ -50,22 +50,30 @@ export async function listSellable(orgId: string): Promise<SellableRow[]> {
 
   if (error) throw new Error(error.message);
 
-  return (data ?? []).map((r: any) => {
-    const p = Array.isArray(r.products) ? r.products[0] ?? null : r.products;
+  return (data ?? [])
+    .map((r: any) => {
+      const p = Array.isArray(r.products) ? r.products[0] ?? null : r.products;
 
-    return {
-      org_id: String(r.org_id),
-      product_id: String(r.product_id),
-      qty_on_hand: Number(r.qty_on_hand ?? 0),
-      reorder_level: r.reorder_level == null ? null : Number(r.reorder_level),
-      products: p
-  ? {
-      id: String(p.id),
-      name: String(p.name),
-      quantity_value: p.quantity_value == null ? null : Number(p.quantity_value),
-      quantity_unit: p.quantity_unit ?? null,
-    }
-  : null,
-    };
-  });
+      return {
+        org_id: String(r.org_id),
+        product_id: String(r.product_id),
+        qty_on_hand: Number(r.qty_on_hand ?? 0),
+        reorder_level: r.reorder_level == null ? null : Number(r.reorder_level),
+
+        products: p
+          ? {
+              id: String(p.id),
+              name: p.name ?? null,
+              sku: p.sku ?? null,
+              barcode: p.barcode ?? null,
+              category: p.category ?? null,
+              unit_price: p.unit_price == null ? null : Number(p.unit_price),
+              quantity_value:
+                p.quantity_value == null ? null : Number(p.quantity_value),
+              quantity_unit: p.quantity_unit ?? null,
+            }
+          : null,
+      };
+    })
+    .filter((r) => r.products !== null);
 }

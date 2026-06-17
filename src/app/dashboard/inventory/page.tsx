@@ -213,111 +213,6 @@ function useBodyScrollLock(locked: boolean) {
 }
 
 /* ─────────────────────────────────────────────
-   Icons
-───────────────────────────────────────────── */
-const IconSearch = () => (
-  <svg
-    width="15"
-    height="15"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2.2"
-    strokeLinecap="round"
-  >
-    <circle cx="11" cy="11" r="8" />
-    <line x1="21" y1="21" x2="16.65" y2="16.65" />
-  </svg>
-);
-
-const IconPlus = () => (
-  <svg
-    width="14"
-    height="14"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2.5"
-    strokeLinecap="round"
-  >
-    <line x1="12" y1="5" x2="12" y2="19" />
-    <line x1="5" y1="12" x2="19" y2="12" />
-  </svg>
-);
-
-const IconX = () => (
-  <svg
-    width="14"
-    height="14"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2.4"
-    strokeLinecap="round"
-  >
-    <line x1="18" y1="6" x2="6" y2="18" />
-    <line x1="6" y1="6" x2="18" y2="18" />
-  </svg>
-);
-
-const IconCheck = () => (
-  <svg
-    width="14"
-    height="14"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2.4"
-    strokeLinecap="round"
-  >
-    <polyline points="20 6 9 17 4 12" />
-  </svg>
-);
-
-const IconClock = () => (
-  <svg
-    width="14"
-    height="14"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2.2"
-    strokeLinecap="round"
-  >
-    <circle cx="12" cy="12" r="9" />
-    <path d="M12 7v5l3 2" />
-  </svg>
-);
-
-const IconChevronLeft = () => (
-  <svg
-    width="15"
-    height="15"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2.2"
-    strokeLinecap="round"
-  >
-    <polyline points="15 18 9 12 15 6" />
-  </svg>
-);
-
-const IconChevronRight = () => (
-  <svg
-    width="15"
-    height="15"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2.2"
-    strokeLinecap="round"
-  >
-    <polyline points="9 18 15 12 9 6" />
-  </svg>
-);
-
-/* ─────────────────────────────────────────────
    Toast
 ───────────────────────────────────────────── */
 function Toast({
@@ -340,10 +235,9 @@ function Toast({
         type === "success" ? "bg-green-600" : "bg-red-600"
       }`}
     >
-      <span>{type === "success" ? <IconCheck /> : <IconX />}</span>
       <span>{message}</span>
-      <button onClick={onClose} className="text-white/70 hover:text-white">
-        <IconX />
+      <button onClick={onClose} className="text-white/80 hover:text-white text-xs font-bold">
+        Close
       </button>
     </div>
   );
@@ -376,39 +270,37 @@ function Modal({
   if (!open) return null;
 
   const maxW =
-    size === "xl" ? "max-w-5xl" : size === "lg" ? "max-w-3xl" : "max-w-md";
-
-  function handleBackdropClick() {
-    if (!closeOnBackdrop) return;
-    onClose();
-  }
+    size === "xl" ? "max-w-5xl" : size === "lg" ? "max-w-3xl" : "max-w-xl";
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/45 backdrop-blur-sm p-4"
-      onClick={handleBackdropClick}
+      className="fixed inset-0 z-[60] flex items-end justify-center bg-slate-950/35 backdrop-blur-sm p-0 sm:items-center sm:p-4"
+      onClick={() => closeOnBackdrop && onClose()}
     >
       <div
-        className={`w-full ${maxW} rounded-2xl bg-white shadow-2xl max-h-[90vh] overflow-hidden flex flex-col`}
+        className={`flex max-h-[92vh] w-full ${maxW} flex-col overflow-hidden rounded-t-[28px] border border-[#EADFC2] bg-white shadow-2xl sm:rounded-[28px]`}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-start justify-between border-b border-slate-100 px-6 py-4">
-          <div>
-            <div className="text-base font-bold text-slate-900">{title}</div>
-            {sub && <div className="text-xs text-slate-500 mt-0.5">{sub}</div>}
+        <div className="border-b border-[#F1E6C9] bg-[linear-gradient(180deg,#FFFDF8_0%,#FFF8E6_100%)] px-6 py-5">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <div className="text-lg font-black tracking-tight text-slate-950">{title}</div>
+              {sub && <div className="mt-1 text-sm text-slate-500">{sub}</div>}
+            </div>
+
+            <button
+              onClick={onClose}
+              className="rounded-full border border-[#EADFC2] bg-white px-3 py-1.5 text-xs font-bold text-slate-500 transition hover:bg-[#FFF8E6] hover:text-slate-800"
+            >
+              Close
+            </button>
           </div>
-          <button
-            onClick={onClose}
-            className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition"
-          >
-            <IconX />
-          </button>
         </div>
 
-        <div className="overflow-y-auto px-6 py-5">{children}</div>
+        <div className="overflow-y-auto px-6 py-6">{children}</div>
 
         {footer && (
-          <div className="border-t border-slate-100 px-6 py-4 flex justify-end gap-3">
+          <div className="sticky bottom-0 flex justify-end gap-3 border-t border-[#F1E6C9] bg-white/95 px-6 py-4 backdrop-blur">
             {footer}
           </div>
         )}
@@ -428,7 +320,7 @@ function TopTabs({
   onChange: (v: MainTab) => void;
 }) {
   return (
-    <div className="inline-flex items-center rounded-2xl border border-slate-200 bg-white p-1 shadow-sm">
+    <div className="inline-flex items-center rounded-2xl border border-[#EADFC2] bg-white/90 p-1 shadow-sm">
       {[
         { key: "overview", label: "Overview" },
         { key: "history", label: "History" },
@@ -440,8 +332,8 @@ function TopTabs({
             onClick={() => onChange(tab.key as MainTab)}
             className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${
               active
-                ? "bg-slate-900 text-white"
-                : "text-slate-600 hover:bg-slate-100"
+                ? "bg-[#2F2718] text-white shadow-sm"
+                : "text-slate-600 hover:bg-[#FFF8E6]"
             }`}
           >
             {tab.label}
@@ -470,7 +362,7 @@ function HistoryTypeTabs({
   ];
 
   return (
-    <div className="inline-flex flex-wrap items-center rounded-2xl border border-slate-200 bg-white p-1 shadow-sm gap-1">
+    <div className="inline-flex flex-wrap items-center rounded-2xl border border-[#EADFC2] bg-white/90 p-1 shadow-sm gap-1">
       {tabs.map((tab) => {
         const active = value === tab.key;
         return (
@@ -480,8 +372,8 @@ function HistoryTypeTabs({
             onClick={() => onChange(tab.key)}
             className={`rounded-xl px-3.5 py-2 text-sm font-semibold transition ${
               active
-                ? "bg-slate-900 text-white"
-                : "text-slate-600 hover:bg-slate-100"
+                ? "bg-[#2F2718] text-white shadow-sm"
+                : "text-slate-600 hover:bg-[#FFF8E6]"
             }`}
           >
             {tab.label}
@@ -496,7 +388,6 @@ function StatCard({
   title,
   value,
   sub,
-  icon,
   variant = "neutral",
   active = false,
   onClick,
@@ -504,7 +395,6 @@ function StatCard({
   title: string;
   value: string;
   sub?: string;
-  icon: React.ReactNode;
   variant?: "neutral" | "warning" | "danger" | "success";
   active?: boolean;
   onClick?: () => void;
@@ -557,14 +447,7 @@ function StatCard({
         cursor: onClick ? "pointer" : "default",
       }}
     >
-      <div className="flex items-center gap-4">
-        <div
-          className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl text-lg"
-          style={{ background: cfg.iconBg, color: cfg.iconColor }}
-        >
-          {icon}
-        </div>
-
+      <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
           <div
             className="text-[11px] font-semibold uppercase tracking-[0.18em]"
@@ -600,35 +483,27 @@ function StatusBadge({ qty, reorder }: { qty: number; reorder: number }) {
 
   if (status === "out") {
     return (
-      <span className="inline-flex items-center gap-1.5 rounded-full bg-red-100 px-2.5 py-1 text-xs font-semibold text-red-700 border border-red-200">
-        <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
-        Out of stock
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-red-100 px-2.5 py-1 text-xs font-semibold text-red-700 border border-red-200">Out of stock
       </span>
     );
   }
 
   if (status === "critical") {
     return (
-      <span className="inline-flex items-center gap-1.5 rounded-full bg-orange-100 px-2.5 py-1 text-xs font-semibold text-orange-700 border border-orange-200">
-        <span className="h-1.5 w-1.5 rounded-full bg-orange-500" />
-        Critical
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-orange-100 px-2.5 py-1 text-xs font-semibold text-orange-700 border border-orange-200">Critical
       </span>
     );
   }
 
   if (status === "low") {
     return (
-      <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-700 border border-amber-200">
-        <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-        Low stock
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-700 border border-amber-200">Low stock
       </span>
     );
   }
 
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full bg-green-100 px-2.5 py-1 text-xs font-semibold text-green-700 border border-green-200">
-      <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
-      In stock
+    <span className="inline-flex items-center gap-1.5 rounded-full bg-green-100 px-2.5 py-1 text-xs font-semibold text-green-700 border border-green-200">In stock
     </span>
   );
 }
@@ -664,9 +539,9 @@ function Pagination({
         <button
           onClick={() => onPage(page - 1)}
           disabled={page === 1}
-          className="grid h-9 w-9 place-items-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition"
+          className="h-9 rounded-xl border border-[#EADFC2] bg-white px-3 text-xs font-bold text-slate-600 hover:bg-[#FFF8E6] disabled:opacity-40 disabled:cursor-not-allowed transition"
         >
-          <IconChevronLeft />
+          Prev
         </button>
 
         <span className="px-3 text-sm font-semibold text-slate-700">
@@ -676,9 +551,9 @@ function Pagination({
         <button
           onClick={() => onPage(page + 1)}
           disabled={page === totalPages}
-          className="grid h-9 w-9 place-items-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition"
+          className="h-9 rounded-xl border border-[#EADFC2] bg-white px-3 text-xs font-bold text-slate-600 hover:bg-[#FFF8E6] disabled:opacity-40 disabled:cursor-not-allowed transition"
         >
-          <IconChevronRight />
+          Next
         </button>
       </div>
     </div>
@@ -1146,19 +1021,7 @@ export default function InventoryPage() {
   if (!orgId && !err) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <div className="flex items-center gap-3 text-slate-400 text-sm">
-          <svg
-            className="h-4 w-4 animate-spin"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-          >
-            <circle cx="12" cy="12" r="10" strokeOpacity="0.2" />
-            <path d="M12 2a10 10 0 0110 10" />
-          </svg>
-          Loading inventory…
-        </div>
+        <div className="text-slate-400 text-sm font-semibold">Loading inventory…</div>
       </div>
     );
   }
@@ -1186,7 +1049,6 @@ export default function InventoryPage() {
 
       {err && (
         <div className="flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          <span className="shrink-0 mt-0.5">⚠️</span>
           <span className="flex-1">{err}</span>
           <button
             onClick={() => setErr("")}
@@ -1199,13 +1061,13 @@ export default function InventoryPage() {
 
       <div className="flex flex-col gap-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
+          {/* <div>
 
             <h1 className="mt-3 text-[32px] font-bold text-slate-900 tracking-tight">
               Stock Overview
             </h1>
           
-          </div>
+          </div> */}
 
           
         </div>
@@ -1224,7 +1086,6 @@ export default function InventoryPage() {
           title="Total products"
           value={String(kpis.totalItems)}
           sub="tracked stock items"
-          icon="📦"
           variant="neutral"
           active={stockFilter === "all"}
           onClick={() => setStockFilter("all")}
@@ -1233,7 +1094,6 @@ export default function InventoryPage() {
           title="Low stock"
           value={String(kpis.lowStock)}
           sub="below reorder level"
-          icon="📉"
           variant="warning"
           active={stockFilter === "low"}
           onClick={() => handleStockCardFilter("low")}
@@ -1242,7 +1102,6 @@ export default function InventoryPage() {
           title="Out of stock"
           value={String(kpis.outOfStock)}
           sub="no packs left"
-          icon="🚫"
           variant="danger"
           active={stockFilter === "out"}
           onClick={() => handleStockCardFilter("out")}
@@ -1251,20 +1110,16 @@ export default function InventoryPage() {
           title="Stock cost value"
           value={fmtMoney(kpis.stockCostValue)}
           sub={`Retail value ${fmtMoney(kpis.stockRetailValue)}`}
-          icon="💰"
           variant="success"
         />
       </div>
 
-        <div className="rounded-[24px] border border-slate-200 bg-white shadow-[0_12px_36px_rgba(15,23,42,0.05)] overflow-hidden">
-          <div className="border-b border-slate-100 bg-slate-50/70 px-5 py-4 lg:px-6">
+        <div className="rounded-[28px] border border-[#EADFC2] bg-white shadow-[0_12px_36px_rgba(92,64,16,0.06)] overflow-hidden">
+          <div className="border-b border-[#F1E6C9] bg-[linear-gradient(180deg,#FFFDF8_0%,#FFF9EC_100%)] px-5 py-4 lg:px-6">
             <div className="flex flex-wrap items-center gap-2">
               <label className="relative flex-1 min-w-[220px] max-w-sm">
-                <div className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
-                  <IconSearch />
-                </div>
                 <input
-                  className="w-full rounded-2xl border border-slate-200 bg-white pl-10 pr-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 focus:border-slate-400 focus:ring-2 focus:ring-slate-100 outline-none transition"
+                  className="w-full rounded-2xl border border-[#EADFC2] bg-white px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 focus:border-amber-400 focus:ring-2 focus:ring-amber-100 outline-none transition"
                   placeholder="Search by product, pack size, SKU or category…"
                   value={q}
                   onChange={(e) => setQ(e.target.value)}
@@ -1272,9 +1127,9 @@ export default function InventoryPage() {
                 {q && (
                   <button
                     onClick={() => setQ("")}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400 hover:text-slate-600"
                   >
-                    <IconX />
+                    Clear
                   </button>
                 )}
               </label>
@@ -1300,7 +1155,6 @@ export default function InventoryPage() {
             <div className="space-y-3">
               {paginatedRows.length === 0 ? (
                 <div className="py-20 text-center">
-                  <div className="text-5xl mb-4">📦</div>
                   <p className="text-lg font-semibold text-slate-700">
                     {rows.length === 0
                       ? "No inventory items yet"
@@ -1331,7 +1185,7 @@ export default function InventoryPage() {
                   return (
                     <div
                       key={r.product_id}
-                      className="group rounded-[24px] border border-slate-200 bg-white shadow-[0_8px_30px_rgba(15,23,42,0.04)] transition-all duration-200 hover:-translate-y-px hover:shadow-[0_16px_34px_rgba(15,23,42,0.08)]"
+                      className="group rounded-[24px] border border-[#EFE4C6] bg-[linear-gradient(180deg,#FFFFFF_0%,#FFFCF4_100%)] shadow-[0_8px_30px_rgba(92,64,16,0.04)] transition-all duration-200 hover:-translate-y-px hover:shadow-[0_16px_34px_rgba(92,64,16,0.08)]"
                     >
                       <div
                         className="hidden lg:grid items-center gap-4 px-6 py-5 text-sm"
@@ -1557,8 +1411,8 @@ export default function InventoryPage() {
       )}
 
       {tab === "history" && (
-        <div className="rounded-[24px] border border-slate-200 bg-white shadow-[0_12px_36px_rgba(15,23,42,0.05)] overflow-hidden">
-          <div className="border-b border-slate-100 bg-slate-50/70 px-5 py-4 lg:px-6">
+        <div className="rounded-[28px] border border-[#EADFC2] bg-white shadow-[0_12px_36px_rgba(92,64,16,0.06)] overflow-hidden">
+          <div className="border-b border-[#F1E6C9] bg-[linear-gradient(180deg,#FFFDF8_0%,#FFF9EC_100%)] px-5 py-4 lg:px-6">
             <div className="flex items-center justify-between gap-3 flex-wrap">
               <div>
                 <div className="text-sm font-semibold text-slate-900">
@@ -1575,11 +1429,8 @@ export default function InventoryPage() {
             <div className="mt-4 flex flex-col gap-3">
               <div className="flex flex-wrap items-center gap-2">
                 <label className="relative flex-1 min-w-[220px] max-w-sm">
-                  <div className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
-                    <IconSearch />
-                  </div>
                   <input
-                    className="w-full rounded-2xl border border-slate-200 bg-white pl-10 pr-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 focus:border-slate-400 focus:ring-2 focus:ring-slate-100 outline-none transition"
+                    className="w-full rounded-2xl border border-[#EADFC2] bg-white px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 focus:border-amber-400 focus:ring-2 focus:ring-amber-100 outline-none transition"
                     placeholder="Search product, note or movement type…"
                     value={historySearch}
                     onChange={(e) => setHistorySearch(e.target.value)}
@@ -1587,9 +1438,9 @@ export default function InventoryPage() {
                   {historySearch && (
                     <button
                       onClick={() => setHistorySearch("")}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400 hover:text-slate-600"
                     >
-                      <IconX />
+                      Clear
                     </button>
                   )}
                 </label>
@@ -1612,7 +1463,6 @@ export default function InventoryPage() {
           <div className="px-5 py-5 space-y-6">
             {filteredHistory.length === 0 ? (
               <div className="py-16 text-center">
-                <div className="text-5xl mb-4">🕘</div>
                 <p className="text-lg font-semibold text-slate-700">
                   No stock history found
                 </p>
@@ -1645,7 +1495,6 @@ export default function InventoryPage() {
                                     m.type
                                   )}`}
                                 >
-                                  <IconClock />
                                   {movementLabel(m.type)}
                                 </span>
 
@@ -1710,7 +1559,8 @@ export default function InventoryPage() {
       <Modal
         open={addOpen}
         title="Add stock item"
-        sub="Start tracking a product in inventory"
+        sub="Start tracking a catalog product in inventory"
+        size="lg"
         onClose={() => setAddOpen(false)}
         footer={
           <>
@@ -1728,18 +1578,21 @@ export default function InventoryPage() {
         }
       >
         {addCandidates.length === 0 ? (
-          <div className="py-10 text-center">
-            <div className="text-5xl mb-4">✅</div>
-            <p className="font-semibold text-slate-700">
+          <div className="rounded-[24px] border border-[#F1E6C9] bg-[#FFFDF8] px-6 py-10 text-center">
+            <p className="text-lg font-black text-slate-900">
               All catalog products are already tracked
+            </p>
+            <p className="mt-1 text-sm text-slate-500">
+              Every product in your catalog already has an inventory record.
             </p>
           </div>
         ) : (
-          <div className="space-y-5">
-            <div>
-              <label className="mb-1.5 block text-sm font-semibold text-slate-700">
-                Select product
+          <div className="space-y-6">
+            <div className="rounded-[24px] border border-[#F1E6C9] bg-[#FFFDF8] p-5">
+              <label className="mb-2 block text-xs font-black uppercase tracking-[0.16em] text-slate-400">
+                Product
               </label>
+
               <select
                 className={S.input}
                 value={addProductId}
@@ -1752,11 +1605,15 @@ export default function InventoryPage() {
                   </option>
                 ))}
               </select>
+
+              <p className="mt-2 text-xs text-slate-500">
+                Choose a catalog product that is not yet being tracked in inventory.
+              </p>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="mb-1.5 block text-sm font-semibold text-slate-700">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="rounded-[22px] border border-[#F1E6C9] bg-white p-5">
+                <label className="mb-2 block text-xs font-black uppercase tracking-[0.16em] text-slate-400">
                   Initial packs
                 </label>
                 <input
@@ -1766,10 +1623,13 @@ export default function InventoryPage() {
                   value={addQty}
                   onChange={(e) => setAddQty(e.target.value)}
                 />
+                <p className="mt-2 text-xs text-slate-500">
+                  Current stock available today.
+                </p>
               </div>
 
-              <div>
-                <label className="mb-1.5 block text-sm font-semibold text-slate-700">
+              <div className="rounded-[22px] border border-[#F1E6C9] bg-white p-5">
+                <label className="mb-2 block text-xs font-black uppercase tracking-[0.16em] text-slate-400">
                   Reorder level
                 </label>
                 <input
@@ -1779,7 +1639,14 @@ export default function InventoryPage() {
                   value={addReorder}
                   onChange={(e) => setAddReorder(e.target.value)}
                 />
+                <p className="mt-2 text-xs text-slate-500">
+                  This becomes the low-stock threshold.
+                </p>
               </div>
+            </div>
+
+            <div className="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
+              Inventory tracking will start immediately after saving.
             </div>
           </div>
         )}
@@ -1796,7 +1663,8 @@ export default function InventoryPage() {
               })}`
             : "Adjust stock"
         }
-        sub="Add for incoming stock, remove for loss or damage, set for stock count correction"
+        sub="Add incoming stock, remove damaged stock, or set a corrected stock count"
+        size="lg"
         onClose={handleAdjustModalClose}
         closeOnBackdrop={!adjustDirty}
         footer={
@@ -1830,7 +1698,7 @@ export default function InventoryPage() {
               </div>
             )}
 
-            <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <div className="flex items-center justify-between rounded-[24px] border border-[#F1E6C9] bg-[#FFFDF8] p-5">
               <div>
                 <div className="text-xs font-semibold uppercase tracking-wider text-slate-500">
                   Current stock
@@ -1852,23 +1720,23 @@ export default function InventoryPage() {
               />
             </div>
 
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-3 gap-2 rounded-[22px] border border-[#F1E6C9] bg-white p-2">
               {(["add", "remove", "set"] as const).map((m) => (
                 <button
                   key={m}
                   className={`rounded-xl border py-2.5 text-sm font-semibold transition ${
                     adjustMode === m
                       ? "border-slate-900 bg-slate-900 text-white shadow-sm"
-                      : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                      : "border-transparent text-slate-600 hover:bg-[#FFF8E6]"
                   }`}
                   onClick={() => setAdjustMode(m)}
                 >
-                  {m === "add" ? "+ Add" : m === "remove" ? "− Remove" : "= Set"}
+                  {m === "add" ? "Add" : m === "remove" ? "Remove" : "Set"}
                 </button>
               ))}
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <label className="mb-1.5 block text-sm font-semibold text-slate-700">
                   {adjustMode === "set" ? "New pack count" : "Pack amount"}
@@ -1898,12 +1766,12 @@ export default function InventoryPage() {
               </div>
             </div>
 
-            <p className="text-xs text-slate-400">
+            <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 text-xs text-slate-500">
               Removing stock will never go below zero.
-            </p>
+            </div>
 
             {adjustDirty && (
-              <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-500">
+              <div className="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-xs text-amber-800">
                 You have unsaved changes. Click{" "}
                 <span className="font-semibold text-slate-700">Confirm adjustment</span>{" "}
                 or{" "}

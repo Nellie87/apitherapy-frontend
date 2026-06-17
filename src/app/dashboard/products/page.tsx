@@ -216,125 +216,16 @@ function useBodyScrollLock(locked: boolean) {
 }
 
 /* ─────────────────────────────────────────────
-   Icons
+   Visual icons removed for a cleaner UI
 ───────────────────────────────────────────── */
-const IconPlus = () => (
-  <svg
-    width="16"
-    height="16"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2.5"
-    strokeLinecap="round"
-  >
-    <line x1="12" y1="5" x2="12" y2="19" />
-    <line x1="5" y1="12" x2="19" y2="12" />
-  </svg>
-);
-
-const IconSearch = () => (
-  <svg
-    width="15"
-    height="15"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2.2"
-    strokeLinecap="round"
-  >
-    <circle cx="11" cy="11" r="8" />
-    <line x1="21" y1="21" x2="16.65" y2="16.65" />
-  </svg>
-);
-
-const IconTrash = () => (
-  <svg
-    width="15"
-    height="15"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-  >
-    <path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14z" />
-    <line x1="10" y1="11" x2="10" y2="17" />
-    <line x1="14" y1="11" x2="14" y2="17" />
-  </svg>
-);
-
-const IconEdit = () => (
-  <svg
-    width="15"
-    height="15"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-  >
-    <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
-    <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
-  </svg>
-);
-
-const IconCheck = () => (
-  <svg
-    width="15"
-    height="15"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2.5"
-    strokeLinecap="round"
-  >
-    <polyline points="20 6 9 17 4 12" />
-  </svg>
-);
-
-const IconX = () => (
-  <svg
-    width="15"
-    height="15"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2.5"
-    strokeLinecap="round"
-  >
-    <line x1="18" y1="6" x2="6" y2="18" />
-    <line x1="6" y1="6" x2="18" y2="18" />
-  </svg>
-);
-
-const IconChevronLeft = () => (
-  <svg
-    width="15"
-    height="15"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2.2"
-    strokeLinecap="round"
-  >
-    <polyline points="15 18 9 12 15 6" />
-  </svg>
-);
-
-const IconChevronRight = () => (
-  <svg
-    width="15"
-    height="15"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2.2"
-    strokeLinecap="round"
-  >
-    <polyline points="9 18 15 12 9 6" />
-  </svg>
-);
+const IconPlus = () => null;
+const IconSearch = () => null;
+const IconTrash = () => null;
+const IconEdit = () => null;
+const IconCheck = () => null;
+const IconX = () => null;
+const IconChevronLeft = () => null;
+const IconChevronRight = () => null;
 
 /* ─────────────────────────────────────────────
    Toast
@@ -359,15 +250,12 @@ function Toast({
         type === "success" ? "bg-green-600" : "bg-red-600"
       }`}
     >
-      <span className="shrink-0">
-        {type === "success" ? <IconCheck /> : <IconX />}
-      </span>
       <span>{message}</span>
       <button
         onClick={onClose}
-        className="ml-1 text-white/70 hover:text-white"
+        className="ml-2 rounded-full px-2 py-0.5 text-xs text-white/75 hover:bg-white/10 hover:text-white"
       >
-        <IconX />
+        Close
       </button>
     </div>
   );
@@ -377,13 +265,11 @@ function Toast({
    KPI Card
 ───────────────────────────────────────────── */
 function KpiCard({
-  icon,
   label,
   value,
   sub,
   variant = "neutral",
 }: {
-  icon: string;
   label: string;
   value: string;
   sub?: string;
@@ -432,14 +318,6 @@ function KpiCard({
         boxShadow: cfg.shadow,
       }}
     >
-      <div className="flex items-center gap-3 mb-3">
-        <div
-          className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl text-lg"
-          style={{ background: cfg.iconBg, color: cfg.iconColor }}
-        >
-          {icon}
-        </div>
-      </div>
       <div
         className="text-[11px] font-semibold uppercase tracking-[0.18em] mb-1"
         style={{ color: cfg.sub }}
@@ -591,7 +469,6 @@ function InlineCategoryCreator({
           onClick={() => setOpen(true)}
           className="flex items-center gap-1.5 text-xs font-semibold text-amber-600 hover:text-amber-700 transition"
         >
-          <IconPlus />
           Add new category
         </button>
       ) : (
@@ -664,10 +541,7 @@ function ArchiveModal({
         className="w-full max-w-md rounded-2xl bg-white shadow-2xl p-6"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-start gap-4 mb-5">
-          <div className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-amber-100 text-2xl">
-            📦
-          </div>
+        <div className="mb-5">
           <div>
             <div className="text-lg font-bold text-slate-900">
               Archive this product?
@@ -817,17 +691,11 @@ function ConfirmSaveModal({
 function Modal({
   title,
   sub,
-  icon,
-  iconBg,
-  iconColor,
   onClose,
   children,
 }: {
   title: string;
   sub?: string;
-  icon: React.ReactNode;
-  iconBg: string;
-  iconColor: string;
   onClose: () => void;
   children: React.ReactNode;
 }) {
@@ -842,12 +710,6 @@ function Modal({
       >
         <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4 shrink-0">
           <div className="flex items-center gap-3">
-            <div
-              className="grid h-10 w-10 place-items-center rounded-xl text-lg"
-              style={{ background: iconBg, color: iconColor }}
-            >
-              {icon}
-            </div>
             <div>
               <div className="text-base font-bold text-slate-900">{title}</div>
               {sub && (
@@ -857,9 +719,9 @@ function Modal({
           </div>
           <button
             onClick={onClose}
-            className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition"
+            className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50 transition"
           >
-            <IconX />
+            Close
           </button>
         </div>
         <div className="overflow-y-auto px-6 py-5">{children}</div>
@@ -976,7 +838,6 @@ function ProductForm({
     <form onSubmit={handleSubmit} className="space-y-6" noValidate>
       {submitAttempted && hasErrors && (
         <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 flex items-start gap-2">
-          <span className="shrink-0 mt-0.5">⚠️</span>
           <span>Please fix the highlighted fields before continuing.</span>
         </div>
       )}
@@ -1380,9 +1241,9 @@ function Pagination({
         <button
           onClick={() => onPage(page - 1)}
           disabled={page === 1}
-          className="grid h-9 w-9 place-items-center rounded-xl border border-[#EADFC2] bg-white text-slate-500 hover:bg-[#FFF8E6] disabled:opacity-40 disabled:cursor-not-allowed transition"
+          className="h-9 rounded-xl border border-[#EADFC2] bg-white px-3 text-xs font-bold text-slate-600 hover:bg-[#FFF8E6] disabled:opacity-40 disabled:cursor-not-allowed transition"
         >
-          <IconChevronLeft />
+          Prev
         </button>
 
         {pages.map((p, i) =>
@@ -1411,9 +1272,9 @@ function Pagination({
         <button
           onClick={() => onPage(page + 1)}
           disabled={page === totalPages}
-          className="grid h-9 w-9 place-items-center rounded-xl border border-[#EADFC2] bg-white text-slate-500 hover:bg-[#FFF8E6] disabled:opacity-40 disabled:cursor-not-allowed transition"
+          className="h-9 rounded-xl border border-[#EADFC2] bg-white px-3 text-xs font-bold text-slate-600 hover:bg-[#FFF8E6] disabled:opacity-40 disabled:cursor-not-allowed transition"
         >
-          <IconChevronRight />
+          Next
         </button>
       </div>
     </div>
@@ -1820,19 +1681,7 @@ export default function ProductsPage() {
   if (!orgId && !err) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <div className="flex items-center gap-3 text-slate-400 text-sm">
-          <svg
-            className="h-4 w-4 animate-spin"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-          >
-            <circle cx="12" cy="12" r="10" strokeOpacity="0.2" />
-            <path d="M12 2a10 10 0 0110 10" />
-          </svg>
-          Loading catalog…
-        </div>
+        <div className="text-slate-400 text-sm font-semibold">Loading catalog…</div>
       </div>
     );
   }
@@ -1849,7 +1698,6 @@ export default function ProductsPage() {
 
       {err && (
         <div className="flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          <span className="shrink-0 mt-0.5">⚠️</span>
           <span className="flex-1">{err}</span>
           <button
             onClick={() => setErr("")}
@@ -1861,7 +1709,7 @@ export default function ProductsPage() {
       )}
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
+        {/* <div>
           <div className="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-amber-700">
             Catalog
           </div>
@@ -1871,47 +1719,41 @@ export default function ProductsPage() {
           <p className="mt-1 text-sm text-slate-500">
             Manage products, sizes, pricing and availability
           </p>
-        </div>
+        </div> */}
 
         <button
           className={`${S.btnPrimary} shadow-[0_12px_28px_rgba(245,197,24,0.25)]`}
           onClick={() => setShowAddModal(true)}
         >
-          <IconPlus />
           Add product
         </button>
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         <KpiCard
-          icon="📦"
           label="Total products"
           value={String(kpis.total)}
           sub={showArchived ? "active + archived" : "active only"}
         />
         <KpiCard
-          icon="✅"
           label="For sale"
           value={String(kpis.activeSellable)}
           sub="active listings"
           variant="success"
         />
         <KpiCard
-          icon="🗄️"
           label="Archived"
           value={String(kpis.archived)}
           sub="hidden from sales"
           variant="warning"
         />
         <KpiCard
-          icon="🏷️"
           label="Categories"
           value={String(kpis.categories)}
           sub="product groups"
           variant="info"
         />
         <KpiCard
-          icon="📈"
           label="Avg margin"
           value={`${kpis.avgMargin.toFixed(0)}%`}
           sub="gross margin"
@@ -1929,11 +1771,8 @@ export default function ProductsPage() {
         <div className="border-b border-[#F1E6C9] bg-[linear-gradient(180deg,#FFFDF8_0%,#FFF9EC_100%)] px-5 py-4 lg:px-6">
           <div className="flex flex-wrap items-center gap-2">
             <label className="relative flex-1 min-w-[220px] max-w-sm">
-              <div className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
-                <IconSearch />
-              </div>
               <input
-                className="w-full rounded-2xl border border-[#EADFC2] bg-white pl-10 pr-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 focus:border-amber-500 focus:ring-2 focus:ring-amber-100 outline-none transition"
+                className="w-full rounded-2xl border border-[#EADFC2] bg-white px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 focus:border-amber-500 focus:ring-2 focus:ring-amber-100 outline-none transition"
                 placeholder="Search products…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -1943,7 +1782,7 @@ export default function ProductsPage() {
                   onClick={() => setSearch("")}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
                 >
-                  <IconX />
+                  Clear
                 </button>
               )}
             </label>
@@ -2021,7 +1860,6 @@ export default function ProductsPage() {
           <div className="space-y-3">
             {paginated.length === 0 ? (
               <div className="py-20 text-center">
-                <div className="text-5xl mb-4">🍯</div>
                 <p className="text-lg font-semibold text-slate-700">
                   {items.length === 0 ? "No products yet" : "No matching products"}
                 </p>
@@ -2096,10 +1934,9 @@ export default function ProductsPage() {
                       <div className="flex items-center justify-end gap-2">
                         <button
                           onClick={() => openEdit(p)}
-                          className="grid h-9 w-9 place-items-center rounded-xl border border-blue-200 bg-blue-50 text-blue-600 hover:bg-blue-100 transition opacity-0 group-hover:opacity-100"
-                          title="Edit"
+                          className="rounded-xl border border-slate-200 bg-white px-3.5 h-9 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition opacity-0 group-hover:opacity-100"
                         >
-                          <IconEdit />
+                          Edit
                         </button>
 
                         {p.active === false ? (
@@ -2112,10 +1949,9 @@ export default function ProductsPage() {
                         ) : (
                           <button
                             onClick={() => setDeletingProduct(p)}
-                            className="grid h-9 w-9 place-items-center rounded-xl border border-red-200 bg-red-50 text-red-500 hover:bg-red-100 transition opacity-0 group-hover:opacity-100"
-                            title="Archive"
+                            className="rounded-xl border border-red-200 bg-red-50 px-3.5 h-9 text-xs font-semibold text-red-600 hover:bg-red-100 transition opacity-0 group-hover:opacity-100"
                           >
-                            <IconTrash />
+                            Archive
                           </button>
                         )}
                       </div>
@@ -2189,7 +2025,7 @@ export default function ProductsPage() {
                           onClick={() => openEdit(p)}
                           className="flex-1 flex items-center justify-center gap-2 rounded-2xl border border-blue-200 bg-blue-50 py-2.5 text-xs font-semibold text-blue-700 hover:bg-blue-100 transition"
                         >
-                          <IconEdit /> Edit
+                          Edit
                         </button>
 
                         {p.active === false ? (
@@ -2204,7 +2040,7 @@ export default function ProductsPage() {
                             onClick={() => setDeletingProduct(p)}
                             className="flex-1 flex items-center justify-center gap-2 rounded-2xl border border-red-200 bg-red-50 py-2.5 text-xs font-semibold text-red-600 hover:bg-red-100 transition"
                           >
-                            <IconTrash /> Archive
+                            Archive
                           </button>
                         )}
                       </div>
@@ -2229,9 +2065,6 @@ export default function ProductsPage() {
         <Modal
           title="Add product"
           sub="Fill in the details below"
-          icon={<IconPlus />}
-          iconBg="#fef3c7"
-          iconColor="#92400e"
           onClose={() => setShowAddModal(false)}
         >
           <ProductForm
@@ -2254,9 +2087,6 @@ export default function ProductsPage() {
         <Modal
           title="Edit product"
           sub={formatProductDisplayName(editProduct)}
-          icon={<IconEdit />}
-          iconBg="#dbeafe"
-          iconColor="#1e40af"
           onClose={() => setEditProduct(null)}
         >
           <ProductForm
