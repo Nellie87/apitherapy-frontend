@@ -33,8 +33,7 @@ export default function AuthConfirmPage() {
       }
 
       window.history.replaceState(null, "", "/auth/confirm");
-      window.location.href = "/dashboard/summarydashboard";
-    }
+window.location.href = "/set-password";    }
 
     confirmInvite();
   }, []);
