@@ -19,24 +19,10 @@ export async function bootstrapOrg(): Promise<string> {
     throw new Error(error.message);
   }
 
-  if (orgs && orgs.length > 0) {
-    await setOrgId(orgs[0].id);
-    return orgs[0].id;
+  if (!orgs || orgs.length === 0) {
+    throw new Error("No organization found.");
   }
 
-  const { data: orgId, error: rpcErr } = await supabase.rpc("create_org", {
-    p_name: "My Shop",
-  });
-
-  if (rpcErr) {
-    throw new Error(rpcErr.message);
-  }
-
-  if (!orgId) {
-    throw new Error("Failed to create organization.");
-  }
-
-  await setOrgId(String(orgId));
-
-  return String(orgId);
+  await setOrgId(orgs[0].id);
+  return orgs[0].id;
 }

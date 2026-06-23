@@ -6,8 +6,20 @@ import type { OrgRole } from "@/lib/auth/orgRole";
 type Ctx = {
   role: OrgRole | null;
   loading: boolean;
-  isSalesClerk: boolean;
+
+  isOwner: boolean;
   isAdmin: boolean;
+  isManager: boolean;
+  isSalesClerk: boolean;
+  isCashier: boolean;
+  isPos: boolean;
+
+  canSell: boolean;
+  canViewReports: boolean;
+  canManageInventory: boolean;
+  canManageExpenses: boolean;
+  canManageTeam: boolean;
+  canManageSettings: boolean;
 };
 
 const OrgRoleContext = createContext<Ctx | null>(null);
@@ -21,25 +33,71 @@ export function OrgRoleProvider({
   loading: boolean;
   children: ReactNode;
 }) {
+  const safeRole = role ?? "none";
+
+  const isOwner = !loading && safeRole === "owner";
+  const isAdmin = !loading && safeRole === "admin";
+  const isManager = !loading && safeRole === "manager";
+  const isSalesClerk = !loading && safeRole === "sales_clerk";
+  const isCashier = !loading && safeRole === "cashier";
+  const isPos = !loading && safeRole === "pos";
+
+  const canSell = isOwner || isAdmin || isManager || isSalesClerk || isCashier || isPos;
+  const canViewReports = isOwner || isAdmin || isManager;
+  const canManageInventory = isOwner || isAdmin || isManager;
+  const canManageExpenses = isOwner || isAdmin || isManager;
+  const canManageTeam = isOwner || isAdmin;
+  const canManageSettings = isOwner || isAdmin;
+
   const value: Ctx = {
-    role,
+    role: safeRole,
     loading,
-    isSalesClerk: !loading && role === "sales_clerk",
-    isAdmin: !loading && role !== "sales_clerk",
+
+    isOwner,
+    isAdmin,
+    isManager,
+    isSalesClerk,
+    isCashier,
+    isPos,
+
+    canSell,
+    canViewReports,
+    canManageInventory,
+    canManageExpenses,
+    canManageTeam,
+    canManageSettings,
   };
 
-  return <OrgRoleContext.Provider value={value}>{children}</OrgRoleContext.Provider>;
+  return (
+    <OrgRoleContext.Provider value={value}>
+      {children}
+    </OrgRoleContext.Provider>
+  );
 }
 
 export function useOrgRole(): Ctx {
   const v = useContext(OrgRoleContext);
+
   if (!v) {
     return {
-      role: null,
+      role: "none",
       loading: true,
-      isSalesClerk: false,
+
+      isOwner: false,
       isAdmin: false,
+      isManager: false,
+      isSalesClerk: false,
+      isCashier: false,
+      isPos: false,
+
+      canSell: false,
+      canViewReports: false,
+      canManageInventory: false,
+      canManageExpenses: false,
+      canManageTeam: false,
+      canManageSettings: false,
     };
   }
+
   return v;
 }

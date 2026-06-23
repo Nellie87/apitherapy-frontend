@@ -1,15 +1,28 @@
 import { createClient } from "@/lib/supabase/client";
 
-export type OrgRole = "admin" | "sales_clerk" | "none";
+export type OrgRole =
+  | "owner"
+  | "admin"
+  | "manager"
+  | "sales_clerk"
+  | "cashier"
+  | "pos"
+  | "none";
 
-const ADMIN_ROLES = new Set(["owner", "admin", "manager"]);
-const CLERK_ROLES = new Set(["sales_clerk", "cashier", "pos"]);
+const ALLOWED_ROLES = new Set<OrgRole>([
+  "owner",
+  "admin",
+  "manager",
+  "sales_clerk",
+  "cashier",
+  "pos",
+  "none",
+]);
 
 export async function fetchMyOrgRole(
   orgId: string | null | undefined
 ): Promise<OrgRole> {
-  // TEMP: allow normal signups even before org_members exists
-  if (!orgId) return "admin";
+  if (!orgId) return "none";
 
   const supabase = createClient();
 
@@ -28,14 +41,12 @@ export async function fetchMyOrgRole(
 
   if (error) {
     console.error("fetchMyOrgRole error:", error.message);
-    return "admin";
+    return "none";
   }
 
-  const raw = String(data?.role ?? "").trim().toLowerCase();
+  const raw = String(data?.role ?? "none").trim().toLowerCase() as OrgRole;
 
-  if (CLERK_ROLES.has(raw)) return "sales_clerk";
-  if (ADMIN_ROLES.has(raw)) return "admin";
+  if (ALLOWED_ROLES.has(raw)) return raw;
 
-  // TEMP: no membership yet = allow dashboard access
-  return "admin";
+  return "none";
 }
