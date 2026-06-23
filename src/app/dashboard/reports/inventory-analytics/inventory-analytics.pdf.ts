@@ -6,19 +6,34 @@ import type {
 } from "./inventory-analytics.types";
 import { fmtMoney } from "./inventory-analytics.helpers";
 
+const esc = (v: unknown) =>
+  String(v ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+
 export function printInventoryPdfReport(params: {
   rows: Enriched[];
   totals: Totals;
   categoryData: CategoryData[];
   insights: InventoryInsight[];
+  from?: string;
+  to?: string;
 }) {
-  const { rows, totals, categoryData, insights } = params;
+  const { rows, totals, categoryData, insights, from, to } = params;
 
   const today = new Date().toLocaleDateString("en-KE", {
     year: "numeric",
     month: "long",
     day: "numeric",
   });
+
+  const period =
+    from || to
+      ? `${from || "Start"} to ${to || "Today"}`
+      : "All available inventory records";
 
   const riskPct = ((totals.atRiskVal / (totals.totalVal || 1)) * 100).toFixed(1);
 
@@ -46,7 +61,7 @@ export function printInventoryPdfReport(params: {
         @media print {
           body { padding: 20px; }
           .no-print { display: none; }
-          tr { page-break-inside: avoid; page-break-after: auto; }
+          tr { page-break-inside: avoid; }
         }
       </style>
     </head>
@@ -55,6 +70,7 @@ export function printInventoryPdfReport(params: {
       <div class="header">
         <h1>Inventory Analytics Report</h1>
         <div class="muted">Generated on ${today}</div>
+        <div class="muted">Period: ${esc(period)}</div>
         <div class="muted">${rows.length} products analysed</div>
       </div>
 
@@ -65,18 +81,14 @@ export function printInventoryPdfReport(params: {
         <div class="card"><div class="label">Average Coverage</div><div class="value">${totals.avgCoverage.toFixed(1)}×</div></div>
       </div>
 
-      <h2>Executive Summary</h2>
-      <p>
-        This report reviews inventory value, stock health, reorder urgency,
-        category exposure, and capital tied up in at-risk products.
-      </p>
+      <h2>Summary</h2>
       <p>
         Total inventory value is <strong>${fmtMoney(totals.totalVal)}</strong>.
         At-risk inventory value is <strong>${fmtMoney(totals.atRiskVal)}</strong>,
         representing <strong>${riskPct}%</strong> of total inventory value.
       </p>
       <p>
-        Current stock health: <strong>${totals.out}</strong> out of stock,
+        Stock health: <strong>${totals.out}</strong> out of stock,
         <strong> ${totals.critical}</strong> critical,
         <strong> ${totals.low}</strong> low, and
         <strong> ${totals.ok}</strong> healthy.
@@ -87,8 +99,8 @@ export function printInventoryPdfReport(params: {
         .map(
           (ins) => `
           <div class="insight">
-            <strong>${ins.icon} ${ins.title}</strong>
-            <div class="muted">${ins.detail}</div>
+            <strong>${esc(ins.title)}</strong>
+            <div class="muted">${esc(ins.detail)}</div>
           </div>`
         )
         .join("")}
@@ -111,7 +123,7 @@ export function printInventoryPdfReport(params: {
               const pct = cat.count ? (cat.atRisk / cat.count) * 100 : 0;
               return `
               <tr>
-                <td>${cat.name}</td>
+                <td>${esc(cat.name)}</td>
                 <td class="right">${cat.count}</td>
                 <td class="right">${cat.atRisk}</td>
                 <td class="right">${pct.toFixed(0)}%</td>
@@ -123,7 +135,7 @@ export function printInventoryPdfReport(params: {
         </tbody>
       </table>
 
-      <h2>Reorder Priority List</h2>
+      <h2>Reorder Priority</h2>
       <table>
         <thead>
           <tr>
@@ -145,12 +157,12 @@ export function printInventoryPdfReport(params: {
             .map(
               (r) => `
               <tr>
-                <td>${r.name}</td>
-                <td>${r.sku ?? "—"}</td>
-                <td>${r.category ?? "—"}</td>
+                <td>${esc(r.name)}</td>
+                <td>${esc(r.sku ?? "—")}</td>
+                <td>${esc(r.category ?? "—")}</td>
                 <td class="right">${r.qty_on_hand}</td>
                 <td class="right">${r.reorder_level}</td>
-                <td><span class="badge">${r.status}</span></td>
+                <td><span class="badge">${esc(r.status)}</span></td>
                 <td class="right">${r.coverage >= 99 ? "∞" : `${r.coverage}×`}</td>
                 <td class="right">${r.urgency}</td>
               </tr>`
@@ -158,48 +170,6 @@ export function printInventoryPdfReport(params: {
             .join("")}
         </tbody>
       </table>
-
-      <h2>Inventory Valuation</h2>
-      <table>
-        <thead>
-          <tr>
-            <th>Product</th>
-            <th>SKU</th>
-            <th>Category</th>
-            <th>Status</th>
-            <th class="right">Qty</th>
-            <th class="right">Unit Price</th>
-            <th class="right">Total Value</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${[...rows]
-            .sort((a, b) => b.total_value - a.total_value)
-            .slice(0, 60)
-            .map(
-              (r) => `
-              <tr>
-                <td>${r.name}</td>
-                <td>${r.sku ?? "—"}</td>
-                <td>${r.category ?? "—"}</td>
-                <td>${r.status}</td>
-                <td class="right">${r.qty_on_hand}</td>
-                <td class="right">${fmtMoney(r.unit_price)}</td>
-                <td class="right">${fmtMoney(r.total_value)}</td>
-              </tr>`
-            )
-            .join("")}
-        </tbody>
-      </table>
-
-      <h2>Recommended Actions</h2>
-      <ol>
-        <li>Restock out-of-stock products immediately.</li>
-        <li>Place reorder requests for critical products before they hit zero.</li>
-        <li>Review high-value products with low coverage to reduce revenue risk.</li>
-        <li>Check products with stock but no reorder level configured.</li>
-        <li>Prioritise supplier agreements for top-value categories.</li>
-      </ol>
 
       <button class="print-btn no-print" onclick="window.print()">Print / Save PDF</button>
     </body>
@@ -215,5 +185,5 @@ export function printInventoryPdfReport(params: {
   setTimeout(() => {
     win.focus();
     win.print();
-  }, 500);
+  }, 400);
 }

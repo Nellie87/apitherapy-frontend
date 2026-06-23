@@ -73,8 +73,10 @@ export async function POST(req: Request) {
 
     const admin = createAdminClient();
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "");
-    const redirectTo = baseUrl ? `${baseUrl}/login` : undefined;
-
+const redirectTo = baseUrl
+  ? `${baseUrl}/auth/confirm`
+  : undefined;
+  
     const { data: invited, error: inviteErr } =
       await admin.auth.admin.inviteUserByEmail(email, {
         data: {

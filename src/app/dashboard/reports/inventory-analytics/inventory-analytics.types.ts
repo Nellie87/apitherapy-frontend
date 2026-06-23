@@ -30,7 +30,6 @@ export type CategoryData = {
 
 export type InventoryInsight = {
   type: "critical" | "warning" | "ok" | "neutral";
-  icon: string;
   title: string;
   detail: string;
 };

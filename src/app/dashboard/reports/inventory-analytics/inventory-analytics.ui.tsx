@@ -6,31 +6,27 @@ import type { SortCol, StockHealth } from "./inventory-analytics.types";
 
 export const STATUS_CFG: Record<
   StockHealth,
-  { label: string; dot: string; cls: string; icon: string }
+  { label: string; dot: string; cls: string }
 > = {
   out: {
     label: "Out of Stock",
     dot: "#ef4444",
-    cls: "bg-red-100 text-red-700",
-    icon: "🚫",
+    cls: "bg-red-50 text-red-700 border-red-200",
   },
   critical: {
     label: "Critical",
     dot: "#f97316",
-    cls: "bg-orange-100 text-orange-700",
-    icon: "🔥",
+    cls: "bg-orange-50 text-orange-700 border-orange-200",
   },
   low: {
     label: "Low",
     dot: "#f59e0b",
-    cls: "bg-amber-100 text-amber-700",
-    icon: "📉",
+    cls: "bg-amber-50 text-amber-700 border-amber-200",
   },
   ok: {
     label: "Healthy",
     dot: "#22c55e",
-    cls: "bg-green-100 text-green-700",
-    icon: "✅",
+    cls: "bg-green-50 text-green-700 border-green-200",
   },
 };
 
@@ -39,9 +35,9 @@ export function StatusBadge({ status }: { status: StockHealth }) {
 
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold ${c.cls}`}
+      className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${c.cls}`}
     >
-      {c.icon} {c.label}
+      {c.label}
     </span>
   );
 }
@@ -79,16 +75,13 @@ export function UrgencyBar({ score }: { score: number }) {
 
   return (
     <div className="flex items-center gap-2">
-      <div
-        className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-100"
-        style={{ minWidth: 56 }}
-      >
+      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-100">
         <div
-          className="h-full rounded-full transition-all duration-300"
+          className="h-full rounded-full"
           style={{ width: `${score}%`, background: color }}
         />
       </div>
-      <span className="w-6 text-right text-xs font-bold text-slate-400">
+      <span className="w-7 text-right text-xs font-semibold text-slate-500">
         {score}
       </span>
     </div>
@@ -105,15 +98,15 @@ export function SegControl<T extends string>({
   options: { value: T; label: string }[];
 }) {
   return (
-    <div className="flex items-center gap-0.5 rounded-xl border border-slate-200 bg-slate-50 p-1">
+    <div className="flex w-full gap-1 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-1 shadow-sm sm:w-fit">
       {options.map((o) => (
         <button
           key={o.value}
           onClick={() => onChange(o.value)}
-          className={`whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+          className={`whitespace-nowrap rounded-xl px-4 py-2 text-sm font-semibold transition ${
             value === o.value
-              ? "border border-slate-200 bg-white text-slate-900 shadow-sm"
-              : "text-slate-500 hover:text-slate-700"
+              ? "bg-amber-500 text-white shadow-sm"
+              : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
           }`}
         >
           {o.label}
@@ -127,69 +120,28 @@ export function KpiCard({
   label,
   value,
   sub,
-  icon,
   variant = "neutral",
 }: {
   label: string;
   value: string;
   sub?: string;
-  icon: string;
   variant?: "neutral" | "success" | "warning" | "danger" | "info";
 }) {
   const cfg = {
-    neutral: {
-      bg: "bg-white",
-      border: "border-slate-200",
-      iconBg: "bg-slate-50",
-      val: "text-slate-900",
-      sub: "text-slate-500",
-    },
-    success: {
-      bg: "bg-green-50",
-      border: "border-green-200",
-      iconBg: "bg-green-100",
-      val: "text-green-800",
-      sub: "text-green-600",
-    },
-    warning: {
-      bg: "bg-amber-50",
-      border: "border-amber-200",
-      iconBg: "bg-amber-100",
-      val: "text-amber-800",
-      sub: "text-amber-600",
-    },
-    danger: {
-      bg: "bg-red-50",
-      border: "border-red-200",
-      iconBg: "bg-red-100",
-      val: "text-red-800",
-      sub: "text-red-500",
-    },
-    info: {
-      bg: "bg-blue-50",
-      border: "border-blue-200",
-      iconBg: "bg-blue-100",
-      val: "text-blue-800",
-      sub: "text-blue-600",
-    },
+    neutral: "border-slate-200 bg-white text-slate-900",
+    success: "border-green-200 bg-green-50 text-green-800",
+    warning: "border-amber-200 bg-amber-50 text-amber-800",
+    danger: "border-red-200 bg-red-50 text-red-800",
+    info: "border-blue-200 bg-blue-50 text-blue-800",
   }[variant];
 
   return (
-    <div
-      className={`rounded-2xl border p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md ${cfg.bg} ${cfg.border}`}
-    >
-      <div
-        className={`mb-3 grid h-10 w-10 place-items-center rounded-xl text-lg ${cfg.iconBg}`}
-      >
-        {icon}
-      </div>
-      <div className={`mb-1.5 text-xs font-semibold uppercase tracking-wider ${cfg.sub}`}>
+    <div className={`rounded-2xl border p-5 shadow-sm ${cfg}`}>
+      <div className="text-xs font-semibold uppercase tracking-wide opacity-70">
         {label}
       </div>
-      <div className={`text-2xl font-bold leading-tight ${cfg.val}`}>
-        {value}
-      </div>
-      {sub && <div className={`mt-1 text-xs ${cfg.sub}`}>{sub}</div>}
+      <div className="mt-2 text-2xl font-bold leading-tight">{value}</div>
+      {sub && <div className="mt-1 text-xs opacity-70">{sub}</div>}
     </div>
   );
 }
@@ -209,7 +161,7 @@ export function Card({
 }) {
   return (
     <div className={`${S.card} overflow-hidden`}>
-      <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+      <div className="flex flex-col gap-3 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <div className="font-bold text-slate-900">{title}</div>
           {sub && <div className="mt-0.5 text-xs text-slate-500">{sub}</div>}
@@ -223,62 +175,24 @@ export function Card({
 
 export function InsightCard({
   type,
-  icon,
   title,
   detail,
 }: {
   type: string;
-  icon: string;
   title: string;
   detail: string;
 }) {
-  const cfg: Record<
-    string,
-    { border: string; iconBg: string; titleColor: string }
-  > = {
-    critical: {
-      border: "border-red-200",
-      iconBg: "bg-red-50",
-      titleColor: "text-red-800",
-    },
-    warning: {
-      border: "border-amber-200",
-      iconBg: "bg-amber-50",
-      titleColor: "text-amber-800",
-    },
-    ok: {
-      border: "border-green-200",
-      iconBg: "bg-green-50",
-      titleColor: "text-green-800",
-    },
-    neutral: {
-      border: "border-slate-200",
-      iconBg: "bg-slate-50",
-      titleColor: "text-slate-900",
-    },
+  const cfg: Record<string, string> = {
+    critical: "border-red-200 bg-red-50",
+    warning: "border-amber-200 bg-amber-50",
+    ok: "border-green-200 bg-green-50",
+    neutral: "border-slate-200 bg-white",
   };
 
-  const c = cfg[type] ?? cfg.neutral;
-
   return (
-    <div
-      className={`rounded-2xl border bg-white p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md ${c.border}`}
-    >
-      <div className="flex items-start gap-3">
-        <div
-          className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl text-base ${c.iconBg}`}
-        >
-          {icon}
-        </div>
-        <div>
-          <div className={`mb-1 text-sm font-bold ${c.titleColor}`}>
-            {title}
-          </div>
-          <div className="text-xs leading-relaxed text-slate-500">
-            {detail}
-          </div>
-        </div>
-      </div>
+    <div className={`rounded-2xl border p-4 shadow-sm ${cfg[type] ?? cfg.neutral}`}>
+      <div className="text-sm font-bold text-slate-900">{title}</div>
+      <div className="mt-1 text-xs leading-relaxed text-slate-600">{detail}</div>
     </div>
   );
 }
@@ -301,20 +215,15 @@ export function SortTh({
   const isA = active === col;
 
   return (
-    <div
-      className={`flex cursor-pointer select-none items-center gap-1 text-xs font-semibold uppercase tracking-wider ${
+    <button
+      type="button"
+      className={`flex w-full cursor-pointer select-none items-center gap-1 text-xs font-semibold uppercase tracking-wide ${
         align === "right" ? "justify-end" : ""
-      } ${
-        isA
-          ? "text-amber-600"
-          : "text-slate-500 hover:text-slate-700"
-      }`}
+      } ${isA ? "text-amber-600" : "text-slate-500 hover:text-slate-700"}`}
       onClick={() => onSort(col)}
     >
       {children}
-      <span className="text-xs opacity-60">
-        {isA ? (dir === "desc" ? "↓" : "↑") : "↕"}
-      </span>
-    </div>
+      <span className="opacity-60">{isA ? (dir === "desc" ? "↓" : "↑") : "↕"}</span>
+    </button>
   );
 }

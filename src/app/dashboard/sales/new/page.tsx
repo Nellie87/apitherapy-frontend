@@ -404,16 +404,19 @@ export default function NewSalePage() {
   }
 
   function updateQty(product_id: string, qty: number) {
-    setCart((prev) =>
-      prev
-        .map((x) =>
-          x.product_id !== product_id
-            ? x
-            : { ...x, qty: Math.max(0, Math.min(qty, x.available)) }
-        )
-        .filter((x) => x.qty > 0)
-    );
-  }
+  if (!Number.isFinite(qty)) return;
+
+  setCart((prev) =>
+    prev.map((x) =>
+      x.product_id !== product_id
+        ? x
+        : {
+            ...x,
+            qty: Math.max(1, Math.min(qty, x.available)),
+          }
+    )
+  );
+}
 
   function updateOverride(product_id: string, price: number | null) {
     setCart((prev) =>
@@ -867,7 +870,7 @@ export default function NewSalePage() {
                               : "border-slate-300 bg-white focus:border-slate-400 focus:ring-2 focus:ring-slate-100"
                           }`}
                           type="number"
-                          min={0}
+                          min={1}
                           max={line.available}
                           value={line.qty}
                           onChange={(e) =>
