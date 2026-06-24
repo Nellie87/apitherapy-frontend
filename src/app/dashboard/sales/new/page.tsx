@@ -237,10 +237,17 @@ export default function NewSalePage() {
   const [draftRestored, setDraftRestored] = useState(false);
 
   async function refresh(o: string) {
-    const [sellable, sales] = await Promise.all([listSellable(o), listSales(o)]);
-    setRows(sellable);
-    setRecentSales(sales.slice(0, 6));
-  }
+  const [sellable, sales] = await Promise.all([
+    listSellable(o),
+    listSales(o, {
+      ownOnly: true,
+      limit: 6,
+    }),
+  ]);
+
+  setRows(sellable);
+  setRecentSales(sales);
+}
 
   useEffect(() => {
     (async () => {
@@ -759,8 +766,8 @@ export default function NewSalePage() {
 
                       <div className="shrink-0 text-right">
                         <div className="text-xs font-black text-slate-950">
-                          {fmtMoney(sale.total)}
-                        </div>
+  {sale.payment_method || "—"}
+</div>
                         <span
                           className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-bold ${paymentPill(
                             sale.payment_method

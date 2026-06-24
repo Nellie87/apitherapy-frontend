@@ -400,8 +400,10 @@ export default function SaleDetailsPage() {
   const [voidSubmitting, setVoidSubmitting] = useState(false);
   const [successMsg, setSuccessMsg] = useState("");
 
-  const { isSalesClerk, loading: roleLoading } = useOrgRole();
-  const hideSensitive = !roleLoading && isSalesClerk;
+  const { role, loading: roleLoading } = useOrgRole();
+
+const hideSensitive =
+  !roleLoading && ["sales_clerk", "cashier", "pos"].includes(role ?? "none");
 
   useEffect(() => {
     (async () => {

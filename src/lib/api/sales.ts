@@ -68,10 +68,16 @@ function normalizeProduct(p: any): SaleItemProduct | null {
   };
 }
 
-export async function listSales(orgId: string) {
+export async function listSales(
+  orgId: string,
+  opts?: {
+    ownOnly?: boolean;
+    limit?: number;
+  }
+) {
   const supabase = createClient();
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("sales")
     .select(`
       id,
@@ -101,8 +107,25 @@ export async function listSales(orgId: string) {
         )
       )
     `)
-    .eq("org_id", orgId)
-    .order("created_at", { ascending: false });
+    .eq("org_id", orgId);
+
+  if (opts?.ownOnly) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) return [];
+
+    query = query.eq("sold_by_user_id", user.id);
+  }
+
+  query = query.order("created_at", { ascending: false });
+
+  if (opts?.limit) {
+    query = query.limit(opts.limit);
+  }
+
+  const { data, error } = await query;
 
   if (error) throw new Error(error.message);
 
@@ -124,7 +147,11 @@ export async function listSales(orgId: string) {
       created_at: r.created_at,
       sold_by_user_id: r.sold_by_user_id ?? null,
       created_by: r.created_by ?? null,
-      recorded_by_name: prof?.full_name ? String(prof.full_name) : null,
+      recorded_by_name: opts?.ownOnly
+        ? null
+        : prof?.full_name
+        ? String(prof.full_name)
+        : null,
       sale_items: (r.sale_items ?? []).map((it: any) => {
         const p = Array.isArray(it.products)
           ? it.products[0] ?? null
@@ -170,6 +197,7 @@ export async function getSale(orgId: string, saleId: string) {
   if (error) throw new Error(error.message);
 
   const r: any = data;
+
   const prof = Array.isArray(r.recorded_by_profile)
     ? r.recorded_by_profile[0]
     : r.recorded_by_profile;

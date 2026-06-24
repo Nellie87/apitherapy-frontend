@@ -4,11 +4,9 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { bootstrapOrg } from "@/lib/org/bootstrapOrg";
 import { listSales, type SaleRowWithItems } from "@/lib/api/sales";
+import { useOrgRole } from "@/contexts/OrgRoleContext";
 import * as S from "./page.styles";
 
-/* ─────────────────────────────────────────────
-   Helpers
-───────────────────────────────────────────── */
 function fmtMoney(v: number) {
   return `Ksh ${Number(v || 0).toLocaleString("en-KE", {
     minimumFractionDigits: 0,
@@ -25,9 +23,7 @@ function formatQuantity(value?: number | string | null, unit?: string | null) {
 
   const formatted = Number.isInteger(n)
     ? String(n)
-    : n.toLocaleString("en-KE", {
-        maximumFractionDigits: 3,
-      });
+    : n.toLocaleString("en-KE", { maximumFractionDigits: 3 });
 
   return `${formatted} ${unit}`;
 }
@@ -69,9 +65,7 @@ function fmtTime(d: string) {
 }
 
 function isToday(d: string) {
-  const date = new Date(d);
-  const now = new Date();
-  return date.toDateString() === now.toDateString();
+  return new Date(d).toDateString() === new Date().toDateString();
 }
 
 function isThisWeek(d: string) {
@@ -94,28 +88,14 @@ function isThisMonth(d: string) {
 function paymentPill(method?: string | null) {
   const key = (method ?? "").toLowerCase();
 
-  if (key === "cash") {
-    return "border-green-200 bg-green-50 text-green-700";
-  }
-
-  if (key === "mpesa") {
-    return "border-blue-200 bg-blue-50 text-blue-700";
-  }
-
-  if (key === "card") {
-    return "border-purple-200 bg-purple-50 text-purple-700";
-  }
-
-  if (key === "credit") {
-    return "border-amber-200 bg-amber-50 text-amber-700";
-  }
+  if (key === "cash") return "border-green-200 bg-green-50 text-green-700";
+  if (key === "mpesa") return "border-blue-200 bg-blue-50 text-blue-700";
+  if (key === "card") return "border-purple-200 bg-purple-50 text-purple-700";
+  if (key === "credit") return "border-amber-200 bg-amber-50 text-amber-700";
 
   return "border-slate-200 bg-slate-50 text-slate-600";
 }
 
-/* ─────────────────────────────────────────────
-   Components
-───────────────────────────────────────────── */
 function StatCard({
   label,
   value,
@@ -178,18 +158,12 @@ function StatCard({
   );
 }
 
-interface ProductPreview {
-  list: { name: string; qty: number }[];
-  totalQty: number;
-}
-
-function saleProductsPreview(sale: any): ProductPreview {
-  const items = (sale.sale_items ?? []) as any[];
+function saleProductsPreview(sale: SaleRowWithItems) {
+  const items = sale.sale_items ?? [];
   const map = new Map<string, { name: string; qty: number }>();
 
   for (const it of items) {
-    const p = Array.isArray(it.products) ? it.products[0] : it.products;
-    const name = p ? formatProductDisplayName(p) : "Unknown";
+    const name = it.products ? formatProductDisplayName(it.products) : "Unknown";
     const qty = Number(it.qty ?? 0);
 
     if (qty <= 0 || name === "Unknown") continue;
@@ -200,45 +174,76 @@ function saleProductsPreview(sale: any): ProductPreview {
   }
 
   const list = Array.from(map.values());
-  const totalQty = list.reduce((s, x) => s + x.qty, 0);
+  const totalQty = list.reduce((sum, x) => sum + x.qty, 0);
 
   return { list, totalQty };
 }
 
 type DateFilter = "all" | "today" | "week" | "month" | "custom";
 
-/* ─────────────────────────────────────────────
-   Page
-───────────────────────────────────────────── */
 export default function SalesPage() {
   const [orgId, setOrgId] = useState<string | null>(null);
   const [rows, setRows] = useState<SaleRowWithItems[]>([]);
   const [q, setQ] = useState("");
   const [dateFilter, setDateFilter] = useState<DateFilter>("all");
-  const [customDate, setCustomDate] = useState<string>("");
+  const [customDate, setCustomDate] = useState("");
   const [err, setErr] = useState("");
 
-  async function refresh(o: string) {
-    try {
-      const data = await listSales(o);
-      setRows(data || []);
-    } catch (e: any) {
-      setErr(e.message ?? "Failed to load sales.");
-      console.error(e);
-    }
-  }
+  const { role, loading: roleLoading } = useOrgRole();
+
+  const isSalesOnly = ["sales_clerk", "cashier", "pos"].includes(
+    role ?? "none"
+  );
+
+  const refresh = useCallback(
+    async (o: string) => {
+      try {
+        const data = await listSales(o, {
+          ownOnly: isSalesOnly,
+          limit: isSalesOnly ? 20 : undefined,
+        });
+
+        setRows(data || []);
+      } catch (e: any) {
+        setErr(e.message ?? "Failed to load sales.");
+        console.error(e);
+      }
+    },
+    [isSalesOnly]
+  );
 
   useEffect(() => {
+    if (roleLoading) return;
+
+    let cancelled = false;
+
     (async () => {
       try {
         const o = await bootstrapOrg();
+
+        if (cancelled) return;
+
         setOrgId(o);
-        await refresh(o);
+
+        const data = await listSales(o, {
+          ownOnly: isSalesOnly,
+          limit: isSalesOnly ? 20 : undefined,
+        });
+
+        if (!cancelled) {
+          setRows(data || []);
+        }
       } catch (e: any) {
-        setErr(e.message ?? String(e));
+        if (!cancelled) {
+          setErr(e.message ?? String(e));
+        }
       }
     })();
-  }, []);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [roleLoading, isSalesOnly]);
 
   const handleFilterChange = useCallback((newFilter: DateFilter) => {
     setDateFilter(newFilter);
@@ -273,28 +278,32 @@ export default function SalesPage() {
       });
     }
 
-    const t = q.trim().toLowerCase();
+   const t = q.trim().toLowerCase();
 
-    if (t) {
-      result = result.filter((s) => {
-        const saleNoMatch = s.sale_no.toLowerCase().includes(t);
-        const customerMatch = (s.customer_name ?? "").toLowerCase().includes(t);
+if (t) {
+  result = result.filter((s) => {
+    const saleNoMatch = s.sale_no.toLowerCase().includes(t);
 
-        let productMatch = false;
+    const customerMatch = (s.customer_name ?? "")
+      .toLowerCase()
+      .includes(t);
 
-        if (Array.isArray((s as any).sale_items)) {
-          productMatch = (s as any).sale_items.some((item: any) => {
-            const prod = Array.isArray(item.products)
-              ? item.products[0]
-              : item.products;
+    const staffMatch = (s.recorded_by_name ?? "")
+      .toLowerCase()
+      .includes(t);
 
-            return prod?.name && String(prod.name).toLowerCase().includes(t);
-          });
-        }
+    const productMatch = (s.sale_items ?? []).some((item) =>
+      item.products?.name?.toLowerCase().includes(t)
+    );
 
-        return saleNoMatch || customerMatch || productMatch;
-      });
-    }
+    return (
+      saleNoMatch ||
+      customerMatch ||
+      staffMatch ||
+      productMatch
+    );
+  });
+}
 
     return result;
   }, [rows, q, dateFilter, customDate]);
@@ -324,9 +333,11 @@ export default function SalesPage() {
     { key: "month", label: "This month" },
   ];
 
-  const GRID = "1.2fr 1.7fr 1.1fr 0.9fr 0.7fr 0.9fr";
+  const GRID = isSalesOnly
+  ? "1.2fr 1.9fr 1.1fr 0.9fr 0.7fr"
+  : "1.2fr 1.6fr 1fr 1fr 0.9fr 0.7fr 0.9fr";
 
-  if (!orgId && !err) {
+  if ((roleLoading || !orgId) && !err) {
     return (
       <div className="flex h-64 items-center justify-center">
         <div className="text-sm font-semibold text-slate-400">
@@ -351,39 +362,56 @@ export default function SalesPage() {
       )}
 
       <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-     
+        <div>
+          <p className="text-sm font-semibold text-slate-500">
+            {isSalesOnly
+              ? "View only the sales you have recorded."
+              : "Track all completed sales for this organization."}
+          </p>
+        </div>
 
         <Link href="/dashboard/sales/new" className={S.btnPrimary}>
           New Sale
         </Link>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div
+        className={`grid grid-cols-1 gap-3 sm:grid-cols-2 ${
+          isSalesOnly ? "xl:grid-cols-1" : "xl:grid-cols-4"
+        }`}
+      >
         <StatCard
-          label="Total Sales"
+          label={isSalesOnly ? "My Sales" : "Total Sales"}
           value={String(kpis.totalSales)}
-          sub="all transactions"
+          sub={isSalesOnly ? "sales recorded by you" : "all transactions"}
         />
-        <StatCard
-          label="Total Revenue"
-          value={fmtMoney(kpis.totalRevenue)}
-          sub="gross income"
-          variant="success"
-        />
-        <StatCard
-          label="Average Sale"
-          value={fmtMoney(avgSale)}
-          sub="per transaction"
-        />
-        <StatCard
-          label="Discounts Given"
-          value={fmtMoney(kpis.totalDiscounts)}
-          sub="total reductions"
-          variant="warning"
-        />
+
+        {!isSalesOnly && (
+          <>
+            <StatCard
+              label="Total Revenue"
+              value={fmtMoney(kpis.totalRevenue)}
+              sub="gross income"
+              variant="success"
+            />
+
+            <StatCard
+              label="Average Sale"
+              value={fmtMoney(avgSale)}
+              sub="per transaction"
+            />
+
+            <StatCard
+              label="Discounts Given"
+              value={fmtMoney(kpis.totalDiscounts)}
+              sub="total reductions"
+              variant="warning"
+            />
+          </>
+        )}
       </div>
 
-      {kpis.todaySales > 0 && (
+      {!isSalesOnly && kpis.todaySales > 0 && (
         <div className="flex flex-col gap-3 rounded-[24px] border border-green-200 bg-green-50 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="font-black text-green-800">Today so far</div>
@@ -410,7 +438,7 @@ export default function SalesPage() {
             <label className="relative min-w-[220px] flex-1">
               <input
                 className={S.input}
-                placeholder="Search sale number, customer, or product..."
+                placeholder="Search sale number, customer, staff, or product..."
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
               />
@@ -461,16 +489,25 @@ export default function SalesPage() {
           className="hidden items-center gap-4 px-5 py-3 lg:grid"
           style={{ gridTemplateColumns: GRID }}
         >
-          {["Sale No", "Customer & Items", "Date", "Payment", "Items", "Total"].map(
-            (h) => (
-              <div
-                key={h}
-                className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400"
-              >
-                {h}
-              </div>
-            )
-          )}
+          {(isSalesOnly
+            ? ["Sale No", "Customer & Items", "Date", "Payment", "Items"]
+            : [
+  "Sale No",
+  "Customer & Items",
+  "Staff",
+  "Date",
+  "Payment",
+  "Items",
+  "Total",
+]
+          ).map((h) => (
+            <div
+              key={h}
+              className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400"
+            >
+              {h}
+            </div>
+          ))}
         </div>
 
         <div className="divide-y divide-slate-100">
@@ -478,7 +515,9 @@ export default function SalesPage() {
             <div className="px-5 py-20 text-center">
               <p className="font-bold text-slate-700">
                 {rows.length === 0
-                  ? "No sales yet"
+                  ? isSalesOnly
+                    ? "You have not recorded any sales yet"
+                    : "No sales yet"
                   : dateFilter !== "all" || customDate
                     ? "No sales for selected period"
                     : "No matching sales"}
@@ -486,7 +525,7 @@ export default function SalesPage() {
 
               <p className="mt-1 text-sm text-slate-400">
                 {rows.length === 0 ? (
-                  "Create your first sale to get started"
+                  "Create a sale to get started"
                 ) : dateFilter !== "all" || customDate ? (
                   <button
                     onClick={() => {
@@ -505,7 +544,7 @@ export default function SalesPage() {
           ) : (
             filtered.map((s) => {
               const pv = saleProductsPreview(s);
-              const itemCount = (s as any).sale_items?.length ?? null;
+              const itemCount = s.sale_items?.length ?? null;
 
               return (
                 <Link
@@ -530,11 +569,7 @@ export default function SalesPage() {
                         )}
                       </div>
 
-                      {s.recorded_by_name?.trim() && (
-                        <div className="mt-1 truncate text-[11px] text-slate-400">
-                          Recorded by {s.recorded_by_name.trim()}
-                        </div>
-                      )}
+                    
 
                       {pv.list.length > 0 && (
                         <div className="mt-2 flex flex-wrap gap-1">
@@ -555,7 +590,15 @@ export default function SalesPage() {
                         </div>
                       )}
                     </div>
-
+{!isSalesOnly && (
+  <div className="min-w-0">
+    <span className="inline-flex max-w-full rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">
+      <span className="truncate">
+        {s.recorded_by_name?.trim() || "User Account"}
+      </span>
+    </span>
+  </div>
+)}
                     <div>
                       <div className="text-sm font-semibold text-slate-700">
                         {fmtDate(s.created_at)}
@@ -583,17 +626,19 @@ export default function SalesPage() {
                       )}
                     </div>
 
-                    <div className="text-right">
-                      <div className="text-sm font-black text-slate-950">
-                        {fmtMoney(Number(s.total ?? 0))}
-                      </div>
-
-                      {Number(s.discount_total ?? 0) > 0 && (
-                        <div className="text-xs font-semibold text-amber-600">
-                          -{fmtMoney(Number(s.discount_total))} off
+                    {!isSalesOnly && (
+                      <div className="text-right">
+                        <div className="text-sm font-black text-slate-950">
+                          {fmtMoney(Number(s.total ?? 0))}
                         </div>
-                      )}
-                    </div>
+
+                        {Number(s.discount_total ?? 0) > 0 && (
+                          <div className="text-xs font-semibold text-amber-600">
+                            -{fmtMoney(Number(s.discount_total))} off
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   <div className="px-5 py-4 lg:hidden">
@@ -608,24 +653,26 @@ export default function SalesPage() {
                           {fmtDate(s.created_at)}
                         </div>
 
-                        {s.recorded_by_name?.trim() && (
+                        {!isSalesOnly && s.recorded_by_name?.trim() && (
                           <div className="mt-1 text-[11px] text-slate-400">
                             By {s.recorded_by_name.trim()}
                           </div>
                         )}
                       </div>
 
-                      <div className="shrink-0 text-right">
-                        <div className="font-black text-slate-950">
-                          {fmtMoney(Number(s.total ?? 0))}
-                        </div>
-
-                        {Number(s.discount_total ?? 0) > 0 && (
-                          <div className="text-xs font-semibold text-amber-600">
-                            -{fmtMoney(Number(s.discount_total))}
+                      {!isSalesOnly && (
+                        <div className="shrink-0 text-right">
+                          <div className="font-black text-slate-950">
+                            {fmtMoney(Number(s.total ?? 0))}
                           </div>
-                        )}
-                      </div>
+
+                          {Number(s.discount_total ?? 0) > 0 && (
+                            <div className="text-xs font-semibold text-amber-600">
+                              -{fmtMoney(Number(s.discount_total))}
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     {pv.list.length > 0 && (
@@ -669,7 +716,7 @@ export default function SalesPage() {
           )}
         </div>
 
-        {filtered.length > 0 && (
+        {!isSalesOnly && filtered.length > 0 && (
           <div className="flex flex-col gap-2 border-t border-slate-100 bg-slate-50/60 px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
             <span className="text-xs text-slate-400">
               Showing {filtered.length} of {rows.length} sale
