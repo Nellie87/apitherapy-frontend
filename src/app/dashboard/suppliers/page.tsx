@@ -1,12 +1,10 @@
 "use client";
 
-import React, { useEffect, useMemo, useState, useCallback } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { bootstrapOrg } from "@/lib/org/bootstrapOrg";
-import { listSuppliers, createSupplier } from "@/lib/api/lookups";
+import { createSupplier, listSuppliers } from "@/lib/api/lookups";
 import { createClient } from "@/lib/supabase/client";
 import * as S from "./page.styles";
-
-// ─── Types ───────────────────────────────────────────────────────────────────
 
 type SupplierLookup = {
   id: string;
@@ -41,85 +39,99 @@ const BLANK_FORM: SupplierForm = {
 
 function validateSupplierForm(form: SupplierForm): SupplierFormErrors {
   const errors: SupplierFormErrors = {};
-  if (!form.name.trim()) errors.name = "Supplier name is required";
-  if (form.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim()))
-    errors.email = "Enter a valid email address";
+
+  if (!form.name.trim()) {
+    errors.name = "Supplier name is required.";
+  }
+
+  if (
+    form.email.trim() &&
+    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())
+  ) {
+    errors.email = "Enter a valid email address.";
+  }
+
   return errors;
 }
 
-// ─── Primitives ──────────────────────────────────────────────────────────────
-
 function FieldError({ message }: { message?: string }) {
   if (!message) return null;
-  return (
-    <p className="mt-1.5 flex items-center gap-1.5 text-xs font-medium text-rose-600">
-      <svg className="h-3 w-3 shrink-0" viewBox="0 0 12 12" fill="currentColor">
-        <path d="M6 1a5 5 0 1 0 0 10A5 5 0 0 0 6 1zm0 7.5a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5zm.75-3a.75.75 0 0 1-1.5 0v-2a.75.75 0 0 1 1.5 0v2z" />
-      </svg>
-      {message}
-    </p>
-  );
+
+  return <p className="mt-1.5 text-xs font-semibold text-rose-600">{message}</p>;
 }
 
-function Label({ children, required, hint }: { children: React.ReactNode; required?: boolean; hint?: string }) {
+function Label({
+  children,
+  required,
+  hint,
+}: {
+  children: React.ReactNode;
+  required?: boolean;
+  hint?: string;
+}) {
   return (
     <div className="mb-2">
-      <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500">
+      <label className="block text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
         {children}
-        {required && <span className="ml-0.5 text-rose-500">*</span>}
+        {required ? <span className="ml-1 text-rose-500">*</span> : null}
       </label>
-      {hint && <p className="mt-0.5 text-xs text-slate-400">{hint}</p>}
+
+      {hint ? <p className="mt-1 text-xs text-slate-400">{hint}</p> : null}
     </div>
   );
 }
 
 function StatusBadge({ active }: { active?: boolean }) {
-  if (active === false) {
-    return (
-      <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-500">
-        <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
-        Archived
-      </span>
-    );
-  }
+  const isArchived = active === false;
+
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
-      <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
-      Active
+    <span
+      className={
+        isArchived
+          ? "inline-flex rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-500"
+          : "inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700"
+      }
+    >
+      {isArchived ? "Archived" : "Active"}
     </span>
   );
 }
 
-// ─── Toast ───────────────────────────────────────────────────────────────────
-
-function Toast({ message, type = "success", onClose }: { message: string; type?: "success" | "error"; onClose: () => void }) {
+function Toast({
+  message,
+  type = "success",
+  onClose,
+}: {
+  message: string;
+  type?: "success" | "error";
+  onClose: () => void;
+}) {
   useEffect(() => {
-    const t = setTimeout(onClose, 4000);
-    return () => clearTimeout(t);
+    const t = window.setTimeout(onClose, 4000);
+    return () => window.clearTimeout(t);
   }, [onClose]);
-
-  const isSuccess = type === "success";
 
   return (
     <div
-      className={`fixed bottom-5 right-5 z-[100] flex max-w-sm items-center gap-3 rounded-2xl px-5 py-3.5 text-sm font-semibold text-white shadow-xl ${
-        isSuccess ? "bg-emerald-600" : "bg-red-600"
+      className={`fixed bottom-4 left-4 right-4 z-[100] rounded-2xl px-4 py-3 text-sm font-bold text-white shadow-xl sm:left-auto sm:right-5 sm:max-w-sm ${
+        type === "success" ? "bg-emerald-600" : "bg-rose-600"
       }`}
     >
-      <p className="flex-1 leading-snug">{message}</p>
-      <button
-        type="button"
-        onClick={onClose}
-        className="shrink-0 text-white/70 transition hover:text-white"
-        aria-label="Dismiss"
-      >
-        ×
-      </button>
+      <div className="flex items-center justify-between gap-3">
+        <p className="leading-snug">{message}</p>
+
+        <button
+          type="button"
+          onClick={onClose}
+          className="text-lg leading-none text-white/80 transition hover:text-white"
+          aria-label="Dismiss"
+        >
+          ×
+        </button>
+      </div>
     </div>
   );
 }
-
-// ─── Archive / Restore Modal ─────────────────────────────────────────────────
 
 function ArchiveConfirmModal({
   supplier,
@@ -137,72 +149,44 @@ function ArchiveConfirmModal({
   const isArchive = mode === "archive";
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 backdrop-blur-sm sm:items-center sm:p-4"
-      onClick={onCancel}
-    >
-      <div
-        className="w-full max-w-md overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Color stripe at top */}
-        <div className={`h-1.5 w-full ${isArchive ? "bg-rose-500" : "bg-emerald-500"}`} />
+    <div className={S.modalOverlay} onClick={onCancel}>
+      <div className="w-full max-w-md overflow-hidden rounded-t-3xl border border-slate-200 bg-white shadow-2xl sm:rounded-3xl" onClick={(e) => e.stopPropagation()}>
+        <div className="px-5 py-5 sm:px-6">
+          <p className={S.sectionTitle}>{isArchive ? "Archive supplier" : "Restore supplier"}</p>
 
-        <div className="px-6 pb-6 pt-5">
-          <div className="mb-5">
-            <div className={`mb-3 inline-flex h-10 w-10 items-center justify-center rounded-2xl ${isArchive ? "bg-rose-50" : "bg-emerald-50"}`}>
-              {isArchive ? (
-                <svg className="h-5 w-5 text-rose-600" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M20 7H4m16 0-2 10H6L4 7m16 0-1-3H5L4 7M9 11v4m6-4v4" />
-                </svg>
-              ) : (
-                <svg className="h-5 w-5 text-emerald-600" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="m4 4 12 12M7.5 7.5 4 11l6 6 9-9" />
-                </svg>
-              )}
-            </div>
-            <h3 className="text-base font-bold text-slate-900">
-              {isArchive ? "Archive supplier?" : "Restore supplier?"}
-            </h3>
-            <p className="mt-1 text-sm leading-relaxed text-slate-500">
-              {isArchive
-                ? "This supplier will be hidden from active selections but remain in your records."
-                : "This supplier will become active again and appear in all supplier selections."}
+          <h2 className="mt-2 text-xl font-black tracking-tight text-slate-950">
+            {isArchive ? "Move this supplier to archived?" : "Restore this supplier?"}
+          </h2>
+
+          <p className="mt-2 text-sm leading-relaxed text-slate-600">
+            {isArchive
+              ? "The supplier will no longer appear as an active option, but their records will remain available."
+              : "The supplier will become active again and appear in supplier selections."}
+          </p>
+
+          <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <p className="text-sm font-black text-slate-950">{supplier.name}</p>
+            <p className="mt-1 text-xs text-slate-500">
+              {supplier.contact_person || supplier.email || supplier.phone || "No extra contact details"}
             </p>
           </div>
 
-          {/* Supplier preview card */}
-          <div className="mb-5 flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3.5">
-            <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-sm font-bold text-white ${isArchive ? "bg-rose-500" : "bg-emerald-500"}`}>
-              {supplier.name.charAt(0).toUpperCase()}
-            </div>
-            <div className="min-w-0">
-              <div className="truncate text-sm font-semibold text-slate-900">{supplier.name}</div>
-              <div className="mt-0.5 truncate text-xs text-slate-500">
-                {supplier.what_they_supply || supplier.contact_person || "No description"}
-              </div>
-            </div>
-          </div>
-
-          <div className="flex gap-3">
-            <button
-              type="button"
-              onClick={onCancel}
-              className="flex-1 rounded-xl border border-slate-200 bg-white py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-            >
+          <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+            <button type="button" onClick={onCancel} disabled={loading} className={S.btnGhost}>
               Cancel
             </button>
+
             <button
               type="button"
               onClick={onConfirm}
               disabled={loading}
-              className={`flex-1 rounded-xl py-2.5 text-sm font-semibold text-white transition disabled:opacity-50 ${
-                isArchive ? "bg-rose-600 hover:bg-rose-700" : "bg-emerald-600 hover:bg-emerald-700"
-              }`}
+              className={
+                isArchive
+                  ? "inline-flex w-full items-center justify-center rounded-2xl bg-rose-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-rose-700 disabled:pointer-events-none disabled:opacity-50 sm:w-auto"
+                  : "inline-flex w-full items-center justify-center rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-emerald-700 disabled:pointer-events-none disabled:opacity-50 sm:w-auto"
+              }
             >
-              {loading
-                ? isArchive ? "Archiving…" : "Restoring…"
-                : isArchive ? "Archive" : "Restore"}
+              {loading ? "Saving…" : isArchive ? "Archive supplier" : "Restore supplier"}
             </button>
           </div>
         </div>
@@ -210,8 +194,6 @@ function ArchiveConfirmModal({
     </div>
   );
 }
-
-// ─── Create Supplier Modal ────────────────────────────────────────────────────
 
 function SupplierModal({
   form,
@@ -232,147 +214,123 @@ function SupplierModal({
 }) {
   const hasErrors = Object.keys(errors).length > 0;
 
+  function inputClass(field: keyof SupplierForm) {
+    return submitAttempted && errors[field] ? S.inputError : S.input;
+  }
+
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 backdrop-blur-sm sm:items-center sm:p-4"
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-xl overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
+    <div className={S.modalOverlay} onClick={onClose}>
+      <div className={S.modalPanel} onClick={(e) => e.stopPropagation()}>
         <div className={S.modalHeader}>
           <div className="flex items-start justify-between gap-4">
             <div>
-              <h2 className="text-base font-bold text-slate-900">Add new supplier</h2>
-              <p className="mt-1 text-sm text-slate-600">
-                Supplier records can be linked to products and orders.
+              <p className={S.sectionTitle}>New supplier</p>
+              <h2 className="mt-2 text-xl font-black tracking-tight text-slate-950">
+                Add supplier
+              </h2>
+              <p className="mt-1 text-sm leading-relaxed text-slate-600">
+                Save supplier details for purchases, stock, and business records.
               </p>
             </div>
+
             <button
               type="button"
               onClick={onClose}
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 hover:text-slate-800"
+              className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-slate-200 bg-white text-xl leading-none text-slate-500 transition hover:bg-slate-50 hover:text-slate-900"
+              aria-label="Close"
             >
-              <svg className="h-4 w-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
-                <line x1="4" y1="4" x2="12" y2="12" /><line x1="12" y1="4" x2="4" y2="12" />
-              </svg>
+              ×
             </button>
           </div>
         </div>
 
         <form onSubmit={onSubmit}>
-          <div className="space-y-5 px-6 py-5">
-            {submitAttempted && hasErrors && (
-              <div className="flex items-start gap-2.5 rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-3 text-sm text-rose-700">
-                <svg className="mt-0.5 h-4 w-4 shrink-0" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <circle cx="8" cy="8" r="6" />
-                  <line x1="8" y1="5" x2="8" y2="8.5" strokeLinecap="round" />
-                  <circle cx="8" cy="11" r="0.5" fill="currentColor" />
-                </svg>
+          <div className="max-h-[70vh] space-y-5 overflow-y-auto px-5 py-5 sm:px-6">
+            {submitAttempted && hasErrors ? (
+              <div className={S.alertErr}>
                 Please fix the highlighted fields before saving.
               </div>
-            )}
+            ) : null}
 
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="sm:col-span-2">
-                <Label required>Supplier name</Label>
-                <input
-                  autoFocus
-                  className={`w-full rounded-xl border bg-slate-50 px-3.5 py-2.5 text-sm font-medium text-slate-900 placeholder:text-slate-400 outline-none transition focus:bg-white ${
-                    errors.name && submitAttempted
-                      ? "border-rose-400 focus:border-rose-400 focus:ring-2 focus:ring-rose-100"
-                      : "border-slate-200 focus:border-amber-500 focus:ring-2 focus:ring-amber-100"
-                  }`}
-                  placeholder="e.g. Highlands Honey Distributors"
-                  value={form.name}
-                  onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                />
-                <FieldError message={submitAttempted ? errors.name : undefined} />
-              </div>
+            <div>
+              <Label required>Supplier name</Label>
+              <input
+                autoFocus
+                className={inputClass("name")}
+                placeholder="e.g. Nairobi Packaging Ltd"
+                value={form.name}
+                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+              />
+              <FieldError message={submitAttempted ? errors.name : undefined} />
+            </div>
 
+            <div className="grid gap-5 sm:grid-cols-2">
               <div>
                 <Label>Contact person</Label>
                 <input
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm font-medium text-slate-900 placeholder:text-slate-400 outline-none transition focus:bg-white focus:border-amber-500 focus:ring-2 focus:ring-amber-100"
-                  placeholder="e.g. Jane Wanjiku"
+                  className={S.input}
+                  placeholder="e.g. Jane Doe"
                   value={form.contact_person}
-                  onChange={(e) => setForm((f) => ({ ...f, contact_person: e.target.value }))}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, contact_person: e.target.value }))
+                  }
                 />
               </div>
 
               <div>
-                <Label>Phone number</Label>
+                <Label>Phone</Label>
                 <input
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm font-medium text-slate-900 placeholder:text-slate-400 outline-none transition focus:bg-white focus:border-amber-500 focus:ring-2 focus:ring-amber-100"
-                  placeholder="e.g. +254 7XX XXX XXX"
+                  className={S.input}
+                  placeholder="e.g. +254712345678"
                   value={form.phone}
                   onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
                 />
               </div>
-
-              <div className="sm:col-span-2">
-                <Label>Email address</Label>
-                <input
-                  className={`w-full rounded-xl border bg-slate-50 px-3.5 py-2.5 text-sm font-medium text-slate-900 placeholder:text-slate-400 outline-none transition focus:bg-white ${
-                    errors.email && submitAttempted
-                      ? "border-rose-400 focus:border-rose-400 focus:ring-2 focus:ring-rose-100"
-                      : "border-slate-200 focus:border-amber-500 focus:ring-2 focus:ring-amber-100"
-                  }`}
-                  placeholder="e.g. supplies@example.com"
-                  value={form.email}
-                  onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-                />
-                <FieldError message={submitAttempted ? errors.email : undefined} />
-              </div>
             </div>
 
             <div>
-              <Label hint="Helps your team know what this supplier provides.">What they supply</Label>
+              <Label>Email</Label>
               <input
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm font-medium text-slate-900 placeholder:text-slate-400 outline-none transition focus:bg-white focus:border-amber-500 focus:ring-2 focus:ring-amber-100"
-                placeholder="e.g. Raw honey, bottles, labels, packaging materials"
+                type="email"
+                className={inputClass("email")}
+                placeholder="supplier@example.com"
+                value={form.email}
+                onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+              />
+              <FieldError message={submitAttempted ? errors.email : undefined} />
+            </div>
+
+            <div>
+              <Label hint="Separate multiple items with commas.">What they supply</Label>
+              <input
+                className={S.input}
+                placeholder="Packaging, bottles, labels"
                 value={form.what_they_supply}
-                onChange={(e) => setForm((f) => ({ ...f, what_they_supply: e.target.value }))}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, what_they_supply: e.target.value }))
+                }
               />
             </div>
 
             <div>
-              <Label hint="Delivery terms, payment notes, reliability observations…">Notes</Label>
+              <Label>Notes</Label>
               <textarea
-                rows={3}
-                className="w-full resize-none rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm font-medium text-slate-900 placeholder:text-slate-400 outline-none transition focus:bg-white focus:border-amber-500 focus:ring-2 focus:ring-amber-100"
-                placeholder="Any relevant notes about this supplier…"
+                rows={4}
+                className={S.textarea}
+                placeholder="Payment terms, delivery notes, or extra details"
                 value={form.notes}
                 onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
               />
             </div>
           </div>
 
-          {/* Footer */}
-          <div className="flex items-center justify-between gap-3 border-t border-slate-100 bg-slate-50 px-6 py-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className={S.btnGhost}
-            >
+          <div className="flex flex-col-reverse gap-3 border-t border-slate-100 bg-slate-50 px-5 py-4 sm:flex-row sm:justify-end sm:px-6">
+            <button type="button" onClick={onClose} disabled={saving} className={S.btnGhost}>
               Cancel
             </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className={`${S.btnPrimary} disabled:opacity-50`}
-            >
-              {saving ? (
-                <span className="flex items-center gap-2">
-                  <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 14 14" fill="none">
-                    <circle cx="7" cy="7" r="5.5" stroke="currentColor" strokeOpacity=".3" strokeWidth="2" />
-                    <path d="M7 1.5A5.5 5.5 0 0 1 12.5 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                  </svg>
-                  Saving…
-                </span>
-              ) : "Save supplier"}
+
+            <button type="submit" disabled={saving} className={S.btnPrimary}>
+              {saving ? "Saving…" : "Save supplier"}
             </button>
           </div>
         </form>
@@ -381,19 +339,13 @@ function SupplierModal({
   );
 }
 
-// ─── KPI Cards ───────────────────────────────────────────────────────────────
-
 function KpiCard({ label, value, accent }: { label: string; value: number; accent: "slate" | "emerald" | "amber" }) {
   const styles = {
-    amber: "border-amber-200/80 bg-gradient-to-br from-amber-50 to-white text-slate-900 shadow-sm",
-    emerald: "border-emerald-200 bg-white text-slate-900",
-    slate: "border-slate-200 bg-white text-slate-900",
+    amber: "border-amber-200 bg-gradient-to-br from-amber-50 to-white",
+    emerald: "border-emerald-200 bg-white",
+    slate: "border-slate-200 bg-white",
   };
-  const labelStyles = {
-    amber: "text-amber-700",
-    emerald: "text-emerald-600",
-    slate: "text-slate-400",
-  };
+
   const valueStyles = {
     amber: "text-amber-900",
     emerald: "text-emerald-700",
@@ -401,16 +353,16 @@ function KpiCard({ label, value, accent }: { label: string; value: number; accen
   };
 
   return (
-    <div className={`rounded-2xl border px-5 py-4 ${styles[accent]}`}>
-      <div className={`text-[11px] font-semibold uppercase tracking-[0.18em] ${labelStyles[accent]}`}>
+    <div className={`rounded-3xl border p-5 shadow-sm ${styles[accent]}`}>
+      <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
         {label}
-      </div>
-      <div className={`mt-1.5 text-3xl font-bold tabular-nums ${valueStyles[accent]}`}>{value}</div>
+      </p>
+      <p className={`mt-2 text-3xl font-black tabular-nums ${valueStyles[accent]}`}>
+        {value}
+      </p>
     </div>
   );
 }
-
-// ─── Supply Pills ─────────────────────────────────────────────────────────────
 
 function SupplyTags({ value }: { value?: string | null }) {
   if (!value) return <span className="text-slate-300">—</span>;
@@ -423,12 +375,9 @@ function SupplyTags({ value }: { value?: string | null }) {
   if (tags.length === 0) return <span className="text-slate-300">—</span>;
 
   return (
-    <div className="flex flex-wrap gap-1">
+    <div className="flex flex-wrap gap-1.5">
       {tags.map((tag, i) => (
-        <span
-          key={i}
-          className={S.supplyTag}
-        >
+        <span key={`${tag}-${i}`} className={S.supplyTag}>
           {tag}
         </span>
       ))}
@@ -436,70 +385,45 @@ function SupplyTags({ value }: { value?: string | null }) {
   );
 }
 
-// ─── Avatar ───────────────────────────────────────────────────────────────────
-
 function SupplierAvatar({ name, active }: { name: string; active?: boolean }) {
-  const initials = name
-    .split(" ")
-    .slice(0, 2)
-    .map((w) => w.charAt(0))
-    .join("")
-    .toUpperCase();
-
-  if (active === false) {
-    return <div className={S.avatarArchived}>{initials}</div>;
-  }
+  const initials =
+    name
+      .split(" ")
+      .slice(0, 2)
+      .map((w) => w.charAt(0))
+      .join("")
+      .toUpperCase() || "S";
 
   return (
-    <div
-      className={S.avatarActive}
-      style={{
-        background: "linear-gradient(135deg, #F8D54A 0%, #E2B11A 55%, #C9920A 100%)",
-        boxShadow: "0 4px 12px rgba(245,197,24,0.18)",
-      }}
-    >
+    <div className={active === false ? S.avatarArchived : S.avatarActive}>
       {initials}
     </div>
   );
 }
 
-// ─── Empty State ──────────────────────────────────────────────────────────────
-
 function EmptyState({ hasItems, onAdd }: { hasItems: boolean; onAdd: () => void }) {
   return (
-    <div className="flex flex-col items-center justify-center px-6 py-20 text-center">
-      <div
-        className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl text-2xl text-[#2B2100]"
-        style={{
-          background: "linear-gradient(135deg, #F8D54A 0%, #E2B11A 55%, #C9920A 100%)",
-          boxShadow: "0 8px 18px rgba(245,197,24,0.2)",
-        }}
-        aria-hidden
-      >
-        ◎
-      </div>
-      <h3 className="text-base font-bold text-slate-800">
-        {hasItems ? "No matching suppliers" : "No suppliers yet"}
+    <div className="flex flex-col items-center justify-center px-5 py-16 text-center">
+      <p className={S.sectionTitle}>{hasItems ? "No results" : "No suppliers"}</p>
+
+      <h3 className="mt-2 text-xl font-black tracking-tight text-slate-950">
+        {hasItems ? "No matching suppliers found" : "Add your first supplier"}
       </h3>
-      <p className="mt-1.5 max-w-xs text-sm leading-relaxed text-slate-400">
+
+      <p className="mt-2 max-w-sm text-sm leading-relaxed text-slate-600">
         {hasItems
-          ? "Try adjusting your search or filter to find what you're looking for."
-          : "Get started by adding your first supplier. You can link them to products and orders."}
+          ? "Try adjusting your search or include archived suppliers."
+          : "Keep supplier contacts, supply categories, and notes in one clean place."}
       </p>
-      {!hasItems && (
-        <button
-          type="button"
-          onClick={onAdd}
-          className={`mt-5 ${S.btnPrimary} w-auto`}
-        >
-          Add first supplier
+
+      {!hasItems ? (
+        <button type="button" onClick={onAdd} className={`mt-6 ${S.btnPrimary}`}>
+          Add supplier
         </button>
-      )}
+      ) : null}
     </div>
   );
 }
-
-// ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function SuppliersPage() {
   const [orgId, setOrgId] = useState<string | null>(null);
@@ -516,27 +440,30 @@ export default function SuppliersPage() {
   const [showArchived, setShowArchived] = useState(true);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
-  async function refresh(o: string) {
+  const refresh = useCallback(async (o: string) => {
     const data = await listSuppliers(o);
     setItems(data as SupplierLookup[]);
-  }
+  }, []);
 
   useEffect(() => {
-    (async () => {
+    async function loadSuppliers() {
       try {
         const o = await bootstrapOrg();
         setOrgId(o);
         await refresh(o);
-      } catch (e: any) {
-        setErr(e.message ?? "Failed to load suppliers");
+      } catch (e: unknown) {
+        setErr(e instanceof Error ? e.message : "Failed to load suppliers.");
       }
-    })();
-  }, []);
+    }
+
+    loadSuppliers();
+  }, [refresh]);
 
   const errors = useMemo(() => validateSupplierForm(form), [form]);
 
   const filteredItems = useMemo(() => {
     const t = search.trim().toLowerCase();
+
     return items.filter((s) => {
       const matchesArchived = showArchived ? true : s.active !== false;
       const matchesSearch =
@@ -546,6 +473,7 @@ export default function SuppliersPage() {
         (s.phone ?? "").toLowerCase().includes(t) ||
         (s.email ?? "").toLowerCase().includes(t) ||
         (s.what_they_supply ?? "").toLowerCase().includes(t);
+
       return matchesArchived && matchesSearch;
     });
   }, [items, search, showArchived]);
@@ -554,21 +482,23 @@ export default function SuppliersPage() {
     const total = items.length;
     const active = items.filter((s) => s.active !== false).length;
     const archived = items.filter((s) => s.active === false).length;
+
     return { total, active, archived };
   }, [items]);
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     setSubmitAttempted(true);
+
     const validationErrors = validateSupplierForm(form);
-    if (Object.keys(validationErrors).length > 0) return;
-    if (!orgId) return;
+    if (Object.keys(validationErrors).length > 0 || !orgId) return;
 
     setSaving(true);
     setErr("");
 
     try {
       const supplierName = form.name.trim();
+
       await createSupplier(orgId, {
         name: supplierName,
         contact_person: form.contact_person.trim() || undefined,
@@ -582,10 +512,10 @@ export default function SuppliersPage() {
       setSubmitAttempted(false);
       setShowModal(false);
       await refresh(orgId);
-      setToast({ message: `"${supplierName}" added successfully`, type: "success" });
-    } catch (e: any) {
-      setErr(e.message ?? "Failed to create supplier");
-      setToast({ message: "Failed to create supplier", type: "error" });
+      setToast({ message: `"${supplierName}" added successfully.`, type: "success" });
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : "Failed to create supplier.");
+      setToast({ message: "Failed to create supplier.", type: "error" });
     } finally {
       setSaving(false);
     }
@@ -593,29 +523,46 @@ export default function SuppliersPage() {
 
   async function handleArchiveConfirm() {
     if (!orgId || !supplierToArchive) return;
+
     try {
       setArchiving(true);
       setErr("");
+
       const supabase = createClient();
       const nextActive = modalMode === "restore";
+
       const { error } = await supabase
         .from("suppliers")
         .update({ active: nextActive })
         .eq("org_id", orgId)
         .eq("id", supplierToArchive.id);
+
       if (error) throw error;
 
       const supplierName = supplierToArchive.name;
+
       await refresh(orgId);
       setSupplierToArchive(null);
       setToast({
-        message: modalMode === "archive" ? `"${supplierName}" archived` : `"${supplierName}" restored`,
+        message:
+          modalMode === "archive"
+            ? `"${supplierName}" archived.`
+            : `"${supplierName}" restored.`,
         type: "success",
       });
-    } catch (e: any) {
-      setErr(e.message ?? (modalMode === "archive" ? "Failed to archive supplier" : "Failed to restore supplier"));
+    } catch (e: unknown) {
+      setErr(
+        e instanceof Error
+          ? e.message
+          : modalMode === "archive"
+            ? "Failed to archive supplier."
+            : "Failed to restore supplier."
+      );
       setToast({
-        message: modalMode === "archive" ? "Failed to archive supplier" : "Failed to restore supplier",
+        message:
+          modalMode === "archive"
+            ? "Failed to archive supplier."
+            : "Failed to restore supplier.",
         type: "error",
       });
     } finally {
@@ -641,297 +588,246 @@ export default function SuppliersPage() {
 
   if (!orgId && !err) {
     return (
-      <div className="flex items-center justify-center gap-2 p-12 text-sm text-slate-400">
-        <svg className="h-4 w-4 animate-spin" viewBox="0 0 14 14" fill="none">
-          <circle cx="7" cy="7" r="5.5" stroke="currentColor" strokeOpacity=".2" strokeWidth="2" />
-          <path d="M7 1.5A5.5 5.5 0 0 1 12.5 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-        </svg>
-        Loading suppliers…
+      <div className="flex min-h-[60vh] items-center justify-center px-4">
+        <div className="text-center">
+          <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-slate-200 border-t-amber-500" />
+          <p className="mt-3 text-sm font-semibold text-slate-500">
+            Loading suppliers…
+          </p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      {/* Toast */}
-      {toast && (
-        <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />
-      )}
+    <main className="min-h-screen bg-slate-50 px-4 py-6 sm:px-6 lg:px-8">
+      <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
+        {toast ? (
+          <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />
+        ) : null}
 
-      {/* Error Banner */}
-      {err && (
-        <div className="flex items-start gap-2.5 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-          <svg className="mt-0.5 h-4 w-4 shrink-0" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-            <circle cx="8" cy="8" r="6" />
-            <line x1="8" y1="5" x2="8" y2="8.5" strokeLinecap="round" />
-            <circle cx="8" cy="11" r="0.5" fill="currentColor" />
-          </svg>
-          {err}
-        </div>
-      )}
+        {err ? <div className={S.alertErr}>{err}</div> : null}
 
-      {/* ── Page Header ── */}
-      <div className="rounded-3xl border border-slate-200 bg-white shadow-sm">
-        {/* Top strip */}
-        <div className="border-b border-slate-100 px-6 py-5">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-3">
-              <div
-                className={`${S.iconBadge} text-[#2B2100]`}
-                style={{
-                  background:
-                    "linear-gradient(135deg, #F8D54A 0%, #E2B11A 55%, #C9920A 100%)",
-                  boxShadow: "0 8px 18px rgba(245,197,24,0.22)",
-                }}
-                aria-hidden
-              >
-                ◎
-              </div>
+        <section className={S.card}>
+          <div className="border-b border-slate-100 bg-gradient-to-br from-amber-50 via-white to-white px-5 py-5 sm:px-6">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
               <div>
                 <p className={S.sectionTitle}>Procurement</p>
-                <h1 className={S.pageTitle}>Suppliers</h1>
-                <p className={S.pageSubtitle}>Manage suppliers and their contact details.</p>
+                <h1 className={`mt-2 ${S.pageTitle}`}>Suppliers</h1>
+                <p className={S.pageSubtitle}>
+                  Manage supplier contacts, supplied items, and archive status from one simple workspace.
+                </p>
               </div>
-            </div>
-            <button
-              onClick={openCreateModal}
-              type="button"
-              className={S.btnPrimary}
-            >
-              <svg className="h-3.5 w-3.5" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2">
-                <line x1="7" y1="2" x2="7" y2="12" strokeLinecap="round" />
-                <line x1="2" y1="7" x2="12" y2="7" strokeLinecap="round" />
-              </svg>
-              Add supplier
-            </button>
-          </div>
-        </div>
 
-        {/* KPI Cards */}
-        <div className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-3">
-          <KpiCard label="Total suppliers" value={counts.total} accent="amber" />
-          <KpiCard label="Active" value={counts.active} accent="emerald" />
-          <KpiCard label="Archived" value={counts.archived} accent="slate" />
-        </div>
-      </div>
-
-      {/* ── Toolbar ── */}
-      <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-1 flex-wrap items-center gap-2">
-          {/* Search */}
-          <div className="relative flex-1" style={{ minWidth: 220 }}>
-            <svg className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <circle cx="6.5" cy="6.5" r="4.5" />
-              <line x1="10.5" y1="10.5" x2="14" y2="14" strokeLinecap="round" />
-            </svg>
-            <input
-              className={`${S.input} py-2.5 pl-9 pr-3.5`}
-              placeholder="Search name, contact, email, supply…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-            {search && (
-              <button
-                type="button"
-                onClick={() => setSearch("")}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-              >
-                <svg className="h-3.5 w-3.5" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2">
-                  <line x1="3" y1="3" x2="11" y2="11" strokeLinecap="round" />
-                  <line x1="11" y1="3" x2="3" y2="11" strokeLinecap="round" />
-                </svg>
+              <button onClick={openCreateModal} type="button" className={S.btnPrimary}>
+                Add supplier
               </button>
-            )}
+            </div>
           </div>
 
-          {/* Archived toggle */}
-          <button
-            type="button"
-            onClick={() => setShowArchived((v) => !v)}
-            className={`inline-flex items-center gap-2 rounded-xl px-3.5 py-2.5 text-sm font-semibold transition ${
-              showArchived
-                ? "bg-amber-500 text-[#2E2200] shadow-sm"
-                : "border border-slate-200 bg-white text-slate-600 hover:bg-amber-50"
-            }`}
-          >
-            <svg className="h-3.5 w-3.5" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <path d="M12 10H9.5a2.5 2.5 0 0 0 0 5H12a2 2 0 0 0 0-4zM2 10h4.5M2 7h10M2 4h10" strokeLinecap="round" />
-            </svg>
-            {showArchived ? "Showing archived" : "Show archived"}
-          </button>
-        </div>
+          <div className="grid gap-3 p-4 sm:grid-cols-3 sm:p-5">
+            <KpiCard label="Total suppliers" value={counts.total} accent="amber" />
+            <KpiCard label="Active" value={counts.active} accent="emerald" />
+            <KpiCard label="Archived" value={counts.archived} accent="slate" />
+          </div>
+        </section>
 
-        <span className="shrink-0 text-xs text-slate-400">
-          {filteredItems.length} of {items.length} supplier{items.length !== 1 ? "s" : ""}
-        </span>
-      </div>
+        <section className="flex flex-col gap-3 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm lg:flex-row lg:items-center lg:justify-between">
+          <input
+            className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-amber-500 focus:ring-4 focus:ring-amber-100 lg:max-w-xl"
+            placeholder="Search by name, contact, phone, email, or supply…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
 
-      {/* ── Table ── */}
-      <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-        {/* Desktop header */}
-        <div className="hidden border-b border-slate-100 bg-slate-50 px-5 py-3 lg:grid lg:grid-cols-[minmax(0,1.8fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.5fr)_80px]">
-          {["Supplier", "Contact", "Phone", "Email", "What they supply", ""].map((col, i) => (
-            <div key={i} className={`${S.tableHead} ${i === 5 ? "text-right" : ""}`}>
-              {col}
-            </div>
-          ))}
-        </div>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between lg:justify-end">
+            <button
+              type="button"
+              onClick={() => setShowArchived((v) => !v)}
+              className={
+                showArchived
+                  ? "inline-flex items-center justify-center rounded-2xl bg-amber-500 px-4 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-amber-600"
+                  : "inline-flex items-center justify-center rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
+              }
+            >
+              {showArchived ? "Archived shown" : "Show archived"}
+            </button>
 
-        {filteredItems.length === 0 ? (
-          <EmptyState hasItems={items.length > 0} onAdd={openCreateModal} />
-        ) : (
-          filteredItems.map((s, idx) => {
-            const isArchived = s.active === false;
-            return (
-              <div
-                key={s.id}
-                className={`border-b border-slate-100 last:border-b-0 transition-colors ${
-                  isArchived ? "bg-slate-50/60" : "hover:bg-slate-50/40"
-                }`}
-              >
-                {/* Desktop row */}
-                <div className="hidden items-start gap-4 px-5 py-4 lg:grid lg:grid-cols-[minmax(0,1.8fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.5fr)_80px]">
-                  <div className="flex items-start gap-3">
-                    <SupplierAvatar name={s.name} active={s.active} />
-                    <div className="min-w-0">
-                      <div className={`truncate text-sm font-semibold ${isArchived ? "text-slate-400" : "text-slate-900"}`}>
-                        {s.name}
-                      </div>
-                      <div className="mt-1.5">
-                        <StatusBadge active={s.active} />
-                      </div>
-                    </div>
-                  </div>
+            <p className="text-center text-xs font-semibold text-slate-500 sm:text-right">
+              {filteredItems.length} of {items.length} supplier{items.length === 1 ? "" : "s"}
+            </p>
+          </div>
+        </section>
 
-                  <div className={`pt-0.5 text-sm ${isArchived ? "text-slate-400" : "text-slate-600"}`}>
-                    {s.contact_person || <span className="text-slate-300">—</span>}
-                  </div>
-                  <div className={`pt-0.5 text-sm ${isArchived ? "text-slate-400" : "text-slate-600"}`}>
-                    {s.phone || <span className="text-slate-300">—</span>}
-                  </div>
-                  <div className={`break-all pt-0.5 text-sm ${isArchived ? "text-slate-400" : "text-slate-600"}`}>
-                    {s.email || <span className="text-slate-300">—</span>}
-                  </div>
-
-                  <div className="pt-0.5">
-                    <SupplyTags value={isArchived ? null : s.what_they_supply} />
-                    {isArchived && s.what_they_supply && (
-                      <span className="text-xs text-slate-300">{s.what_they_supply}</span>
-                    )}
-                  </div>
-
-                  <div className="flex justify-end pt-0.5">
-                    {isArchived ? (
-                      <button
-                        onClick={() => openRestoreModal(s)}
-                        type="button"
-                        className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100"
-                      >
-                        Restore
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => openArchiveModal(s)}
-                        type="button"
-                        className="rounded-lg border border-transparent px-3 py-1.5 text-xs font-semibold text-slate-400 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600"
-                      >
-                        Archive
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                {/* Mobile card */}
-                <div className="space-y-3 p-4 lg:hidden">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-start gap-3">
-                      <SupplierAvatar name={s.name} active={s.active} />
-                      <div>
-                        <div className={`text-sm font-semibold ${isArchived ? "text-slate-400" : "text-slate-900"}`}>
-                          {s.name}
-                        </div>
-                        <div className="mt-0.5 text-xs text-slate-500">
-                          {s.contact_person || "No contact person"}
-                        </div>
-                        <div className="mt-2">
-                          <StatusBadge active={s.active} />
-                        </div>
-                      </div>
-                    </div>
-
-                    {isArchived ? (
-                      <button
-                        onClick={() => openRestoreModal(s)}
-                        type="button"
-                        className="shrink-0 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700"
-                      >
-                        Restore
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => openArchiveModal(s)}
-                        type="button"
-                        className="shrink-0 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-500"
-                      >
-                        Archive
-                      </button>
-                    )}
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2 rounded-xl border border-slate-100 bg-slate-50 p-3 text-xs">
-                    <div>
-                      <div className="font-bold uppercase tracking-widest text-slate-400">Phone</div>
-                      <div className="mt-1 text-slate-700">{s.phone || "—"}</div>
-                    </div>
-                    <div>
-                      <div className="font-bold uppercase tracking-widest text-slate-400">Email</div>
-                      <div className="mt-1 break-all text-slate-700">{s.email || "—"}</div>
-                    </div>
-                  </div>
-
-                  {s.what_they_supply && (
-                    <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
-                      <div className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-400">
-                        What they supply
-                      </div>
-                      <SupplyTags value={s.what_they_supply} />
-                    </div>
-                  )}
-
-                  {s.notes && (
-                    <p className="rounded-xl border border-amber-100 bg-amber-50/60 px-3 py-2 text-xs italic text-slate-500">
-                      {s.notes}
-                    </p>
-                  )}
-                </div>
+        <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+          <div className="hidden border-b border-slate-100 bg-slate-50 px-5 py-3 lg:grid lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1.5fr)_110px] lg:items-center lg:gap-4">
+            {["Supplier", "Contact", "Phone", "Email", "What they supply", "Action"].map((col, i) => (
+              <div key={col} className={`${S.tableHead} ${i === 5 ? "text-right" : ""}`}>
+                {col}
               </div>
-            );
-          })
-        )}
+            ))}
+          </div>
+
+          {filteredItems.length === 0 ? (
+            <EmptyState hasItems={items.length > 0} onAdd={openCreateModal} />
+          ) : (
+            <div className="divide-y divide-slate-100">
+              {filteredItems.map((s) => {
+                const isArchived = s.active === false;
+
+                return (
+                  <article
+                    key={s.id}
+                    className={isArchived ? "bg-slate-50/70" : "bg-white transition hover:bg-slate-50/60"}
+                  >
+                    <div className="hidden px-5 py-4 lg:grid lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1.5fr)_110px] lg:items-start lg:gap-4">
+                      <div className="flex min-w-0 items-start gap-3">
+                        <SupplierAvatar name={s.name} active={s.active} />
+
+                        <div className="min-w-0">
+                          <p className={`truncate text-sm font-black ${isArchived ? "text-slate-400" : "text-slate-950"}`}>
+                            {s.name}
+                          </p>
+                          <div className="mt-2">
+                            <StatusBadge active={s.active} />
+                          </div>
+                        </div>
+                      </div>
+
+                      <p className={`text-sm ${isArchived ? "text-slate-400" : "text-slate-600"}`}>
+                        {s.contact_person || "—"}
+                      </p>
+
+                      <p className={`text-sm ${isArchived ? "text-slate-400" : "text-slate-600"}`}>
+                        {s.phone || "—"}
+                      </p>
+
+                      <p className={`break-all text-sm ${isArchived ? "text-slate-400" : "text-slate-600"}`}>
+                        {s.email || "—"}
+                      </p>
+
+                      <div>
+                        {isArchived ? (
+                          <span className="text-xs text-slate-300">
+                            {s.what_they_supply || "—"}
+                          </span>
+                        ) : (
+                          <SupplyTags value={s.what_they_supply} />
+                        )}
+                      </div>
+
+                      <div className="flex justify-end">
+                        {isArchived ? (
+                          <button
+                            onClick={() => openRestoreModal(s)}
+                            type="button"
+                            className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700 transition hover:bg-emerald-100"
+                          >
+                            Restore
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => openArchiveModal(s)}
+                            type="button"
+                            className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-500 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700"
+                          >
+                            Archive
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="space-y-4 p-4 lg:hidden">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex min-w-0 items-start gap-3">
+                          <SupplierAvatar name={s.name} active={s.active} />
+
+                          <div className="min-w-0">
+                            <p className={`truncate text-sm font-black ${isArchived ? "text-slate-400" : "text-slate-950"}`}>
+                              {s.name}
+                            </p>
+                            <p className="mt-1 text-xs text-slate-500">
+                              {s.contact_person || "No contact person"}
+                            </p>
+                            <div className="mt-2">
+                              <StatusBadge active={s.active} />
+                            </div>
+                          </div>
+                        </div>
+
+                        {isArchived ? (
+                          <button
+                            onClick={() => openRestoreModal(s)}
+                            type="button"
+                            className="shrink-0 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700"
+                          >
+                            Restore
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => openArchiveModal(s)}
+                            type="button"
+                            className="shrink-0 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600"
+                          >
+                            Archive
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="grid gap-3 rounded-2xl border border-slate-100 bg-slate-50 p-3 text-xs sm:grid-cols-2">
+                        <div>
+                          <p className="font-bold uppercase tracking-[0.16em] text-slate-400">Phone</p>
+                          <p className="mt-1 text-slate-700">{s.phone || "—"}</p>
+                        </div>
+
+                        <div>
+                          <p className="font-bold uppercase tracking-[0.16em] text-slate-400">Email</p>
+                          <p className="mt-1 break-all text-slate-700">{s.email || "—"}</p>
+                        </div>
+                      </div>
+
+                      <div className="rounded-2xl border border-slate-100 bg-white p-3">
+                        <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
+                          What they supply
+                        </p>
+                        <SupplyTags value={s.what_they_supply} />
+                      </div>
+
+                      {s.notes ? (
+                        <p className="rounded-2xl border border-amber-100 bg-amber-50/60 px-3 py-2 text-xs leading-relaxed text-slate-600">
+                          {s.notes}
+                        </p>
+                      ) : null}
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+        </section>
+
+        {showModal ? (
+          <SupplierModal
+            form={form}
+            setForm={setForm}
+            saving={saving}
+            errors={errors}
+            submitAttempted={submitAttempted}
+            onClose={() => setShowModal(false)}
+            onSubmit={handleCreate}
+          />
+        ) : null}
+
+        {supplierToArchive ? (
+          <ArchiveConfirmModal
+            supplier={supplierToArchive}
+            mode={modalMode}
+            loading={archiving}
+            onCancel={() => setSupplierToArchive(null)}
+            onConfirm={handleArchiveConfirm}
+          />
+        ) : null}
       </div>
-
-      {/* Modals */}
-      {showModal && (
-        <SupplierModal
-          form={form}
-          setForm={setForm}
-          saving={saving}
-          errors={errors}
-          submitAttempted={submitAttempted}
-          onClose={() => setShowModal(false)}
-          onSubmit={handleCreate}
-        />
-      )}
-
-      {supplierToArchive && (
-        <ArchiveConfirmModal
-          supplier={supplierToArchive}
-          mode={modalMode}
-          loading={archiving}
-          onCancel={() => setSupplierToArchive(null)}
-          onConfirm={handleArchiveConfirm}
-        />
-      )}
-    </div>
+    </main>
   );
 }

@@ -8,7 +8,7 @@ import Link from "next/link";
 import * as S from "./page.styles";
 
 const ROLES = [
-  { value: "sales_clerk", label: "Sales (POS only)" },
+  { value: "sales_clerk", label: "Sales POS only" },
   { value: "cashier", label: "Cashier" },
   { value: "pos", label: "POS" },
 ] as const;
@@ -29,25 +29,23 @@ export default function TeamPage() {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    (async () => {
+    async function loadOrg() {
       try {
         const id = await bootstrapOrg();
         setOrgId(id);
       } catch (e: unknown) {
         setMsg({
           type: "err",
-          text:
-            e instanceof Error
-              ? e.message
-              : "Could not load organization.",
+          text: e instanceof Error ? e.message : "Could not load organization.",
         });
       }
-    })();
+    }
+
+    loadOrg();
   }, []);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-
     setMsg(null);
 
     const oid = orgId ?? getOrgId();
@@ -57,7 +55,6 @@ export default function TeamPage() {
         type: "err",
         text: "No organization selected.",
       });
-
       return;
     }
 
@@ -68,7 +65,6 @@ export default function TeamPage() {
         type: "err",
         text: "Enter a valid email address.",
       });
-
       return;
     }
 
@@ -95,7 +91,6 @@ export default function TeamPage() {
           type: "err",
           text: data.error ?? `Request failed (${res.status})`,
         });
-
         return;
       }
 
@@ -106,6 +101,7 @@ export default function TeamPage() {
 
       setEmail("");
       setFullName("");
+      setRole("sales_clerk");
     } catch (e: unknown) {
       setMsg({
         type: "err",
@@ -118,10 +114,12 @@ export default function TeamPage() {
 
   if (roleLoading) {
     return (
-      <div className="flex h-64 items-center justify-center">
-        <div className="flex items-center gap-3 text-sm text-slate-400">
-          <Spinner />
-          Loading team…
+      <div className="flex min-h-[60vh] items-center justify-center px-4">
+        <div className="text-center">
+          <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-slate-200 border-t-amber-500" />
+          <p className="mt-3 text-sm font-medium text-slate-500">
+            Loading team…
+          </p>
         </div>
       </div>
     );
@@ -129,112 +127,97 @@ export default function TeamPage() {
 
   if (isSalesClerk) {
     return (
-      <div className="flex min-h-screen items-center justify-center px-4">
-        <div className={S.gateCard}>
-          <p className="font-bold text-slate-900">
+      <main className="flex min-h-screen items-center justify-center bg-slate-50 px-4 py-10">
+        <section className={S.gateCard}>
+          <p className={S.sectionTitle}>Restricted access</p>
+
+          <h1 className="mt-3 text-2xl font-black tracking-tight text-slate-950">
             Team invites are for organization owners.
+          </h1>
+
+          <p className="mt-3 text-sm leading-relaxed text-slate-600">
+            Your account is limited to sales. Ask an owner to update your role
+            if you need access to team management.
           </p>
 
-          <p className="mt-2 text-sm text-slate-600">
-            Your account is limited to sales. Ask an owner to change your role
-            if you need access here.
-          </p>
-
-          <Link
-            href="/dashboard/sales"
-            className="mt-5 inline-flex items-center rounded-xl border border-amber-300 bg-white px-4 py-2 text-sm font-semibold text-amber-900 transition hover:bg-amber-50"
-          >
+          <Link href="/dashboard/sales" className={`mt-6 ${S.btnGhost}`}>
             Back to sales
           </Link>
-        </div>
-      </div>
+        </section>
+      </main>
     );
   }
 
   return (
-    <div className="flex min-h-screen justify-center px-4 py-10">
-      <div className="w-full max-w-2xl flex flex-col gap-6">
+    <main className="min-h-screen bg-slate-50 px-4 py-8 sm:px-6 lg:px-8">
+      <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
         <header className="text-center">
           <p className={S.sectionTitle}>Organization</p>
 
           <h1 className={`mt-2 ${S.pageTitle}`}>Team</h1>
 
           <p className={S.pageSubtitle}>
-            Invite staff by email. They receive a Supabase link to set a
-            password — no public sign-up page required if you disable sign-ups
-            in the Supabase dashboard.
+            Invite staff members to your workspace and assign the correct access
+            level for daily sales operations.
           </p>
         </header>
 
-        <section className={`${S.card} p-6 sm:p-7`}>
-          <div className="flex items-start gap-3 border-b border-slate-100 pb-4">
-            <div
-              className="grid h-11 w-11 shrink-0 place-items-center rounded-xl text-lg"
-              style={{
-                background:
-                  "linear-gradient(135deg, #F8D54A 0%, #E2B11A 55%, #C9920A 100%)",
-                color: "#2B2100",
-                boxShadow: "0 8px 18px rgba(245,197,24,0.22)",
-              }}
-              aria-hidden
-            >
-              ⎔
-            </div>
+        <section className={`${S.card} overflow-hidden`}>
+          <div className="border-b border-slate-100 bg-gradient-to-br from-amber-50 via-white to-white px-5 py-5 sm:px-8 sm:py-6">
+            <h2 className="text-lg font-black tracking-tight text-slate-950">
+              Invite staff member
+            </h2>
 
-            <div>
-              <h2 className="text-base font-bold text-slate-900">
-                Invite staff member
-              </h2>
-
-              <p className="mt-0.5 text-sm text-slate-500">
-                New teammates join this workspace with the role you choose
-                below.
-              </p>
-            </div>
+            <p className="mt-1 text-sm leading-relaxed text-slate-600">
+              The staff member will receive an email invitation and complete
+              their password setup securely.
+            </p>
           </div>
 
-          <form onSubmit={onSubmit} className="mt-6 space-y-4">
-            <label className="block">
-              <span className={S.label}>Email</span>
+          <form onSubmit={onSubmit} className="space-y-5 p-5 sm:p-8">
+            <div className="grid gap-5 sm:grid-cols-2">
+              <label className="block sm:col-span-2">
+                <span className={S.label}>Email address</span>
 
-              <input
-                type="email"
-                required
-                autoComplete="off"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className={S.input}
-                placeholder="name@company.com"
-              />
-            </label>
+                <input
+                  type="email"
+                  required
+                  autoComplete="off"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className={S.input}
+                  placeholder="name@company.com"
+                />
+              </label>
 
-            <label className="block">
-              <span className={S.label}>Display name (optional)</span>
+              <label className="block">
+                <span className={S.label}>Display name</span>
 
-              <input
-                type="text"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                className={S.input}
-                placeholder="Jane Doe"
-              />
-            </label>
+                <input
+                  type="text"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  className={S.input}
+                  placeholder="Jane Doe"
+                />
+              </label>
 
-            <label className="block">
-              <span className={S.label}>Role in this organization</span>
+              <label className="block">
+                <span className={S.label}>Role</span>
 
-              <select
-                value={role}
-                onChange={(e) => setRole(e.target.value)}
-                className={S.input}
-              >
-                {ROLES.map((r) => (
-                  <option key={r.value} value={r.value}>
-                    {r.label}
-                  </option>
-                ))}
-              </select>
-            </label>
+                <select
+                  value={role}
+                  onChange={(e) => setRole(e.target.value)}
+                  className={S.input}
+                >
+                  {ROLES.map((r) => (
+                    <option key={r.value} value={r.value}>
+                      {r.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
 
             {msg ? (
               <div className={msg.type === "ok" ? S.alertOk : S.alertErr}>
@@ -247,29 +230,16 @@ export default function TeamPage() {
               disabled={submitting || !orgId}
               className={S.btnPrimary}
             >
-              {submitting ? "Sending…" : "Send invitation"}
+              {submitting ? "Sending invitation…" : "Send invitation"}
             </button>
+
+            <p className="text-center text-xs leading-relaxed text-slate-500">
+              Staff access can be controlled from your organization roles and
+              policies.
+            </p>
           </form>
         </section>
-
-        
       </div>
-    </div>
-  );
-}
-
-function Spinner() {
-  return (
-    <svg
-      className="h-4 w-4 animate-spin"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      aria-hidden
-    >
-      <circle cx="12" cy="12" r="10" strokeOpacity="0.2" />
-      <path d="M12 2a10 10 0 0110 10" />
-    </svg>
+    </main>
   );
 }
