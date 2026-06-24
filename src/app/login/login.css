@@ -551,3 +551,26 @@ input::placeholder {
     padding: 9px 12px;
   }
 }
+.forgot-link {
+  margin-top: 8px;
+  border: 0;
+  background: transparent;
+  color: #d97706;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+}
+
+.forgot-link:hover {
+  text-decoration: underline;
+}
+
+.forgot-link:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.reset-card {
+  width: min(440px, calc(100% - 32px));
+  margin: auto;
+}

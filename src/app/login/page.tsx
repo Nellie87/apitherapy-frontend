@@ -61,6 +61,32 @@ export default function LoginPage() {
     setMode(next);
     setMsg("");
   }
+  async function handleForgotPassword() {
+  setMsg("");
+
+  if (!email.trim()) {
+    setMsg("Please enter your email address first.");
+    return;
+  }
+
+  setLoading(true);
+
+  try {
+    const supabase = createClient();
+
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: `${window.location.origin}/auth/callback?next=/reset-password`,
+    });
+
+    if (error) throw error;
+
+    setMsg("Check your email for the password reset link.");
+  } catch (e: any) {
+    setMsg(e?.message || "Could not send reset email. Please try again.");
+  } finally {
+    setLoading(false);
+  }
+}
 
   async function handleSubmit() {
     setMsg("");
@@ -106,6 +132,35 @@ export default function LoginPage() {
         });
 
         if (error) throw error;
+
+        async function handleForgotPassword() {
+  setMsg("");
+
+  if (!email.trim()) {
+    setMsg("Please enter your email address first.");
+    return;
+  }
+
+  setLoading(true);
+
+  try {
+    const supabase = createClient();
+
+   const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+  redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(
+    "/reset-password"
+  )}`,
+});
+
+    if (error) throw error;
+
+    setMsg("Check your email for the password reset link.");
+  } catch (e: any) {
+    setMsg(e?.message || "Could not send reset email. Please try again.");
+  } finally {
+    setLoading(false);
+  }
+}
 
 window.location.href = "/dashboard/summarydashboard";      }
     } catch (e: any) {
@@ -258,6 +313,17 @@ window.location.href = "/dashboard/summarydashboard";      }
                   onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
                 />
               </div>
+
+             {!isSignup && (
+    <button
+      type="button"
+      className="forgot-link"
+      onClick={handleForgotPassword}
+      disabled={loading}
+    >
+      Forgot password?
+    </button>
+  )}
             </div>
 
             {msg && (
