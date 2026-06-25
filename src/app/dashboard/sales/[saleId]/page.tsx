@@ -7,9 +7,12 @@ import { bootstrapOrg } from "@/lib/org/bootstrapOrg";
 import {
   getSale,
   listSaleItems,
+  listSaleActivityLogs,
   voidSaleRestoreInventory,
+  editSaleItemsRestoreInventory,
   type SaleRow,
   type SaleItemRow,
+  type SaleActivityLog,
 } from "@/lib/api/sales";
 import { fetchMyOrgRole } from "@/lib/auth/orgRole";
 import { useOrgRole } from "@/contexts/OrgRoleContext";
@@ -79,6 +82,8 @@ function paymentPill(method?: string | null) {
 /* Types */
 type NormalizedItem = {
   id: string;
+  saleItemId: string;
+  productId: string;
   product_name: string;
   qty: number;
   base: number;
@@ -90,10 +95,25 @@ type NormalizedItem = {
   lineProfit: number;
 };
 
+type EditLine = {
+  saleItemId: string;
+  productId: string;
+  productName: string;
+  qty: string;
+  unitPriceBase: number;
+  discountPerUnit: number;
+};
+
+function isCancelledSale(status?: string | null) {
+  return ["cancelled", "refunded", "void", "voided"].includes(
+    (status ?? "").trim().toLowerCase()
+  );
+}
+
 function saleCanBeVoided(status?: string | null) {
   const s = (status ?? "").trim().toLowerCase();
   if (!s) return true;
-  return !["cancelled", "refunded", "void", "voided"].includes(s);
+  return !isCancelledSale(s);
 }
 
 function StatusBadge({ status }: { status?: string | null }) {
@@ -398,7 +418,12 @@ export default function SaleDetailsPage() {
   const [voidOpen, setVoidOpen] = useState(false);
   const [voidNote, setVoidNote] = useState("");
   const [voidSubmitting, setVoidSubmitting] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editLines, setEditLines] = useState<EditLine[]>([]);
+  const [editNote, setEditNote] = useState("");
+  const [editSubmitting, setEditSubmitting] = useState(false);
   const [successMsg, setSuccessMsg] = useState("");
+  const [activityLogs, setActivityLogs] = useState<SaleActivityLog[]>([]);
 
   const { role, loading: roleLoading } = useOrgRole();
 
@@ -425,12 +450,14 @@ const hideSensitive =
       try {
         const role = await fetchMyOrgRole(orgId);
         const hideCost = role === "sales_clerk";
-        const [s, it] = await Promise.all([
+        const [s, it, logs] = await Promise.all([
           getSale(orgId, saleId),
           listSaleItems(orgId, saleId, { hideCostFields: hideCost }),
+          listSaleActivityLogs(orgId, saleId),
         ]);
         setSale(s);
         setItems(it);
+        setActivityLogs(logs);
       } catch (e: any) {
         setErr(e.message ?? String(e));
       } finally {
@@ -444,6 +471,22 @@ const hideSensitive =
     const t = window.setTimeout(() => setSuccessMsg(""), 6000);
     return () => window.clearTimeout(t);
   }, [successMsg]);
+
+  async function reloadSale() {
+    if (!orgId || !saleId) return;
+
+    const role = await fetchMyOrgRole(orgId);
+    const hideCost = role === "sales_clerk";
+    const [s, it, logs] = await Promise.all([
+      getSale(orgId, saleId),
+      listSaleItems(orgId, saleId, { hideCostFields: hideCost }),
+      listSaleActivityLogs(orgId, saleId),
+    ]);
+
+    setSale(s);
+    setItems(it);
+    setActivityLogs(logs);
+  }
 
   const normalizedItems = useMemo<NormalizedItem[]>(
     () =>
@@ -460,7 +503,10 @@ const hideSensitive =
 
         return {
           id: x.id,
-product_name: formatProductDisplayName(p),          qty,
+          saleItemId: x.id,
+          productId: x.product_id,
+          product_name: formatProductDisplayName(p),
+          qty,
           base,
           discountPerUnit,
           final,
@@ -495,6 +541,100 @@ product_name: formatProductDisplayName(p),          qty,
 
   const tableMinClass = hideSensitive ? "min-w-[620px]" : "min-w-[760px]";
 
+  const canEditSale = Boolean(sale && saleCanBeVoided(sale.status) && !hideSensitive);
+
+  const editTotals = useMemo(() => {
+    const activeLines = editLines.filter((line) => Number(line.qty) > 0);
+    const subtotal = activeLines.reduce(
+      (sum, line) => sum + Number(line.unitPriceBase || 0) * Number(line.qty || 0),
+      0
+    );
+    const discountTotal = activeLines.reduce(
+      (sum, line) =>
+        sum + Number(line.discountPerUnit || 0) * Number(line.qty || 0),
+      0
+    );
+
+    return {
+      subtotal,
+      discountTotal,
+      total: Math.max(0, subtotal - discountTotal),
+      itemCount: activeLines.length,
+    };
+  }, [editLines]);
+
+  function openEditSale() {
+    const nextLines = items.map((x) => {
+      const p = Array.isArray(x.products) ? x.products[0] : (x.products as any);
+      return {
+        saleItemId: x.id,
+        productId: x.product_id,
+        productName: formatProductDisplayName(p),
+        qty: String(Number(x.qty ?? 0)),
+        unitPriceBase: Number(x.unit_price_base ?? x.unit_price ?? 0),
+        discountPerUnit: Number(x.discount_per_unit ?? 0),
+      };
+    });
+
+    setEditLines(nextLines);
+    setEditNote("");
+    setErr("");
+    setEditOpen(true);
+  }
+
+  function updateEditQty(saleItemId: string, qty: string) {
+    if (qty !== "" && !/^\d*(\.\d{0,3})?$/.test(qty)) return;
+
+    setEditLines((prev) =>
+      prev.map((line) =>
+        line.saleItemId === saleItemId ? { ...line, qty } : line
+      )
+    );
+  }
+
+  function removeEditLine(saleItemId: string) {
+    setEditLines((prev) =>
+      prev.map((line) =>
+        line.saleItemId === saleItemId ? { ...line, qty: "0" } : line
+      )
+    );
+  }
+
+  async function handleSaveEdit() {
+    if (!orgId || !saleId) return;
+
+    const cleaned = editLines
+      .map((line) => ({
+        sale_item_id: line.saleItemId,
+        product_id: line.productId,
+        qty: Number(line.qty || 0),
+      }))
+      .filter((line) => Number.isFinite(line.qty) && line.qty > 0);
+
+    if (cleaned.length === 0) {
+      setErr("A sale must have at least one product. Void the sale instead if it should be cancelled.");
+      return;
+    }
+
+    setEditSubmitting(true);
+    setErr("");
+
+    try {
+      await editSaleItemsRestoreInventory(orgId, saleId, {
+        items: cleaned,
+        note: editNote.trim() || null,
+      });
+
+      setEditOpen(false);
+      setSuccessMsg("Sale updated and inventory adjusted.");
+      await reloadSale();
+    } catch (e: any) {
+      setErr(e.message ?? String(e));
+    } finally {
+      setEditSubmitting(false);
+    }
+  }
+
   async function handleDownload() {
     if (!sale) return;
 
@@ -524,14 +664,7 @@ product_name: formatProductDisplayName(p),          qty,
       setVoidNote("");
       setSuccessMsg("Sale voided and stock restored to inventory.");
 
-      const role = await fetchMyOrgRole(orgId);
-      const hideCost = role === "sales_clerk";
-      const [s, it] = await Promise.all([
-        getSale(orgId, saleId),
-        listSaleItems(orgId, saleId, { hideCostFields: hideCost }),
-      ]);
-      setSale(s);
-      setItems(it);
+      await reloadSale();
     } catch (e: any) {
       setErr(e.message ?? String(e));
     } finally {
@@ -582,7 +715,18 @@ product_name: formatProductDisplayName(p),          qty,
           <Link href="/dashboard/sales" className={S.btnGhost}>
             ← Back
           </Link>
-          {!loading && sale && saleCanBeVoided(sale.status) && !hideSensitive && (
+          {!loading && canEditSale && (
+            <button
+              type="button"
+              className={S.btnGhost}
+              onClick={openEditSale}
+              disabled={editSubmitting || voidSubmitting}
+            >
+              Edit sale items
+            </button>
+          )}
+
+          {!loading && canEditSale && (
             <button
               type="button"
               className={S.btnDanger}
@@ -591,7 +735,7 @@ product_name: formatProductDisplayName(p),          qty,
                 setVoidNote("");
                 setErr("");
               }}
-              disabled={voidSubmitting}
+              disabled={voidSubmitting || editSubmitting}
             >
               Void sale · restore stock
             </button>
@@ -698,6 +842,11 @@ product_name: formatProductDisplayName(p),          qty,
                   Status
                 </span>
                 <StatusBadge status={sale?.status} />
+                {Number(sale?.edit_count ?? 0) > 0 && !isCancelledSale(sale?.status) && (
+                  <span className="inline-flex rounded-full border border-blue-200 bg-blue-50 px-2.5 py-0.5 text-xs font-black uppercase tracking-[0.12em] text-blue-700">
+                    Edited
+                  </span>
+                )}
               </div>
 
               <div className="flex items-center gap-2">
@@ -948,6 +1097,222 @@ product_name: formatProductDisplayName(p),          qty,
           Thank you for your business. 🍯
         </div>
       </div>
+
+      <div className={`${S.card} overflow-hidden`}>
+        <div className="flex flex-col gap-3 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="text-base font-bold text-slate-900">Sale Activity</div>
+            <div className="mt-0.5 text-xs text-slate-500">
+              Edits, cancellations, and stock-impacting changes
+            </div>
+          </div>
+
+          {!loading && Number(sale?.edit_count ?? 0) > 0 && (
+            <span className="inline-flex shrink-0 items-center rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-black uppercase tracking-[0.12em] text-blue-700">
+              Edited {sale?.edit_count} time{Number(sale?.edit_count ?? 0) !== 1 ? "s" : ""}
+            </span>
+          )}
+        </div>
+
+        {loading ? (
+          <div className="py-10 text-center text-sm text-slate-400">
+            Loading activity…
+          </div>
+        ) : activityLogs.length === 0 ? (
+          <div className="py-12 text-center text-sm text-slate-400">
+            No edits or cancellations recorded for this sale.
+          </div>
+        ) : (
+          <div className="divide-y divide-slate-100">
+            {activityLogs.map((log) => {
+              const isCancel = ["cancel", "void"].includes(log.action);
+              const isEdit = log.action === "edit";
+              const beforeTotal = Number((log.before_json as any)?.sale?.total ?? 0);
+              const afterTotal = Number((log.after_json as any)?.total ?? 0);
+
+              return (
+                <div key={log.id} className="px-5 py-4 transition-colors hover:bg-slate-50">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span
+                        className={`rounded-full px-2.5 py-1 text-xs font-black uppercase tracking-[0.12em] ${
+                          isCancel
+                            ? "bg-red-100 text-red-700"
+                            : isEdit
+                            ? "bg-blue-100 text-blue-700"
+                            : "bg-slate-100 text-slate-700"
+                        }`}
+                      >
+                        {isCancel ? "Cancelled" : isEdit ? "Edited" : log.action}
+                      </span>
+
+                      {isEdit && beforeTotal !== afterTotal && afterTotal > 0 && (
+                        <span className="text-xs font-semibold text-slate-500">
+                          {fmtMoney(beforeTotal)} → {fmtMoney(afterTotal)}
+                        </span>
+                      )}
+                    </div>
+
+                    <span className="text-xs font-semibold text-slate-400">
+                      {fmtDate(log.created_at)}
+                    </span>
+                  </div>
+
+                  {log.note && (
+                    <div className="mt-2 text-sm text-slate-600">{log.note}</div>
+                  )}
+
+                  {isCancel && sale?.cancel_note && (
+                    <div className="mt-2 rounded-2xl bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
+                      Reason: {sale.cancel_note}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {editOpen && (
+        <div
+          className={`${S.overlayWrap} ${S.noPrint}`}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="edit-sale-title"
+        >
+          <button
+            type="button"
+            className={S.overlayBackdrop}
+            aria-label="Close dialog"
+            onClick={() => !editSubmitting && setEditOpen(false)}
+          />
+
+          <div className={S.modalSheet}>
+            <div className={S.modalSheetBody}>
+              <h2
+                id="edit-sale-title"
+                className="text-lg font-bold leading-snug text-slate-900"
+              >
+                Edit sale items
+              </h2>
+
+              <p className="mt-2 text-sm leading-relaxed text-slate-600">
+                Change the quantity or remove a product. Saving will recalculate
+                the sale total and adjust inventory using the difference.
+              </p>
+
+              <div className="mt-5 max-h-[50vh] space-y-2 overflow-y-auto pr-1">
+                {editLines.map((line) => {
+                  const qty = Number(line.qty || 0);
+                  const unitFinal = Math.max(
+                    0,
+                    Number(line.unitPriceBase || 0) -
+                      Number(line.discountPerUnit || 0)
+                  );
+
+                  return (
+                    <div
+                      key={line.saleItemId}
+                      className={`rounded-2xl border p-3 ${
+                        qty <= 0
+                          ? "border-red-100 bg-red-50/50"
+                          : "border-slate-200 bg-white"
+                      }`}
+                    >
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-bold text-slate-900">
+                            {line.productName}
+                          </div>
+                          <div className="mt-0.5 text-xs text-slate-500">
+                            Unit {fmtMoney(unitFinal)} · Line {fmtMoney(unitFinal * qty)}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <label className="sr-only">Quantity</label>
+                          <input
+                            className="h-10 w-24 rounded-xl border border-slate-300 bg-white px-3 text-right text-sm font-bold text-slate-800 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-100"
+                            value={line.qty}
+                            inputMode="decimal"
+                            onChange={(e) =>
+                              updateEditQty(line.saleItemId, e.target.value)
+                            }
+                            disabled={editSubmitting}
+                          />
+
+                          <button
+                            type="button"
+                            className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-700 transition hover:bg-red-100 disabled:opacity-60"
+                            onClick={() => removeEditLine(line.saleItemId)}
+                            disabled={editSubmitting || qty <= 0}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm">
+                <div className="flex items-center justify-between text-slate-600">
+                  <span>New subtotal</span>
+                  <span className="font-bold text-slate-900">
+                    {fmtMoney(editTotals.subtotal)}
+                  </span>
+                </div>
+                <div className="mt-1 flex items-center justify-between text-slate-600">
+                  <span>New discount</span>
+                  <span className="font-bold text-amber-700">
+                    -{fmtMoney(editTotals.discountTotal)}
+                  </span>
+                </div>
+                <div className="mt-2 flex items-center justify-between border-t border-slate-200 pt-2 text-slate-900">
+                  <span className="font-black">New total</span>
+                  <span className="text-lg font-black">
+                    {fmtMoney(editTotals.total)}
+                  </span>
+                </div>
+              </div>
+
+              <label className="mt-5 block">
+                <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                  Note (optional)
+                </span>
+                <textarea
+                  className={`${S.input} mt-2 min-h-[76px] resize-y`}
+                  value={editNote}
+                  onChange={(e) => setEditNote(e.target.value)}
+                  placeholder="Reason for editing this sale…"
+                  disabled={editSubmitting}
+                />
+              </label>
+
+              <div className="mt-6 flex flex-col-reverse gap-2 border-t border-slate-100 pt-5 sm:flex-row sm:justify-end sm:gap-3 sm:border-t-0 sm:pt-0">
+                <button
+                  type="button"
+                  className={S.btnGhost}
+                  onClick={() => setEditOpen(false)}
+                  disabled={editSubmitting}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className={S.btnPrimary}
+                  onClick={handleSaveEdit}
+                  disabled={editSubmitting}
+                >
+                  {editSubmitting ? "Saving…" : "Save changes"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {voidOpen && (
         <div

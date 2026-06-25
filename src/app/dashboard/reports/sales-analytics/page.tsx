@@ -67,6 +67,22 @@ const localIsoToDate = (value?: string) => {
   return new Date(y, m - 1, d);
 };
 
+function isCancelledSale(status?: string | null) {
+  return ["cancelled", "voided", "void", "refunded"].includes(
+    String(status ?? "").trim().toLowerCase(),
+  );
+}
+
+function isInDateRange(createdAt: string, from: string, to: string) {
+  const d = new Date(createdAt);
+  const fromDate = localIsoToDate(from);
+  const toDate = localIsoToDate(to);
+  if (!fromDate || !toDate) return true;
+  fromDate.setHours(0, 0, 0, 0);
+  toDate.setHours(23, 59, 59, 999);
+  return d >= fromDate && d <= toDate;
+}
+
 const getPresetRange = (preset: Exclude<RangePreset, "custom">) => {
   const today = new Date();
   const from = new Date(today);
@@ -616,31 +632,56 @@ export default function SalesAnalyticsPage() {
     };
   }, [orgId]);
 
-  const currentSummary = useMemo(
-    () => buildPeriodSummary("Selected Period", allSales, fromDate, toDate),
+  const activeSalesForSummary = useMemo(
+    () => allSales.filter((sale) => !isCancelledSale(sale.status)),
+    [allSales],
+  );
+
+  const currentAuditRows = useMemo(
+    () => allSales.filter((sale) => isInDateRange(sale.created_at, fromDate, toDate)),
     [allSales, fromDate, toDate],
+  );
+
+  const currentAudit = useMemo(() => {
+    const cancelled = currentAuditRows.filter((sale) => isCancelledSale(sale.status));
+    const edited = currentAuditRows.filter((sale) => Number(sale.edit_count ?? 0) > 0);
+    const active = currentAuditRows.filter((sale) => !isCancelledSale(sale.status));
+    const discounted = active.filter((sale) => Number(sale.discount_total ?? 0) > 0);
+
+    return {
+      cancelledCount: cancelled.length,
+      cancelledValue: cancelled.reduce((sum, sale) => sum + Number(sale.total ?? 0), 0),
+      editedCount: edited.length,
+      editEvents: edited.reduce((sum, sale) => sum + Number(sale.edit_count ?? 0), 0),
+      discountedCount: discounted.length,
+    };
+  }, [currentAuditRows]);
+
+  const currentSummary = useMemo(
+    () => buildPeriodSummary("Selected Period", activeSalesForSummary, fromDate, toDate),
+    [activeSalesForSummary, fromDate, toDate],
   );
 
   const compareA = useMemo(
     () =>
       buildPeriodSummary(
         "Reference Period",
-        allSales,
+        activeSalesForSummary,
         compareAFrom,
         compareATo,
       ),
-    [allSales, compareAFrom, compareATo],
+    [activeSalesForSummary, compareAFrom, compareATo],
   );
 
   const compareB = useMemo(
     () =>
       buildPeriodSummary(
         "Comparison Period",
-        allSales,
+        activeSalesForSummary,
         compareBFrom,
         compareBTo,
       ),
-    [allSales, compareBFrom, compareBTo],
+    [activeSalesForSummary, compareBFrom, compareBTo],
   );
 
   const compareMetrics = useMemo(
@@ -877,7 +918,7 @@ export default function SalesAnalyticsPage() {
 
       {!loading && !err && tab !== "compare" && (
         <>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-6">
             <CleanKpi
               label="Revenue"
               value={fmtMoney(currentSummary.revenue)}
@@ -902,8 +943,26 @@ export default function SalesAnalyticsPage() {
             <CleanKpi
               label="Discounts"
               value={fmtMoney(currentSummary.discounts)}
-              sub={`${discountRate.toFixed(1)}% of gross`}
+              sub={`${currentAudit.discountedCount} discounted sale${
+                currentAudit.discountedCount !== 1 ? "s" : ""
+              } · ${discountRate.toFixed(1)}% of gross`}
               tone={discountRate > 10 ? "danger" : "neutral"}
+            />
+
+            <CleanKpi
+              label="Edited Sales"
+              value={String(currentAudit.editedCount)}
+              sub={`${currentAudit.editEvents} edit event${
+                currentAudit.editEvents !== 1 ? "s" : ""
+              } recorded`}
+              tone={currentAudit.editedCount > 0 ? "warning" : "neutral"}
+            />
+
+            <CleanKpi
+              label="Cancelled Sales"
+              value={String(currentAudit.cancelledCount)}
+              sub={`${fmtMoney(currentAudit.cancelledValue)} cancelled value`}
+              tone={currentAudit.cancelledCount > 0 ? "danger" : "neutral"}
             />
           </div>
 
@@ -976,6 +1035,26 @@ export default function SalesAnalyticsPage() {
           </div>
 
           <div className="flex flex-col gap-6 xl:col-span-4">
+            <Card
+              title="Sales Control Summary"
+              sub="Edits, cancellations and discounts in this range"
+            >
+              <div className="space-y-3">
+                <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3">
+                  <span className="text-sm font-bold text-slate-700">Edited sales</span>
+                  <span className="text-sm font-black text-slate-950">{currentAudit.editedCount}</span>
+                </div>
+                <div className="flex items-center justify-between rounded-2xl bg-amber-50 px-4 py-3">
+                  <span className="text-sm font-bold text-amber-800">Discounted sales</span>
+                  <span className="text-sm font-black text-amber-900">{currentAudit.discountedCount}</span>
+                </div>
+                <div className="flex items-center justify-between rounded-2xl bg-red-50 px-4 py-3">
+                  <span className="text-sm font-bold text-red-700">Cancelled sales</span>
+                  <span className="text-sm font-black text-red-800">{currentAudit.cancelledCount}</span>
+                </div>
+              </div>
+            </Card>
+
             <MiniMetric
               label="Retail Sales"
               value={fmtMoney(currentSummary.revenue)}

@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/client";
 
 export type PaymentMethod = "cash" | "mpesa" | "card" | "credit";
+export type SaleStatus = "completed" | "voided" | "cancelled" | string;
 
 export type SaleRow = {
   id: string;
@@ -8,7 +9,7 @@ export type SaleRow = {
   sale_no: string;
   customer_name: string | null;
   payment_method: PaymentMethod | string | null;
-  status: string;
+  status: SaleStatus;
   subtotal: number;
   discount_total: number;
   total: number;
@@ -16,6 +17,12 @@ export type SaleRow = {
   sold_by_user_id?: string | null;
   created_by?: string | null;
   recorded_by_name?: string | null;
+  edit_count?: number;
+  edited_at?: string | null;
+  edited_by?: string | null;
+  cancelled_at?: string | null;
+  cancelled_by?: string | null;
+  cancel_note?: string | null;
 };
 
 export type SaleItemProduct = {
@@ -50,13 +57,31 @@ export type SaleItemLite = {
   id: string;
   qty: number;
   product_id: string;
-  products?: SaleItemProduct | null;
   unit_price: number;
-line_total: number;
+  line_total: number;
+  products?: SaleItemProduct | null;
 };
 
 export type SaleRowWithItems = SaleRow & {
   sale_items?: SaleItemLite[];
+};
+
+export type EditSaleItemInput = {
+  sale_item_id: string;
+  product_id: string;
+  qty: number;
+};
+
+export type SaleActivityLog = {
+  id: string;
+  org_id: string;
+  sale_id: string;
+  action: "edit" | "cancel" | "void" | string;
+  note: string | null;
+  before_json: Record<string, unknown> | null;
+  after_json: Record<string, unknown> | null;
+  created_by: string | null;
+  created_at: string;
 };
 
 function normalizeProduct(p: any): SaleItemProduct | null {
@@ -70,141 +95,13 @@ function normalizeProduct(p: any): SaleItemProduct | null {
   };
 }
 
-export async function listSales(
-  orgId: string,
-  
-  opts?: {
-    ownOnly?: boolean;
-    limit?: number;
-  }
-) {
-  const supabase = createClient();
-
-  let query = supabase
-    .from("sales")
-    .select(`
-      id,
-      org_id,
-      sale_no,
-      customer_name,
-      payment_method,
-      status,
-      subtotal,
-      discount_total,
-      total,
-      created_at,
-      sold_by_user_id,
-      created_by,
-      recorded_by_profile:profiles!sales_created_by_fkey (
-        full_name
-      ),
-      sale_items:sale_items (
-  id,
-  qty,
-  product_id,
-  unit_price,
-  line_total,
-  products:products (
-    id,
-    name,
-    quantity_value,
-    quantity_unit
-  )
-)
-    `)
-    .eq("org_id", orgId);
-
-  if (opts?.ownOnly) {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) return [];
-
-    query = query.eq("sold_by_user_id", user.id);
-  }
-
-  query = query.order("created_at", { ascending: false });
-
-  if (opts?.limit) {
-    query = query.limit(opts.limit);
-  }
-
-  const { data, error } = await query;
-
-  if (error) throw new Error(error.message);
-
-  return (data ?? []).map((r: any) => {
-    const prof = Array.isArray(r.recorded_by_profile)
-      ? r.recorded_by_profile[0]
-      : r.recorded_by_profile;
-
-    return {
-      id: String(r.id),
-      org_id: String(r.org_id),
-      sale_no: String(r.sale_no ?? ""),
-      customer_name: r.customer_name ?? null,
-      payment_method: r.payment_method ?? null,
-      status: String(r.status ?? ""),
-      subtotal: Number(r.subtotal ?? 0),
-      discount_total: Number(r.discount_total ?? 0),
-      total: Number(r.total ?? 0),
-      created_at: r.created_at,
-      sold_by_user_id: r.sold_by_user_id ?? null,
-      created_by: r.created_by ?? null,
-      recorded_by_name: opts?.ownOnly
-        ? null
-        : prof?.full_name
-        ? String(prof.full_name)
-        : null,
-      sale_items: (r.sale_items ?? []).map((it: any) => {
-        const p = Array.isArray(it.products)
-          ? it.products[0] ?? null
-          : it.products ?? null;
-
-       return {
-  id: String(it.id),
-  qty: Number(it.qty ?? 0),
-  product_id: String(it.product_id),
-  unit_price: Number(it.unit_price ?? 0),
-  line_total: Number(it.line_total ?? 0),
-  products: normalizeProduct(p),
-};
-      }),
-    };
-  }) as SaleRowWithItems[];
+export function isCancelledSale(status?: string | null) {
+  return ["cancelled", "voided", "void", "refunded"].includes(
+    String(status ?? "").trim().toLowerCase()
+  );
 }
 
-export async function getSale(orgId: string, saleId: string) {
-  const supabase = createClient();
-
-  const { data, error } = await supabase
-    .from("sales")
-    .select(`
-      id,
-      org_id,
-      sale_no,
-      customer_name,
-      payment_method,
-      status,
-      subtotal,
-      discount_total,
-      total,
-      created_at,
-      sold_by_user_id,
-      created_by,
-      recorded_by_profile:profiles!sales_created_by_fkey (
-        full_name
-      )
-    `)
-    .eq("org_id", orgId)
-    .eq("id", saleId)
-    .single();
-
-  if (error) throw new Error(error.message);
-
-  const r: any = data;
-
+function mapSaleRow(r: any, opts?: { ownOnly?: boolean }): SaleRowWithItems {
   const prof = Array.isArray(r.recorded_by_profile)
     ? r.recorded_by_profile[0]
     : r.recorded_by_profile;
@@ -222,8 +119,140 @@ export async function getSale(orgId: string, saleId: string) {
     created_at: r.created_at,
     sold_by_user_id: r.sold_by_user_id ?? null,
     created_by: r.created_by ?? null,
-    recorded_by_name: prof?.full_name ? String(prof.full_name) : null,
-  } as SaleRow;
+    recorded_by_name: opts?.ownOnly
+      ? null
+      : prof?.full_name
+      ? String(prof.full_name)
+      : null,
+    edit_count: Number(r.edit_count ?? 0),
+    edited_at: r.edited_at ?? null,
+    edited_by: r.edited_by ?? null,
+    cancelled_at: r.cancelled_at ?? null,
+    cancelled_by: r.cancelled_by ?? null,
+    cancel_note: r.cancel_note ?? null,
+    sale_items: (r.sale_items ?? []).map((it: any) => {
+      const p = Array.isArray(it.products)
+        ? it.products[0] ?? null
+        : it.products ?? null;
+
+      return {
+        id: String(it.id),
+        qty: Number(it.qty ?? 0),
+        product_id: String(it.product_id),
+        unit_price: Number(it.unit_price ?? 0),
+        line_total: Number(it.line_total ?? 0),
+        products: normalizeProduct(p),
+      };
+    }),
+  };
+}
+
+const SALE_SELECT_WITH_ITEMS = `
+  id,
+  org_id,
+  sale_no,
+  customer_name,
+  payment_method,
+  status,
+  subtotal,
+  discount_total,
+  total,
+  created_at,
+  sold_by_user_id,
+  created_by,
+  edit_count,
+  edited_at,
+  edited_by,
+  cancelled_at,
+  cancelled_by,
+  cancel_note,
+  recorded_by_profile:profiles!sales_created_by_fkey (
+    full_name
+  ),
+  sale_items:sale_items (
+    id,
+    qty,
+    product_id,
+    unit_price,
+    line_total,
+    products:products (
+      id,
+      name,
+      quantity_value,
+      quantity_unit
+    )
+  )
+`;
+
+const SALE_SELECT = `
+  id,
+  org_id,
+  sale_no,
+  customer_name,
+  payment_method,
+  status,
+  subtotal,
+  discount_total,
+  total,
+  created_at,
+  sold_by_user_id,
+  created_by,
+  edit_count,
+  edited_at,
+  edited_by,
+  cancelled_at,
+  cancelled_by,
+  cancel_note,
+  recorded_by_profile:profiles!sales_created_by_fkey (
+    full_name
+  )
+`;
+
+export async function listSales(
+  orgId: string,
+  opts?: {
+    ownOnly?: boolean;
+    limit?: number;
+  }
+) {
+  const supabase = createClient();
+
+  let query = supabase
+    .from("sales")
+    .select(SALE_SELECT_WITH_ITEMS)
+    .eq("org_id", orgId)
+    .order("created_at", { ascending: false });
+
+  if (opts?.ownOnly) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) return [];
+
+    query = query.eq("sold_by_user_id", user.id);
+  }
+
+  if (opts?.limit) query = query.limit(opts.limit);
+
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+
+  return (data ?? []).map((r: any) => mapSaleRow(r, opts)) as SaleRowWithItems[];
+}
+
+export async function getSale(orgId: string, saleId: string) {
+  const supabase = createClient();
+
+  const { data, error } = await supabase
+    .from("sales")
+    .select(SALE_SELECT)
+    .eq("org_id", orgId)
+    .eq("id", saleId)
+    .single();
+
+  if (error) throw new Error(error.message);
+  return mapSaleRow(data) as SaleRow;
 }
 
 export async function listSaleItems(
@@ -254,9 +283,7 @@ export async function listSaleItems(
 
   const select = opts?.hideCostFields
     ? baseFields
-    : `${baseFields.trim()},
-      cost_price_at_sale
-    `;
+    : `${baseFields}, cost_price_at_sale`;
 
   const { data, error } = await supabase
     .from("sale_items")
@@ -291,6 +318,31 @@ export async function listSaleItems(
   }) as SaleItemRow[];
 }
 
+export async function listSaleActivityLogs(orgId: string, saleId: string) {
+  const supabase = createClient();
+
+  const { data, error } = await supabase
+    .from("sale_activity_logs")
+    .select("*")
+    .eq("org_id", orgId)
+    .eq("sale_id", saleId)
+    .order("created_at", { ascending: false });
+
+  if (error) throw new Error(error.message);
+
+  return (data ?? []).map((r: any) => ({
+    id: String(r.id),
+    org_id: String(r.org_id),
+    sale_id: String(r.sale_id),
+    action: String(r.action ?? ""),
+    note: r.note ?? null,
+    before_json: r.before_json ?? null,
+    after_json: r.after_json ?? null,
+    created_by: r.created_by ?? null,
+    created_at: r.created_at,
+  })) as SaleActivityLog[];
+}
+
 export async function createSaleStrict(
   orgId: string,
   args: {
@@ -320,6 +372,48 @@ export async function createSaleStrict(
   };
 }
 
+export async function editSaleItemsRestoreInventory(
+  orgId: string,
+  saleId: string,
+  payload: {
+    items: EditSaleItemInput[];
+    note?: string | null;
+  }
+) {
+  const supabase = createClient();
+
+  const cleanedItems = payload.items
+    .map((item) => ({
+      sale_item_id: String(item.sale_item_id),
+      product_id: String(item.product_id),
+      qty: Number(item.qty),
+    }))
+    .filter(
+      (item) =>
+        item.sale_item_id &&
+        item.product_id &&
+        Number.isFinite(item.qty) &&
+        item.qty > 0
+    );
+
+  if (cleanedItems.length === 0) {
+    throw new Error("A sale must have at least one product. Void the sale instead.");
+  }
+
+  const { data, error } = await supabase.rpc(
+    "edit_sale_items_restore_inventory",
+    {
+      p_org_id: orgId,
+      p_sale_id: saleId,
+      p_items: cleanedItems,
+      p_note: payload.note ?? null,
+    }
+  );
+
+  if (error) throw new Error(error.message);
+  return data as Record<string, unknown> | null;
+}
+
 export async function voidSaleRestoreInventory(
   orgId: string,
   saleId: string,
@@ -334,6 +428,5 @@ export async function voidSaleRestoreInventory(
   });
 
   if (error) throw new Error(error.message);
-
   return data as Record<string, unknown>;
 }

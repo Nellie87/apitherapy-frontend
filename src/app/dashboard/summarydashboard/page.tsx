@@ -37,6 +37,10 @@ type RecentSale = {
   sale_no: string;
   customer_name: string | null;
   total: number;
+  discount_total: number;
+  status: string;
+  edit_count: number;
+  cancelled_at: string | null;
   created_at: string;
 };
 
@@ -56,6 +60,9 @@ type ActivityItem = {
   amount: number;
   at: string;
   href: string;
+  status?: string;
+  edit_count?: number;
+  discount_total?: number;
 };
 
 /* ─────────────────────────────────────────────
@@ -146,6 +153,11 @@ const getPresetRange = (preset: Exclude<RangePreset, "custom">) => {
 
 const fmtMoney = (v: number) =>
   `Ksh ${Number(v || 0).toLocaleString("en-KE", { maximumFractionDigits: 0 })}`;
+
+const isCancelledSale = (status?: string | null) =>
+  ["cancelled", "voided", "void", "refunded"].includes(
+    String(status ?? "").toLowerCase(),
+  );
 
 const fmtK = (v: number) => {
   if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`;
@@ -333,11 +345,11 @@ function Skeleton({
 function QuickActions() {
   const actions = [
     { href: "/dashboard/sales/new", label: "New Sale", primary: true },
-    { href: "/dashboard/expenses", label: "Add Expense" },
-    { href: "/dashboard/inventory", label: "Inventory" },
-    { href: "/dashboard/reports", label: "Reports" },
-    { href: "/dashboard/reports/sales", label: "Sales Report" },
-    { href: "/dashboard/reports/expenses-pnl", label: "Expenses P&L" },
+    // { href: "/dashboard/expenses", label: "Add Expense" },
+    // { href: "/dashboard/inventory", label: "Inventory" },
+    // { href: "/dashboard/reports", label: "Reports" },
+    // { href: "/dashboard/reports/sales", label: "Sales Report" },
+    // { href: "/dashboard/reports/expenses-pnl", label: "Expenses P&L" },
   ];
 
   return (
@@ -1081,7 +1093,9 @@ export default function DashboardPage() {
           await Promise.all([
             supabase
               .from("sales")
-              .select("id,sale_no,customer_name,total,created_at")
+              .select(
+                "id,sale_no,customer_name,total,discount_total,status,edit_count,cancelled_at,created_at",
+              )
               .eq("org_id", orgId)
               .order("created_at", { ascending: false })
               .limit(6),
@@ -1167,15 +1181,30 @@ export default function DashboardPage() {
   }, [inventory]);
 
   const activity = useMemo<ActivityItem[]>(() => {
-    const sales: ActivityItem[] = recentSales.map((s) => ({
-      id: `sale-${s.id}`,
-      type: "sale",
-      title: s.sale_no,
-      sub: s.customer_name ?? "Walk-in customer",
-      amount: Number(s.total ?? 0),
-      at: s.created_at,
-      href: `/dashboard/sales/${s.id}`,
-    }));
+    const sales: ActivityItem[] = recentSales.map((s) => {
+      const cancelled = isCancelledSale(s.status);
+      const editCount = Number(s.edit_count ?? 0);
+      const discountTotal = Number(s.discount_total ?? 0);
+
+      return {
+        id: `sale-${s.id}`,
+        type: "sale",
+        title: s.sale_no,
+        sub: cancelled
+          ? "Cancelled sale"
+          : editCount > 0
+          ? `Edited ${editCount} time${editCount === 1 ? "" : "s"}`
+          : discountTotal > 0
+          ? `Discount given · ${fmtMoney(discountTotal)}`
+          : s.customer_name ?? "Walk-in customer",
+        amount: Number(s.total ?? 0),
+        at: s.cancelled_at ?? s.created_at,
+        href: `/dashboard/sales/${s.id}`,
+        status: s.status,
+        edit_count: editCount,
+        discount_total: discountTotal,
+      };
+    });
 
     const expenses: ActivityItem[] = recentExpenses.map((e) => ({
       id: `expense-${e.id}`,
@@ -1603,15 +1632,42 @@ export default function DashboardPage() {
                     href={a.href}
                     className={`grid items-center gap-4 px-6 py-4 transition-colors duration-150 ${
                       a.type === "sale"
-                        ? "hover:bg-amber-50"
+                        ? isCancelledSale(a.status)
+                          ? "hover:bg-red-50"
+                          : "hover:bg-amber-50"
                         : "hover:bg-slate-50"
                     }`}
                     style={{ gridTemplateColumns: "1fr auto" }}
                   >
                     <div className="min-w-0">
-                      <div className="truncate text-sm font-bold text-slate-900">
-                        {a.title}
+                      <div className="flex min-w-0 items-center gap-2">
+                        <div className="truncate text-sm font-bold text-slate-900">
+                          {a.title}
+                        </div>
+
+                        {a.type === "sale" && isCancelledSale(a.status) && (
+                          <span className="shrink-0 rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-red-600">
+                            Cancelled
+                          </span>
+                        )}
+
+                        {a.type === "sale" &&
+                          !isCancelledSale(a.status) &&
+                          Number(a.edit_count ?? 0) > 0 && (
+                            <span className="shrink-0 rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-blue-600">
+                              Edited
+                            </span>
+                          )}
+
+                        {a.type === "sale" &&
+                          !isCancelledSale(a.status) &&
+                          Number(a.discount_total ?? 0) > 0 && (
+                            <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-emerald-600">
+                              Discount
+                            </span>
+                          )}
                       </div>
+
                       <div className="mt-0.5 truncate text-xs font-medium text-slate-400">
                         {a.sub}
                       </div>
@@ -1620,12 +1676,25 @@ export default function DashboardPage() {
                     <div className="shrink-0 text-right">
                       <div
                         className={`text-sm font-extrabold ${
-                          a.type === "sale" ? "text-slate-900" : "text-red-500"
+                          a.type === "expense"
+                            ? "text-red-500"
+                            : isCancelledSale(a.status)
+                            ? "text-slate-400"
+                            : "text-slate-900"
                         }`}
                       >
-                        {a.type === "expense" ? "−" : "+"}
-                        {fmtMoney(a.amount)}
+                        {a.type === "expense" ? "−" : isCancelledSale(a.status) ? "" : "+"}
+                        <span
+                          className={
+                            isCancelledSale(a.status)
+                              ? "line-through decoration-2"
+                              : ""
+                          }
+                        >
+                          {fmtMoney(a.amount)}
+                        </span>
                       </div>
+
                       <div className="mt-0.5 text-xs font-medium text-slate-400">
                         {fmtDateTime(a.at)}
                       </div>

@@ -39,6 +39,7 @@ type HistoryTypeFilter =
   | "remove"
   | "set"
   | "sale"
+  | "sale_edit"
   | "sale_void";
 
 type ToastState = {
@@ -106,7 +107,7 @@ function getStockStatus(
   return "ok";
 }
 
-function movementLabel(type: InventoryMovementRow["type"]) {
+function movementLabel(type: InventoryMovementRow["type"] | "sale_edit" | string) {
   switch (type) {
     case "add":
       return "Added";
@@ -118,6 +119,8 @@ function movementLabel(type: InventoryMovementRow["type"]) {
       return "Set";
     case "sale":
       return "Sold";
+    case "sale_edit":
+      return "Sale edit";
     case "sale_void":
       return "Sale void";
     default:
@@ -125,7 +128,7 @@ function movementLabel(type: InventoryMovementRow["type"]) {
   }
 }
 
-function movementColor(type: InventoryMovementRow["type"]) {
+function movementColor(type: InventoryMovementRow["type"] | "sale_edit" | string) {
   switch (type) {
     case "add":
     case "restock":
@@ -136,6 +139,8 @@ function movementColor(type: InventoryMovementRow["type"]) {
       return "bg-blue-100 text-blue-700 border-blue-200";
     case "sale":
       return "bg-violet-100 text-violet-700 border-violet-200";
+    case "sale_edit":
+      return "bg-blue-100 text-blue-700 border-blue-200";
     case "sale_void":
       return "bg-amber-100 text-amber-800 border-amber-200";
     default:
@@ -358,6 +363,7 @@ function HistoryTypeTabs({
     { key: "remove", label: "Removed" },
     { key: "set", label: "Set" },
     { key: "sale", label: "Sold" },
+    { key: "sale_edit", label: "Sale edits" },
     { key: "sale_void", label: "Sale void" },
   ];
 
@@ -788,7 +794,7 @@ export default function InventoryPage() {
 
       const matchesMonth = !historyMonth || monthValue === historyMonth;
       const matchesType =
-        historyTypeFilter === "all" || m.type === historyTypeFilter;
+        historyTypeFilter === "all" || String(m.type) === historyTypeFilter;
 
       return matchesText && matchesMonth && matchesType;
     });
@@ -1530,8 +1536,13 @@ export default function InventoryPage() {
                               )}
 
                               {m.ref_sale_id && (
-                                <div className="mt-1 text-xs text-slate-400">
-                                  Related sale: {m.ref_sale_id}
+                                <div className="mt-2">
+                                  <a
+                                    href={`/dashboard/sales/${m.ref_sale_id}`}
+                                    className="inline-flex rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-bold text-slate-600 hover:border-slate-300 hover:text-slate-900"
+                                  >
+                                    View related sale
+                                  </a>
                                 </div>
                               )}
                             </div>

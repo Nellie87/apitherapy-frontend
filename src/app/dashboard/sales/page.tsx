@@ -64,6 +64,12 @@ function fmtTime(d: string) {
   }
 }
 
+function isCancelledSale(status?: string | null) {
+  return ["cancelled", "voided", "void", "refunded"].includes(
+    (status ?? "").trim().toLowerCase()
+  );
+}
+
 function isToday(d: string) {
   return new Date(d).toDateString() === new Date().toDateString();
 }
@@ -90,8 +96,8 @@ function paymentPill(method?: string | null) {
 
   if (key === "cash") return "border-green-200 bg-green-50 text-green-700";
   if (key === "mpesa") return "border-blue-200 bg-blue-50 text-blue-700";
-  if (key === "card") return "border-purple-200 bg-purple-50 text-purple-700";
-  if (key === "credit") return "border-amber-200 bg-amber-50 text-amber-700";
+  // if (key === "card") return "border-purple-200 bg-purple-50 text-purple-700";
+  // if (key === "credit") return "border-amber-200 bg-amber-50 text-amber-700";
 
   return "border-slate-200 bg-slate-50 text-slate-600";
 }
@@ -180,12 +186,14 @@ function saleProductsPreview(sale: SaleRowWithItems) {
 }
 
 type DateFilter = "all" | "today" | "week" | "month" | "custom";
+type ActivityFilter = "all" | "active" | "edited" | "cancelled" | "discounted";
 
 export default function SalesPage() {
   const [orgId, setOrgId] = useState<string | null>(null);
   const [rows, setRows] = useState<SaleRowWithItems[]>([]);
   const [q, setQ] = useState("");
   const [dateFilter, setDateFilter] = useState<DateFilter>("all");
+  const [activityFilter, setActivityFilter] = useState<ActivityFilter>("all");
   const [customDate, setCustomDate] = useState("");
   const [err, setErr] = useState("");
 
@@ -256,73 +264,99 @@ export default function SalesPage() {
     if (val) setDateFilter("custom");
   };
 
-  const filtered = useMemo(() => {
-    let result = rows;
+const filtered = useMemo(() => {
+  let result = [...rows];
 
-    if (dateFilter === "today") {
-      result = result.filter((s) => isToday(s.created_at));
-    } else if (dateFilter === "week") {
-      result = result.filter((s) => isThisWeek(s.created_at));
-    } else if (dateFilter === "month") {
-      result = result.filter((s) => isThisMonth(s.created_at));
-    } else if (dateFilter === "custom" && customDate) {
-      const target = new Date(customDate);
-      target.setHours(0, 0, 0, 0);
+  if (dateFilter === "today") {
+    result = result.filter((s) => isToday(s.created_at));
+  } else if (dateFilter === "week") {
+    result = result.filter((s) => isThisWeek(s.created_at));
+  } else if (dateFilter === "month") {
+    result = result.filter((s) => isThisMonth(s.created_at));
+  } else if (dateFilter === "custom" && customDate) {
+    const target = new Date(customDate);
+    target.setHours(0, 0, 0, 0);
 
-      const nextDay = new Date(target);
-      nextDay.setDate(nextDay.getDate() + 1);
+    const nextDay = new Date(target);
+    nextDay.setDate(nextDay.getDate() + 1);
 
-      result = result.filter((s) => {
-        const d = new Date(s.created_at);
-        return d >= target && d < nextDay;
-      });
-    }
+    result = result.filter((s) => {
+      const d = new Date(s.created_at);
+      return d >= target && d < nextDay;
+    });
+  }
 
-   const t = q.trim().toLowerCase();
+  if (activityFilter === "active") {
+    result = result.filter((s) => !isCancelledSale(s.status));
+  }
 
-if (t) {
-  result = result.filter((s) => {
-    const saleNoMatch = s.sale_no.toLowerCase().includes(t);
+  if (activityFilter === "edited") {
+    result = result.filter((s) => Number(s.edit_count ?? 0) > 0);
+  }
 
-    const customerMatch = (s.customer_name ?? "")
-      .toLowerCase()
-      .includes(t);
+  if (activityFilter === "cancelled") {
+    result = result.filter((s) => isCancelledSale(s.status));
+  }
 
-    const staffMatch = (s.recorded_by_name ?? "")
-      .toLowerCase()
-      .includes(t);
+  if (activityFilter === "discounted") {
+    result = result.filter((s) => Number(s.discount_total ?? 0) > 0);
+  }
 
-    const productMatch = (s.sale_items ?? []).some((item) =>
-      item.products?.name?.toLowerCase().includes(t)
+  const t = q.trim().toLowerCase();
+
+  if (t) {
+    result = result.filter((s) => {
+      const saleNoMatch = s.sale_no.toLowerCase().includes(t);
+
+      const customerMatch = (s.customer_name ?? "")
+        .toLowerCase()
+        .includes(t);
+
+      const staffMatch = (s.recorded_by_name ?? "")
+        .toLowerCase()
+        .includes(t);
+
+      const productMatch = (s.sale_items ?? []).some((item) =>
+        item.products?.name?.toLowerCase().includes(t)
+      );
+
+      return saleNoMatch || customerMatch || staffMatch || productMatch;
+    });
+  }
+
+  return result;
+}, [rows, q, dateFilter, customDate, activityFilter]);
+
+  const kpis = useMemo(() => {
+    const activeRows = rows.filter((r) => !isCancelledSale(r.status));
+    const cancelledRows = rows.filter((r) => isCancelledSale(r.status));
+    const editedRows = rows.filter((r) => Number(r.edit_count ?? 0) > 0);
+    const discountedRows = activeRows.filter(
+      (r) => Number(r.discount_total ?? 0) > 0
     );
+    const todayActiveRows = activeRows.filter((r) => isToday(r.created_at));
 
-    return (
-      saleNoMatch ||
-      customerMatch ||
-      staffMatch ||
-      productMatch
-    );
-  });
-}
-
-    return result;
-  }, [rows, q, dateFilter, customDate]);
-
-  const kpis = useMemo(
-    () => ({
-      totalSales: rows.length,
-      totalRevenue: rows.reduce((sum, r) => sum + Number(r.total ?? 0), 0),
-      totalDiscounts: rows.reduce(
+    return {
+      totalSales: activeRows.length,
+      editedSales: editedRows.length,
+      discountedSales: discountedRows.length,
+      cancelledSales: cancelledRows.length,
+      cancelledValue: cancelledRows.reduce(
+        (sum, r) => sum + Number(r.total ?? 0),
+        0
+      ),
+      totalRevenue: activeRows.reduce((sum, r) => sum + Number(r.total ?? 0), 0),
+      totalDiscounts: activeRows.reduce(
         (sum, r) => sum + Number(r.discount_total ?? 0),
         0
       ),
-      todaySales: rows.filter((r) => isToday(r.created_at)).length,
-      todayRevenue: rows
-        .filter((r) => isToday(r.created_at))
-        .reduce((sum, r) => sum + Number(r.total ?? 0), 0),
-    }),
-    [rows]
-  );
+      todaySales: todayActiveRows.length,
+      todayRevenue: todayActiveRows.reduce(
+        (sum, r) => sum + Number(r.total ?? 0),
+        0
+      ),
+    };
+  }, [rows]);
 
   const avgSale = kpis.totalSales > 0 ? kpis.totalRevenue / kpis.totalSales : 0;
 
@@ -331,6 +365,14 @@ if (t) {
     { key: "today", label: "Today" },
     { key: "week", label: "This week" },
     { key: "month", label: "This month" },
+  ];
+
+  const ACTIVITY_FILTERS: { key: ActivityFilter; label: string }[] = [
+    { key: "all", label: "All" },
+    { key: "active", label: "Active" },
+    { key: "edited", label: "Edited" },
+    { key: "cancelled", label: "Cancelled" },
+    { key: "discounted", label: "Discounted" },
   ];
 
   const GRID = isSalesOnly
@@ -377,7 +419,7 @@ if (t) {
 
       <div
         className={`grid grid-cols-1 gap-3 sm:grid-cols-2 ${
-          isSalesOnly ? "xl:grid-cols-1" : "xl:grid-cols-4"
+          isSalesOnly ? "xl:grid-cols-1" : "xl:grid-cols-6"
         }`}
       >
         <StatCard
@@ -402,9 +444,23 @@ if (t) {
             />
 
             <StatCard
+              label="Edited Sales"
+              value={String(kpis.editedSales)}
+              sub="changed after recording"
+              variant="warning"
+            />
+
+            <StatCard
               label="Discounts Given"
               value={fmtMoney(kpis.totalDiscounts)}
               sub="total reductions"
+              variant="warning"
+            />
+
+            <StatCard
+              label="Cancelled Sales"
+              value={String(kpis.cancelledSales)}
+              sub={`${fmtMoney(kpis.cancelledValue)} cancelled`}
               variant="warning"
             />
           </>
@@ -470,6 +526,24 @@ if (t) {
                 ))}
               </div>
 
+              {!isSalesOnly && (
+                <div className="flex w-full gap-1 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-1 sm:w-auto">
+                  {ACTIVITY_FILTERS.map(({ key, label }) => (
+                    <button
+                      key={key}
+                      onClick={() => setActivityFilter(key)}
+                      className={`whitespace-nowrap rounded-xl px-3 py-2 text-xs font-bold transition ${
+                        activityFilter === key
+                          ? "bg-slate-950 text-white shadow-sm"
+                          : "text-slate-500 hover:bg-slate-50 hover:text-slate-800"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              )}
+
               <input
                 type="date"
                 value={customDate}
@@ -518,7 +592,7 @@ if (t) {
                   ? isSalesOnly
                     ? "You have not recorded any sales yet"
                     : "No sales yet"
-                  : dateFilter !== "all" || customDate
+                  : dateFilter !== "all" || customDate || activityFilter !== "all"
                     ? "No sales for selected period"
                     : "No matching sales"}
               </p>
@@ -526,11 +600,12 @@ if (t) {
               <p className="mt-1 text-sm text-slate-400">
                 {rows.length === 0 ? (
                   "Create a sale to get started"
-                ) : dateFilter !== "all" || customDate ? (
+                ) : dateFilter !== "all" || customDate || activityFilter !== "all" ? (
                   <button
                     onClick={() => {
                       handleFilterChange("all");
                       setCustomDate("");
+                      setActivityFilter("all");
                     }}
                     className="font-semibold text-slate-700 hover:text-slate-950"
                   >
@@ -545,12 +620,17 @@ if (t) {
             filtered.map((s) => {
               const pv = saleProductsPreview(s);
               const itemCount = s.sale_items?.length ?? null;
+              const cancelledSale = isCancelledSale(s.status);
 
               return (
                 <Link
                   key={s.id}
                   href={`/dashboard/sales/${s.id}`}
-                  className="group block transition-colors hover:bg-[#FFFDF8] focus:bg-[#FFFDF8] focus:outline-none"
+                  className={`group block transition-colors focus:outline-none ${
+                    cancelledSale
+                      ? "bg-red-50/40 hover:bg-red-50 focus:bg-red-50"
+                      : "hover:bg-[#FFFDF8] focus:bg-[#FFFDF8]"
+                  }`}
                 >
                   <div
                     className="hidden items-center gap-4 px-5 py-4 lg:grid"
@@ -560,6 +640,17 @@ if (t) {
                       <span className="font-bold text-slate-950 text-sm truncate group-hover:text-slate-700">
                         {s.sale_no}
                       </span>
+                      {cancelledSale && (
+                        <div className="mt-1 w-fit rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.14em] text-red-700">
+                          Cancelled
+                        </div>
+                      )}
+                      {!cancelledSale && Number(s.edit_count ?? 0) > 0 && (
+                        <div className="mt-1 w-fit rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.14em] text-blue-700">
+                          Edited
+                        </div>
+                      )}
+                   
                     </div>
 
                     <div className="min-w-0">
@@ -628,9 +719,20 @@ if (t) {
 
                     {!isSalesOnly && (
                       <div className="text-right">
-                        <div className="text-sm font-black text-slate-950">
+                        <div
+                          className={`text-sm font-black ${
+                            cancelledSale
+                              ? "text-slate-400 line-through"
+                              : "text-slate-950"
+                          }`}
+                        >
                           {fmtMoney(Number(s.total ?? 0))}
                         </div>
+                        {cancelledSale && (
+                          <div className="text-xs font-bold text-red-600">
+                            Cancelled
+                          </div>
+                        )}
 
                         {Number(s.discount_total ?? 0) > 0 && (
                           <div className="text-xs font-semibold text-amber-600">
@@ -647,6 +749,11 @@ if (t) {
                         <div className="font-black text-slate-950">
                           {s.sale_no}
                         </div>
+                        {cancelledSale && (
+                          <div className="mt-1 w-fit rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.14em] text-red-700">
+                            Cancelled
+                          </div>
+                        )}
 
                         <div className="mt-0.5 text-xs text-slate-500">
                           {s.customer_name || <span className="italic">Walk-in</span>} ·{" "}
@@ -662,9 +769,20 @@ if (t) {
 
                       {!isSalesOnly && (
                         <div className="shrink-0 text-right">
-                          <div className="font-black text-slate-950">
+                          <div
+                            className={`font-black ${
+                              cancelledSale
+                                ? "text-slate-400 line-through"
+                                : "text-slate-950"
+                            }`}
+                          >
                             {fmtMoney(Number(s.total ?? 0))}
                           </div>
+                          {cancelledSale && (
+                            <div className="text-xs font-bold text-red-600">
+                              Cancelled
+                            </div>
+                          )}
 
                           {Number(s.discount_total ?? 0) > 0 && (
                             <div className="text-xs font-semibold text-amber-600">
@@ -726,7 +844,11 @@ if (t) {
             <span className="text-xs font-semibold text-slate-600">
               Subtotal:{" "}
               <span className="text-slate-950">
-                {fmtMoney(filtered.reduce((s, r) => s + Number(r.total ?? 0), 0))}
+                {fmtMoney(
+                  filtered
+                    .filter((r) => !isCancelledSale(r.status))
+                    .reduce((s, r) => s + Number(r.total ?? 0), 0)
+                )}
               </span>
             </span>
           </div>
