@@ -33,6 +33,8 @@ export type PeriodSummary = {
   products: ProductStat[];
   payments: PaymentStat[];
   daily: DailyStat[];
+  cancelledSales?: number;
+cancelledValue?: number;
 };
 
 export type CompareMetric = {

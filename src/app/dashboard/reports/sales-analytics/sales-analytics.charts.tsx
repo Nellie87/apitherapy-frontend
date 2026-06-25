@@ -170,15 +170,15 @@ export function ProductBar({
                   {p.name}
                 </div>
                 <div className="mt-0.5 text-xs font-semibold text-slate-400">
-                  {p.appearances.toLocaleString("en-KE")} sale appearance
-                  {p.appearances === 1 ? "" : "s"}
+{p.qty.toLocaleString("en-KE")} unit{p.qty === 1 ? "" : "s"} sold ·{" "}
+{p.appearances.toLocaleString("en-KE")} sale appearance
+{p.appearances === 1 ? "" : "s"}
                 </div>
               </div>
 
               <div className="shrink-0 text-right">
                 <div className="text-xs font-black text-slate-950">
-                  {valueKey === "revenue" ? fmtMoney(p.revenue) : `${p.qty} units`}
-                </div>
+{fmtMoney(p.revenue)}                </div>
                 <div className="mt-0.5 text-[11px] font-semibold text-slate-400">
                   #{i + 1}
                 </div>

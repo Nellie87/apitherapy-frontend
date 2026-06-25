@@ -193,11 +193,11 @@ window.location.href = "/dashboard/summarydashboard";      }
             <h2 className="hero-title">
               {isSignup ? (
                 <>
-                  Join the <span>Hive.</span>
+                  Join Us
                 </>
               ) : (
                 <>
-                  Back to the <span>Hive.</span>
+                  Welcome Back
                 </>
               )}
             </h2>

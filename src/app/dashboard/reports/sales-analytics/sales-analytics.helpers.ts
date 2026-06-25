@@ -72,16 +72,30 @@ export function getProductStats(sales: SaleRowWithItems[]): ProductStat[] {
 
   sales.forEach((sale) => {
     const items = sale.sale_items ?? [];
-    const totalQty = items.reduce((sum, item) => sum + Number(item.qty ?? 0), 0);
 
     items.forEach((item) => {
-      const productId = item.product_id;
-      const name = item.products?.name ?? "Unknown product";
+      const product = item.products;
       const qty = Number(item.qty ?? 0);
 
-      if (!map[productId]) {
-        map[productId] = {
-          product_id: productId,
+      const sizeLabel =
+        product?.quantity_value && product?.quantity_unit
+          ? `${product.quantity_value}${product.quantity_unit}`
+          : null;
+
+      const name = [product?.name ?? "Unknown product", sizeLabel]
+        .filter(Boolean)
+        .join(" · ");
+
+      const productKey = `${item.product_id}:${sizeLabel ?? ""}`;
+
+      const revenue =
+        Number(item.line_total ?? 0) ||
+        Number(item.unit_price ?? 0) * qty ||
+        0;
+
+      if (!map[productKey]) {
+        map[productKey] = {
+          product_id: productKey,
           name,
           qty: 0,
           revenue: 0,
@@ -89,16 +103,13 @@ export function getProductStats(sales: SaleRowWithItems[]): ProductStat[] {
         };
       }
 
-      map[productId].qty += qty;
-      map[productId].appearances += 1;
-
-      if (totalQty > 0) {
-        map[productId].revenue += (qty / totalQty) * Number(sale.total ?? 0);
-      }
+      map[productKey].qty += qty;
+      map[productKey].revenue += revenue;
+      map[productKey].appearances += 1;
     });
   });
 
-  return Object.values(map);
+  return Object.values(map).sort((a, b) => b.revenue - a.revenue);
 }
 
 export function getDailyStats(sales: SaleRowWithItems[]): DailyStat[] {
@@ -153,15 +164,37 @@ export function buildPeriodSummary(
   from: string,
   to: string
 ): PeriodSummary {
-  const sales = filterSalesByRange(allSales, from, to);
-  const daily = getDailyStats(sales);
-  const products = getProductStats(sales);
-  const payments = getPaymentStats(sales);
+  const rangeSales = filterSalesByRange(allSales, from, to);
 
-  const revenue = sales.reduce((sum, row) => sum + Number(row.total ?? 0), 0);
-  const gross = sales.reduce((sum, row) => sum + Number(row.subtotal ?? 0), 0);
-  const discounts = sales.reduce(
+  const completedSales = rangeSales.filter(
+    (sale) => sale.status === "completed"
+  );
+
+  const cancelledSales = rangeSales.filter(
+    (sale) => sale.status === "cancelled"
+  );
+
+  const daily = getDailyStats(completedSales);
+  const products = getProductStats(completedSales);
+  const payments = getPaymentStats(completedSales);
+
+  const revenue = completedSales.reduce(
+    (sum, row) => sum + Number(row.total ?? 0),
+    0
+  );
+
+  const gross = completedSales.reduce(
+    (sum, row) => sum + Number(row.subtotal ?? 0),
+    0
+  );
+
+  const discounts = completedSales.reduce(
     (sum, row) => sum + Number(row.discount_total ?? 0),
+    0
+  );
+
+  const cancelledValue = cancelledSales.reduce(
+    (sum, row) => sum + Number(row.total ?? 0),
     0
   );
 
@@ -169,11 +202,13 @@ export function buildPeriodSummary(
     label,
     from,
     to,
-    sales: sales.length,
+    sales: completedSales.length,
+    cancelledSales: cancelledSales.length,
+    cancelledValue,
     gross,
     discounts,
     revenue,
-    avgBasket: sales.length ? revenue / sales.length : 0,
+    avgBasket: completedSales.length ? revenue / completedSales.length : 0,
     avgDaily: daily.length ? revenue / daily.length : 0,
     products,
     payments,

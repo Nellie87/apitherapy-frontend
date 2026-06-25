@@ -51,6 +51,8 @@ export type SaleItemLite = {
   qty: number;
   product_id: string;
   products?: SaleItemProduct | null;
+  unit_price: number;
+line_total: number;
 };
 
 export type SaleRowWithItems = SaleRow & {
@@ -70,6 +72,7 @@ function normalizeProduct(p: any): SaleItemProduct | null {
 
 export async function listSales(
   orgId: string,
+  
   opts?: {
     ownOnly?: boolean;
     limit?: number;
@@ -96,16 +99,18 @@ export async function listSales(
         full_name
       ),
       sale_items:sale_items (
-        id,
-        qty,
-        product_id,
-        products:products (
-          id,
-          name,
-          quantity_value,
-          quantity_unit
-        )
-      )
+  id,
+  qty,
+  product_id,
+  unit_price,
+  line_total,
+  products:products (
+    id,
+    name,
+    quantity_value,
+    quantity_unit
+  )
+)
     `)
     .eq("org_id", orgId);
 
@@ -157,12 +162,14 @@ export async function listSales(
           ? it.products[0] ?? null
           : it.products ?? null;
 
-        return {
-          id: String(it.id),
-          qty: Number(it.qty ?? 0),
-          product_id: String(it.product_id),
-          products: normalizeProduct(p),
-        };
+       return {
+  id: String(it.id),
+  qty: Number(it.qty ?? 0),
+  product_id: String(it.product_id),
+  unit_price: Number(it.unit_price ?? 0),
+  line_total: Number(it.line_total ?? 0),
+  products: normalizeProduct(p),
+};
       }),
     };
   }) as SaleRowWithItems[];
