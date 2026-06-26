@@ -11,11 +11,9 @@ import {
   type PaymentMethod,
   type SaleRowWithItems,
 } from "@/lib/api/sales";
+import { useOrgRole } from "@/contexts/OrgRoleContext";
 import * as S from "./page.styles";
 
-/* ─────────────────────────────────────────────
-   Types
-───────────────────────────────────────────── */
 type CartLine = {
   product_id: string;
   name: string;
@@ -30,6 +28,7 @@ type DraftSaleCart = {
   orgId: string;
   customer: string;
   payment: PaymentMethod;
+  saleDate?: string;
   cart: CartLine[];
   updatedAt: string;
 };
@@ -39,9 +38,6 @@ type ToastState = {
   type: "success" | "error";
 } | null;
 
-/* ─────────────────────────────────────────────
-   Constants
-───────────────────────────────────────────── */
 const CART_STORAGE_KEY = "apitherapy_sale_draft_v1";
 
 const PAYMENT_METHODS: { key: PaymentMethod; label: string }[] = [
@@ -51,9 +47,14 @@ const PAYMENT_METHODS: { key: PaymentMethod; label: string }[] = [
   { key: "credit", label: "Credit" },
 ];
 
-/* ─────────────────────────────────────────────
-   Helpers
-───────────────────────────────────────────── */
+function todayInputDate() {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
 function fmtMoney(v: number) {
   return `Ksh ${Number(v || 0).toLocaleString("en-KE", {
     minimumFractionDigits: 0,
@@ -124,9 +125,6 @@ function paymentPill(method?: string | null) {
   return "bg-slate-50 text-slate-600 border-slate-100";
 }
 
-/* ─────────────────────────────────────────────
-   UI
-───────────────────────────────────────────── */
 function Toast({
   message,
   type = "success",
@@ -219,10 +217,12 @@ function LoadingState() {
   );
 }
 
-/* ─────────────────────────────────────────────
-   Page
-───────────────────────────────────────────── */
 export default function NewSalePage() {
+  const { role } = useOrgRole();
+
+  const isAdmin = ["admin", "owner", "manager"].includes(role ?? "");
+  const maxSaleDate = todayInputDate();
+
   const [orgId, setOrgId] = useState<string | null>(null);
   const [rows, setRows] = useState<SellableRow[]>([]);
   const [recentSales, setRecentSales] = useState<SaleRowWithItems[]>([]);
@@ -231,23 +231,25 @@ export default function NewSalePage() {
   const [q, setQ] = useState("");
   const [customer, setCustomer] = useState("");
   const [payment, setPayment] = useState<PaymentMethod>("cash");
+  const [saleDate, setSaleDate] = useState(maxSaleDate);
+
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
   const [toast, setToast] = useState<ToastState>(null);
   const [draftRestored, setDraftRestored] = useState(false);
 
   async function refresh(o: string) {
-  const [sellable, sales] = await Promise.all([
-    listSellable(o),
-    listSales(o, {
-      ownOnly: true,
-      limit: 6,
-    }),
-  ]);
+    const [sellable, sales] = await Promise.all([
+      listSellable(o),
+      listSales(o, {
+        ownOnly: true,
+        limit: 6,
+      }),
+    ]);
 
-  setRows(sellable);
-  setRecentSales(sales);
-}
+    setRows(sellable);
+    setRecentSales(sales);
+  }
 
   useEffect(() => {
     (async () => {
@@ -274,12 +276,17 @@ export default function NewSalePage() {
       setCustomer(parsed.customer ?? "");
       setPayment((parsed.payment as PaymentMethod) ?? "cash");
       setCart(Array.isArray(parsed.cart) ? parsed.cart : []);
+
+      if (parsed.saleDate && parsed.saleDate <= maxSaleDate) {
+        setSaleDate(parsed.saleDate);
+      }
+
       setDraftRestored(true);
       setToast({ message: "Saved cart draft restored", type: "success" });
     } catch {
       // Ignore invalid drafts.
     }
-  }, [orgId]);
+  }, [orgId, maxSaleDate]);
 
   useEffect(() => {
     if (!orgId) return;
@@ -288,12 +295,13 @@ export default function NewSalePage() {
       orgId,
       customer,
       payment,
+      saleDate,
       cart,
       updatedAt: new Date().toISOString(),
     };
 
     localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(payload));
-  }, [orgId, customer, payment, cart]);
+  }, [orgId, customer, payment, saleDate, cart]);
 
   useEffect(() => {
     if (!rows.length) return;
@@ -411,19 +419,19 @@ export default function NewSalePage() {
   }
 
   function updateQty(product_id: string, qty: number) {
-  if (!Number.isFinite(qty)) return;
+    if (!Number.isFinite(qty)) return;
 
-  setCart((prev) =>
-    prev.map((x) =>
-      x.product_id !== product_id
-        ? x
-        : {
-            ...x,
-            qty: Math.max(1, Math.min(qty, x.available)),
-          }
-    )
-  );
-}
+    setCart((prev) =>
+      prev.map((x) =>
+        x.product_id !== product_id
+          ? x
+          : {
+              ...x,
+              qty: Math.max(1, Math.min(qty, x.available)),
+            }
+      )
+    );
+  }
 
   function updateOverride(product_id: string, price: number | null) {
     setCart((prev) =>
@@ -446,6 +454,7 @@ export default function NewSalePage() {
     setCart([]);
     setCustomer("");
     setPayment("cash");
+    setSaleDate(maxSaleDate);
     localStorage.removeItem(CART_STORAGE_KEY);
     setToast({ message: "Cart cleared", type: "success" });
   }
@@ -479,6 +488,11 @@ export default function NewSalePage() {
 
     setErr("");
 
+    if (isAdmin && saleDate > maxSaleDate) {
+      setErr("Sale date cannot be in the future.");
+      return;
+    }
+
     const items = cart
       .filter((l) => l.qty > 0)
       .map((l) => ({
@@ -508,12 +522,14 @@ export default function NewSalePage() {
         customer_name: customer.trim() || undefined,
         payment_method: payment,
         items,
+        sale_date: isAdmin ? saleDate : null,
       });
 
       localStorage.removeItem(CART_STORAGE_KEY);
       setCart([]);
       setCustomer("");
       setPayment("cash");
+      setSaleDate(maxSaleDate);
 
       window.location.href = `/dashboard/sales?created=${encodeURIComponent(
         res.sale_no
@@ -538,7 +554,8 @@ export default function NewSalePage() {
       )}
 
       <section className={`${S.card} overflow-hidden`}>
-<div className="h-1 bg-[#D6A324]" />
+        <div className="h-1 bg-[#D6A324]" />
+
         <div className="flex flex-col gap-4 px-4 py-5 sm:px-6 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <div className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">
@@ -601,7 +618,8 @@ export default function NewSalePage() {
 
             <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
               <span className="text-xs font-medium text-slate-400">
-                {productList.length} product{productList.length !== 1 ? "s" : ""} shown
+                {productList.length} product
+                {productList.length !== 1 ? "s" : ""} shown
               </span>
 
               {q && (
@@ -682,11 +700,13 @@ export default function NewSalePage() {
                             {(p as any).category}
                           </span>
                         )}
+
                         {p.sku && (
                           <span className="text-xs text-slate-400">
                             SKU {p.sku}
                           </span>
                         )}
+
                         {p.barcode && (
                           <span className="text-xs text-slate-400">
                             Barcode {p.barcode}
@@ -704,6 +724,7 @@ export default function NewSalePage() {
                         >
                           {fmtMoney(Number(p.unit_price ?? 0))}
                         </div>
+
                         {!outOfStock && <StockBadge available={available} />}
                       </div>
 
@@ -723,6 +744,27 @@ export default function NewSalePage() {
         <aside className="flex flex-col gap-4">
           <section className={`${S.card} p-4`}>
             <div className="grid gap-4">
+              {isAdmin && (
+                <div className="rounded-2xl border border-[#EADFC2] bg-[#FFFDF8] p-4">
+                  <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-500">
+                    Sale date
+                  </label>
+
+                  <input
+                    type="date"
+                    value={saleDate}
+                    max={maxSaleDate}
+                    onChange={(e) => setSaleDate(e.target.value)}
+                    className={S.input}
+                  />
+
+                  <p className="mt-2 text-xs text-slate-400">
+                    Use this when entering a sale that happened earlier. Future
+                    dates are not allowed.
+                  </p>
+                </div>
+              )}
+
               <div>
                 <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-500">
                   Customer name
@@ -743,54 +785,12 @@ export default function NewSalePage() {
               </div>
             </div>
 
-            {recentSales.length > 0 && (
-              <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                <div className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500">
-                  Recent sales
-                </div>
-
-                <div className="space-y-2">
-                  {recentSales.slice(0, 3).map((sale) => (
-                    <div
-                      key={sale.id}
-                      className="flex items-center justify-between gap-3 rounded-xl border border-[#F1E6C9] bg-[#FFFDF8] px-3 py-2"
-                    >
-                      <div className="min-w-0">
-                        <div className="truncate text-xs font-black text-slate-950">
-                          {sale.sale_no}
-                        </div>
-                        <div className="text-[11px] text-slate-400">
-                          {fmtDateTime(sale.created_at)}
-                        </div>
-                      </div>
-
-                      <div className="shrink-0 text-right">
-                        <div className="text-xs font-black text-slate-950">
-  {sale.payment_method || "—"}
-</div>
-                        <span
-                          className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-bold ${paymentPill(
-                            sale.payment_method
-                          )}`}
-                        >
-                          {sale.payment_method || "—"}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <Link
-                  href="/dashboard/sales"
-                  className="mt-3 inline-flex text-xs font-bold text-slate-700 transition hover:text-slate-950"
-                >
-                  View full sales history
-                </Link>
-              </div>
-            )}
+            
           </section>
 
-          <section className={`${S.card} flex min-h-[260px] flex-col overflow-hidden`}>
+          <section
+            className={`${S.card} flex min-h-[260px] flex-col overflow-hidden`}
+          >
             <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
               <div className="flex items-center gap-2">
                 <span className="text-sm font-black text-slate-950">Cart</span>
@@ -810,7 +810,9 @@ export default function NewSalePage() {
 
             {cart.length === 0 ? (
               <div className="flex min-h-[220px] flex-col items-center justify-center px-6 py-12 text-center">
-                <p className="text-sm font-bold text-slate-700">Cart is empty</p>
+                <p className="text-sm font-bold text-slate-700">
+                  Cart is empty
+                </p>
                 <p className="mt-1 text-xs text-slate-400">
                   Select a product from the list to add it.
                 </p>
@@ -846,6 +848,7 @@ export default function NewSalePage() {
                         <div className="truncate text-xs font-bold leading-tight text-slate-950">
                           {line.name}
                         </div>
+
                         <div
                           className={`mt-1 text-xs font-black ${
                             isDiscounted ? "text-green-600" : "text-slate-600"
@@ -870,6 +873,7 @@ export default function NewSalePage() {
                         <label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-slate-400 sm:hidden">
                           Qty
                         </label>
+
                         <input
                           className={`w-full rounded-lg border py-1.5 text-center text-sm font-semibold text-slate-900 outline-none transition ${
                             overQty
@@ -887,6 +891,7 @@ export default function NewSalePage() {
                             )
                           }
                         />
+
                         <div className="mt-0.5 text-center text-[10px] text-slate-400">
                           {line.available} max
                         </div>
@@ -896,6 +901,7 @@ export default function NewSalePage() {
                         <label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-slate-400 sm:hidden">
                           Price
                         </label>
+
                         <input
                           className={`w-full rounded-lg border px-2 py-1.5 text-right text-sm text-slate-900 outline-none transition ${
                             isDiscounted
@@ -920,6 +926,7 @@ export default function NewSalePage() {
                           }}
                           title="Override unit price"
                         />
+
                         <div className="mt-0.5 text-center text-[10px] text-slate-400">
                           {isDiscounted ? "custom" : "default"}
                         </div>
@@ -958,6 +965,17 @@ export default function NewSalePage() {
                   >
                     {PAYMENT_METHODS.find((m) => m.key === payment)?.label}
                   </span>
+                </div>
+              )}
+
+              {isAdmin && (
+                <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+                  <div className="text-xs font-medium text-slate-500">
+                    Sale date
+                  </div>
+                  <div className="text-sm font-black text-slate-950">
+                    {saleDate}
+                  </div>
                 </div>
               )}
 
@@ -1001,7 +1019,8 @@ export default function NewSalePage() {
               )}
 
               <p className="mt-2 text-center text-xs text-slate-400">
-                Draft cart saved automatically. Stock is checked again before saving.
+                Draft cart saved automatically. Stock is checked again before
+                saving.
               </p>
             </section>
           )}

@@ -69,18 +69,18 @@ export async function getSalesSummary(orgId: string, args: { from: string; to: s
   const supabase = createClient();
   const { data, error } = await supabase
     .from("sales")
-    .select("created_at, subtotal, discount_total, total")
+    .select("sold_at, subtotal, discount_total, total")
     .eq("org_id", orgId)
-    .gte("created_at", fromISO)
-    .lt("created_at", toISOExclusive)
-    .order("created_at", { ascending: true });
+    .gte("sold_at", fromISO)
+    .lt("sold_at", toISOExclusive)
+    .order("sold_at", { ascending: true });
 
   if (error) throw new Error(error.message);
 
   const map = new Map<string, SalesSummaryRow>();
 
   for (const r of data ?? []) {
-    const day = String((r as any).created_at).slice(0, 10);
+    const day = String((r as any).sold_at).slice(0, 10);
     const prev =
       map.get(day) ??
       ({
@@ -445,9 +445,9 @@ async function reportPnLCore(orgId: string, args: { from: string; to: string; gr
     .from("sales")
     .select("id,total,discount_total,created_at,sold_at")
     .eq("org_id", orgId)
-    .gte("created_at", fromISO)
-    .lt("created_at", toISOExclusive)
-    .order("created_at", { ascending: true });
+    .gte("sold_at", fromISO)
+    .lt("sold_at", toISOExclusive)
+    .order("sold_at", { ascending: true });
 
   if (salesErr) throw new Error(salesErr.message);
 
@@ -459,13 +459,15 @@ async function reportPnLCore(orgId: string, args: { from: string; to: string; gr
       sale_id,
       qty,
       products:products ( cost_price ),
-      sales:sales ( created_at, sold_at )
+      sales:sales ( sold_at )
     `
     )
     .eq("org_id", orgId);
 
   // join filter (perf); still guard in JS
-  itemsQ = itemsQ.gte("sales.created_at", fromISO).lt("sales.created_at", toISOExclusive);
+itemsQ = itemsQ
+  .gte("sales.sold_at", fromISO)
+  .lt("sales.sold_at", toISOExclusive);
 
   const { data: items, error: itemsErr } = await itemsQ;
   if (itemsErr) throw new Error(itemsErr.message);

@@ -15,6 +15,7 @@ export type SaleRow = {
   total: number;
   created_at: string;
   sold_by_user_id?: string | null;
+  sold_at: string;
   created_by?: string | null;
   recorded_by_name?: string | null;
   edit_count?: number;
@@ -117,6 +118,7 @@ function mapSaleRow(r: any, opts?: { ownOnly?: boolean }): SaleRowWithItems {
     discount_total: Number(r.discount_total ?? 0),
     total: Number(r.total ?? 0),
     created_at: r.created_at,
+    sold_at: r.sold_at ?? null,
     sold_by_user_id: r.sold_by_user_id ?? null,
     created_by: r.created_by ?? null,
     recorded_by_name: opts?.ownOnly
@@ -161,6 +163,7 @@ const SALE_SELECT_WITH_ITEMS = `
   sold_by_user_id,
   created_by,
   edit_count,
+  sold_at,
   edited_at,
   edited_by,
   cancelled_at,
@@ -195,6 +198,7 @@ const SALE_SELECT = `
   discount_total,
   total,
   created_at,
+  sold_at,
   sold_by_user_id,
   created_by,
   edit_count,
@@ -207,6 +211,7 @@ const SALE_SELECT = `
     full_name
   )
 `;
+
 
 export async function listSales(
   orgId: string,
@@ -254,7 +259,25 @@ export async function getSale(orgId: string, saleId: string) {
   if (error) throw new Error(error.message);
   return mapSaleRow(data) as SaleRow;
 }
+export async function updateSaleDateStrict(
+  orgId: string,
+  saleId: string,
+  saleDate: string,
+  note?: string | null
+) {
+  const supabase = createClient();
 
+  const { data, error } = await supabase.rpc("update_sale_date_strict", {
+    p_org_id: orgId,
+    p_sale_id: saleId,
+    p_sale_date: saleDate,
+    p_note: note ?? null,
+  });
+
+  if (error) throw new Error(error.message);
+
+  return data;
+}
 export async function listSaleItems(
   orgId: string,
   saleId: string,
@@ -349,6 +372,7 @@ export async function createSaleStrict(
     customer_name?: string;
     payment_method: PaymentMethod;
     items: CreateSaleItemInput[];
+    sale_date?: string | null;
   }
 ) {
   const supabase = createClient();
@@ -358,11 +382,13 @@ export async function createSaleStrict(
     p_customer_name: args.customer_name ?? null,
     p_payment_method: args.payment_method,
     p_items: args.items,
+    p_sale_date: args.sale_date ?? null,
   });
 
   if (error) throw new Error(error.message);
 
   const r: any = data;
+
   return {
     sale_id: String(r.sale_id),
     sale_no: String(r.sale_no),

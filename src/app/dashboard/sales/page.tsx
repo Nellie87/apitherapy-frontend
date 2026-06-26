@@ -164,6 +164,10 @@ function StatCard({
   );
 }
 
+function saleBusinessDate(s: SaleRowWithItems) {
+  return s.sold_at ?? s.created_at;
+}
+
 function saleProductsPreview(sale: SaleRowWithItems) {
   const items = sale.sale_items ?? [];
   const map = new Map<string, { name: string; qty: number }>();
@@ -185,7 +189,7 @@ function saleProductsPreview(sale: SaleRowWithItems) {
   return { list, totalQty };
 }
 
-type DateFilter = "all" | "today" | "week" | "month" | "custom";
+type DateFilter = "all" | "today" | "week" | "month" | "custom" | "range";
 type ActivityFilter = "all" | "active" | "edited" | "cancelled" | "discounted";
 
 export default function SalesPage() {
@@ -194,7 +198,9 @@ export default function SalesPage() {
   const [q, setQ] = useState("");
   const [dateFilter, setDateFilter] = useState<DateFilter>("all");
   const [activityFilter, setActivityFilter] = useState<ActivityFilter>("all");
-  const [customDate, setCustomDate] = useState("");
+const [customDate, setCustomDate] = useState("");
+const [customFrom, setCustomFrom] = useState("");
+const [customTo, setCustomTo] = useState("");
   const [err, setErr] = useState("");
 
   const { role, loading: roleLoading } = useOrgRole();
@@ -268,21 +274,20 @@ const filtered = useMemo(() => {
   let result = [...rows];
 
   if (dateFilter === "today") {
-    result = result.filter((s) => isToday(s.created_at));
+    result = result.filter((s) => isToday(saleBusinessDate(s)));
   } else if (dateFilter === "week") {
-    result = result.filter((s) => isThisWeek(s.created_at));
+    result = result.filter((s) => isThisWeek(saleBusinessDate(s)));
   } else if (dateFilter === "month") {
-    result = result.filter((s) => isThisMonth(s.created_at));
+    result = result.filter((s) => isThisMonth(saleBusinessDate(s)));
   } else if (dateFilter === "custom" && customDate) {
-    const target = new Date(customDate);
-    target.setHours(0, 0, 0, 0);
-
-    const nextDay = new Date(target);
-    nextDay.setDate(nextDay.getDate() + 1);
-
     result = result.filter((s) => {
-      const d = new Date(s.created_at);
-      return d >= target && d < nextDay;
+      const day = saleBusinessDate(s).slice(0, 10);
+      return day === customDate;
+    });
+  } else if (dateFilter === "range" && customFrom && customTo) {
+    result = result.filter((s) => {
+      const day = saleBusinessDate(s).slice(0, 10);
+      return day >= customFrom && day <= customTo;
     });
   }
 
@@ -307,14 +312,8 @@ const filtered = useMemo(() => {
   if (t) {
     result = result.filter((s) => {
       const saleNoMatch = s.sale_no.toLowerCase().includes(t);
-
-      const customerMatch = (s.customer_name ?? "")
-        .toLowerCase()
-        .includes(t);
-
-      const staffMatch = (s.recorded_by_name ?? "")
-        .toLowerCase()
-        .includes(t);
+      const customerMatch = (s.customer_name ?? "").toLowerCase().includes(t);
+      const staffMatch = (s.recorded_by_name ?? "").toLowerCase().includes(t);
 
       const productMatch = (s.sale_items ?? []).some((item) =>
         item.products?.name?.toLowerCase().includes(t)
@@ -325,38 +324,43 @@ const filtered = useMemo(() => {
   }
 
   return result;
-}, [rows, q, dateFilter, customDate, activityFilter]);
+}, [
+  rows,
+  q,
+  dateFilter,
+  customDate,
+  customFrom,
+  customTo,
+  activityFilter,
+]);
 
-  const kpis = useMemo(() => {
-    const activeRows = rows.filter((r) => !isCancelledSale(r.status));
-    const cancelledRows = rows.filter((r) => isCancelledSale(r.status));
-    const editedRows = rows.filter((r) => Number(r.edit_count ?? 0) > 0);
-    const discountedRows = activeRows.filter(
-      (r) => Number(r.discount_total ?? 0) > 0
-    );
-    const todayActiveRows = activeRows.filter((r) => isToday(r.created_at));
+const kpis = useMemo(() => {
+  const activeRows = filtered.filter((r) => !isCancelledSale(r.status));
+  const cancelledRows = filtered.filter((r) => isCancelledSale(r.status));
+  const editedRows = filtered.filter((r) => Number(r.edit_count ?? 0) > 0);
 
-    return {
-      totalSales: activeRows.length,
-      editedSales: editedRows.length,
-      discountedSales: discountedRows.length,
-      cancelledSales: cancelledRows.length,
-      cancelledValue: cancelledRows.reduce(
-        (sum, r) => sum + Number(r.total ?? 0),
-        0
-      ),
-      totalRevenue: activeRows.reduce((sum, r) => sum + Number(r.total ?? 0), 0),
-      totalDiscounts: activeRows.reduce(
-        (sum, r) => sum + Number(r.discount_total ?? 0),
-        0
-      ),
-      todaySales: todayActiveRows.length,
-      todayRevenue: todayActiveRows.reduce(
-        (sum, r) => sum + Number(r.total ?? 0),
-        0
-      ),
-    };
-  }, [rows]);
+  const discountedRows = activeRows.filter(
+    (r) => Number(r.discount_total ?? 0) > 0
+  );
+
+  return {
+    totalSales: activeRows.length,
+    editedSales: editedRows.length,
+    discountedSales: discountedRows.length,
+    cancelledSales: cancelledRows.length,
+    cancelledValue: cancelledRows.reduce(
+      (sum, r) => sum + Number(r.total ?? 0),
+      0
+    ),
+    totalRevenue: activeRows.reduce((sum, r) => sum + Number(r.total ?? 0), 0),
+    totalDiscounts: activeRows.reduce(
+      (sum, r) => sum + Number(r.discount_total ?? 0),
+      0
+    ),
+    todaySales: activeRows.length,
+    todayRevenue: activeRows.reduce((sum, r) => sum + Number(r.total ?? 0), 0),
+  };
+}, [filtered]);
 
   const avgSale = kpis.totalSales > 0 ? kpis.totalRevenue / kpis.totalSales : 0;
 
@@ -485,6 +489,40 @@ const filtered = useMemo(() => {
           >
             View today
           </button>
+          <button
+  type="button"
+  onClick={() => setDateFilter("range")}
+  className={`rounded-2xl border px-3.5 py-2.5 text-sm font-bold transition ${
+    dateFilter === "range"
+      ? "border-[#D6A324] bg-[#FFF4CC] text-[#5A4500]"
+      : "border-[#EADFC2] bg-white text-slate-600 hover:bg-[#FFF8E6]"
+  }`}
+>
+  Custom range
+</button>
+
+{dateFilter === "range" && (
+  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+    <input
+      type="date"
+      value={customFrom}
+      max={new Date().toISOString().slice(0, 10)}
+      onChange={(e) => setCustomFrom(e.target.value)}
+      className="rounded-2xl border border-[#EADFC2] bg-white px-3.5 py-2.5 text-sm text-slate-700 outline-none"
+    />
+
+    <span className="text-xs font-bold text-slate-400">to</span>
+
+    <input
+      type="date"
+      value={customTo}
+      min={customFrom || undefined}
+      max={new Date().toISOString().slice(0, 10)}
+      onChange={(e) => setCustomTo(e.target.value)}
+      className="rounded-2xl border border-[#EADFC2] bg-white px-3.5 py-2.5 text-sm text-slate-700 outline-none"
+    />
+  </div>
+)}
         </div>
       )}
 
@@ -692,10 +730,10 @@ const filtered = useMemo(() => {
 )}
                     <div>
                       <div className="text-sm font-semibold text-slate-700">
-                        {fmtDate(s.created_at)}
+                        {fmtDate(saleBusinessDate(s))}
                       </div>
                       <div className="text-xs text-slate-400">
-                        {fmtTime(s.created_at)}
+                        {fmtTime(saleBusinessDate(s))}
                       </div>
                     </div>
 
@@ -757,7 +795,7 @@ const filtered = useMemo(() => {
 
                         <div className="mt-0.5 text-xs text-slate-500">
                           {s.customer_name || <span className="italic">Walk-in</span>} ·{" "}
-                          {fmtDate(s.created_at)}
+                          {fmtDate(saleBusinessDate(s))}
                         </div>
 
                         {!isSalesOnly && s.recorded_by_name?.trim() && (

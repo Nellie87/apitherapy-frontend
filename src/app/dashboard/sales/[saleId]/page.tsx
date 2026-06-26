@@ -10,6 +10,7 @@ import {
   listSaleActivityLogs,
   voidSaleRestoreInventory,
   editSaleItemsRestoreInventory,
+  updateSaleDateStrict,
   type SaleRow,
   type SaleItemRow,
   type SaleActivityLog,
@@ -68,6 +69,15 @@ function fmtDate(d: string) {
   } catch {
     return d;
   }
+}
+
+function toDateInputValue(d?: string | null) {
+  if (!d) return "";
+  return d.slice(0, 10);
+}
+
+function todayInputDate() {
+  return new Date().toISOString().slice(0, 10);
 }
 
 function paymentPill(method?: string | null) {
@@ -246,7 +256,14 @@ async function buildAndDownloadPdf(
   const metaCol = CONTENT_W / 4;
   [
     { label: "Customer", value: sale.customer_name ?? "Walk-in" },
-    { label: "Date", value: sale.created_at ? fmtDate(sale.created_at) : "—" },
+    {
+      label: "Sale Date",
+      value: sale.sold_at
+        ? fmtDate(sale.sold_at)
+        : sale.created_at
+        ? fmtDate(sale.created_at)
+        : "—",
+    },
     { label: "Status", value: sale.status ?? "—" },
     { label: "Payment", value: sale.payment_method ?? "—" },
   ].forEach((m, i) => {
@@ -422,13 +439,17 @@ export default function SaleDetailsPage() {
   const [editLines, setEditLines] = useState<EditLine[]>([]);
   const [editNote, setEditNote] = useState("");
   const [editSubmitting, setEditSubmitting] = useState(false);
+  const [dateOpen, setDateOpen] = useState(false);
+  const [editSaleDate, setEditSaleDate] = useState("");
+  const [editDateNote, setEditDateNote] = useState("");
+  const [dateSubmitting, setDateSubmitting] = useState(false);
   const [successMsg, setSuccessMsg] = useState("");
   const [activityLogs, setActivityLogs] = useState<SaleActivityLog[]>([]);
 
   const { role, loading: roleLoading } = useOrgRole();
 
-const hideSensitive =
-  !roleLoading && ["sales_clerk", "cashier", "pos"].includes(role ?? "none");
+  const hideSensitive =
+    !roleLoading && ["sales_clerk", "cashier", "pos"].includes(role ?? "none");
 
   useEffect(() => {
     (async () => {
@@ -543,6 +564,13 @@ const hideSensitive =
 
   const canEditSale = Boolean(sale && saleCanBeVoided(sale.status) && !hideSensitive);
 
+  const canEditSaleDate = Boolean(
+    sale &&
+      saleCanBeVoided(sale.status) &&
+      !hideSensitive &&
+      ["admin", "owner", "manager"].includes(role ?? "")
+  );
+
   const editTotals = useMemo(() => {
     const activeLines = editLines.filter((line) => Number(line.qty) > 0);
     const subtotal = activeLines.reduce(
@@ -635,6 +663,42 @@ const hideSensitive =
     }
   }
 
+  async function handleSaveSaleDate() {
+    if (!orgId || !saleId) return;
+
+    if (!editSaleDate) {
+      setErr("Sale date is required.");
+      return;
+    }
+
+    if (editSaleDate > todayInputDate()) {
+      setErr("Sale date cannot be in the future.");
+      return;
+    }
+
+    setDateSubmitting(true);
+    setErr("");
+
+    try {
+      await updateSaleDateStrict(
+        orgId,
+        saleId,
+        editSaleDate,
+        editDateNote.trim() || null
+      );
+
+      setDateOpen(false);
+      setEditSaleDate("");
+      setEditDateNote("");
+      setSuccessMsg("Sale date updated.");
+      await reloadSale();
+    } catch (e: any) {
+      setErr(e.message ?? String(e));
+    } finally {
+      setDateSubmitting(false);
+    }
+  }
+
   async function handleDownload() {
     if (!sale) return;
 
@@ -720,9 +784,25 @@ const hideSensitive =
               type="button"
               className={S.btnGhost}
               onClick={openEditSale}
-              disabled={editSubmitting || voidSubmitting}
+              disabled={editSubmitting || voidSubmitting || dateSubmitting}
             >
               Edit sale items
+            </button>
+          )}
+
+          {!loading && canEditSaleDate && (
+            <button
+              type="button"
+              className={S.btnGhost}
+              onClick={() => {
+                setEditSaleDate(toDateInputValue(sale?.sold_at ?? sale?.created_at));
+                setEditDateNote("");
+                setErr("");
+                setDateOpen(true);
+              }}
+              disabled={dateSubmitting || editSubmitting || voidSubmitting}
+            >
+              Edit sale date
             </button>
           )}
 
@@ -735,7 +815,7 @@ const hideSensitive =
                 setVoidNote("");
                 setErr("");
               }}
-              disabled={voidSubmitting || editSubmitting}
+              disabled={voidSubmitting || editSubmitting || dateSubmitting}
             >
               Void sale · restore stock
             </button>
@@ -833,9 +913,22 @@ const hideSensitive =
                   Date
                 </span>
                 <span className="text-slate-700">
-                  {sale?.created_at ? fmtDate(sale.created_at) : "—"}
+{sale?.sold_at
+                    ? fmtDate(sale.sold_at)
+                    : sale?.created_at
+                    ? fmtDate(sale.created_at)
+                    : "—"}
                 </span>
               </div>
+
+              {sale?.created_at && (
+                <div className="flex items-center gap-2">
+                  <span className="w-20 text-xs font-semibold uppercase tracking-wider text-slate-400">
+                    Recorded
+                  </span>
+                  <span className="text-slate-500">{fmtDate(sale.created_at)}</span>
+                </div>
+              )}
 
               <div className="flex items-center gap-2">
                 <span className="w-20 text-xs font-semibold uppercase tracking-wider text-slate-400">
@@ -1173,6 +1266,84 @@ const hideSensitive =
           </div>
         )}
       </div>
+
+      {dateOpen && (
+        <div
+          className={`${S.overlayWrap} ${S.noPrint}`}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="edit-sale-date-title"
+        >
+          <button
+            type="button"
+            className={S.overlayBackdrop}
+            aria-label="Close dialog"
+            onClick={() => !dateSubmitting && setDateOpen(false)}
+          />
+
+          <div className={S.modalSheet}>
+            <div className={S.modalSheetBody}>
+              <h2
+                id="edit-sale-date-title"
+                className="text-lg font-bold leading-snug text-slate-900"
+              >
+                Edit sale date
+              </h2>
+
+              <p className="mt-2 text-sm leading-relaxed text-slate-600">
+                This changes the sale date used in reports. It does not change
+                when the record was entered.
+              </p>
+
+              <label className="mt-5 block">
+                <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                  Sale date
+                </span>
+                <input
+                  type="date"
+                  className={`${S.input} mt-2`}
+                  value={editSaleDate}
+                  max={todayInputDate()}
+                  onChange={(e) => setEditSaleDate(e.target.value)}
+                  disabled={dateSubmitting}
+                />
+              </label>
+
+              <label className="mt-5 block">
+                <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                  Note (optional)
+                </span>
+                <textarea
+                  className={`${S.input} mt-2 min-h-[76px] resize-y`}
+                  value={editDateNote}
+                  onChange={(e) => setEditDateNote(e.target.value)}
+                  placeholder="Reason for changing the sale date…"
+                  disabled={dateSubmitting}
+                />
+              </label>
+
+              <div className="mt-6 flex flex-col-reverse gap-2 border-t border-slate-100 pt-5 sm:flex-row sm:justify-end sm:gap-3 sm:border-t-0 sm:pt-0">
+                <button
+                  type="button"
+                  className={S.btnGhost}
+                  onClick={() => setDateOpen(false)}
+                  disabled={dateSubmitting}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className={S.btnPrimary}
+                  onClick={handleSaveSaleDate}
+                  disabled={dateSubmitting}
+                >
+                  {dateSubmitting ? "Saving…" : "Save date"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {editOpen && (
         <div

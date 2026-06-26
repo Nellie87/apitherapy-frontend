@@ -42,6 +42,7 @@ type RecentSale = {
   edit_count: number;
   cancelled_at: string | null;
   created_at: string;
+  sold_at: string | null;
 };
 
 type RecentExpense = {
@@ -345,11 +346,7 @@ function Skeleton({
 function QuickActions() {
   const actions = [
     { href: "/dashboard/sales/new", label: "New Sale", primary: true },
-    // { href: "/dashboard/expenses", label: "Add Expense" },
-    // { href: "/dashboard/inventory", label: "Inventory" },
-    // { href: "/dashboard/reports", label: "Reports" },
-    // { href: "/dashboard/reports/sales", label: "Sales Report" },
-    // { href: "/dashboard/reports/expenses-pnl", label: "Expenses P&L" },
+   
   ];
 
   return (
@@ -1094,17 +1091,14 @@ export default function DashboardPage() {
             supabase
               .from("sales")
               .select(
-                "id,sale_no,customer_name,total,discount_total,status,edit_count,cancelled_at,created_at",
-              )
+"id,sale_no,customer_name,total,discount_total,status,edit_count,cancelled_at,sold_at,created_at"              )
               .eq("org_id", orgId)
-              .order("created_at", { ascending: false })
-              .limit(6),
+.order("sold_at", { ascending: false })              .limit(6),
             supabase
               .from("expenses")
               .select("id,category,amount,expense_date,created_at")
               .eq("org_id", orgId)
-              .order("created_at", { ascending: false })
-              .limit(6),
+.order("expense_date", { ascending: false })              .limit(6),
           ]);
 
         if (sErr) throw new Error(sErr.message);
@@ -1198,8 +1192,7 @@ export default function DashboardPage() {
           ? `Discount given · ${fmtMoney(discountTotal)}`
           : s.customer_name ?? "Walk-in customer",
         amount: Number(s.total ?? 0),
-        at: s.cancelled_at ?? s.created_at,
-        href: `/dashboard/sales/${s.id}`,
+at: s.cancelled_at ?? s.sold_at ?? s.created_at,        href: `/dashboard/sales/${s.id}`,
         status: s.status,
         edit_count: editCount,
         discount_total: discountTotal,

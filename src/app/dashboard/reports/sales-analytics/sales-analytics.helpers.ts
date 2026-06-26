@@ -62,10 +62,12 @@ export function filterSalesByRange(
   to: string
 ) {
   return sales.filter((sale) => {
-    const day = toYMD(sale.created_at);
+    const day = saleDateYMD(sale);
     return day >= from && day <= to;
   });
 }
+export const saleDateYMD = (sale: SaleRowWithItems) =>
+  toYMD(sale.sold_at ?? sale.created_at);
 
 export function getProductStats(sales: SaleRowWithItems[]): ProductStat[] {
   const map: Record<string, ProductStat> = {};
@@ -116,7 +118,7 @@ export function getDailyStats(sales: SaleRowWithItems[]): DailyStat[] {
   const map: Record<string, DailyStat> = {};
 
   sales.forEach((sale) => {
-    const day = toYMD(sale.created_at);
+    const day = saleDateYMD(sale);
 
     if (!map[day]) {
       map[day] = {
