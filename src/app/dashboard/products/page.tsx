@@ -9,12 +9,19 @@ import {
   restoreProduct,
   type ProductRow,
   type QuantityUnit,
+  type ProductUnitSaleType,
 } from "@/lib/api/products";
 import {
+  saveProductUnits,
+  type SaveProductUnitPayload,
+} from "@/lib/api/productUnits";
+import {
   listUnitMeasures,
+  listUnitSizes,
   listCategories,
   createCategory,
   listSuppliers,
+  createUnitSize,
 } from "@/lib/api/lookups";
 import { createClient } from "@/lib/supabase/client";
 import * as S from "./page.styles";
@@ -28,6 +35,15 @@ type MeasureLookup = {
   id: string;
   name: string;
   allowed_kinds: UnitKind[];
+};
+
+type UnitSizeLookup = {
+  id: string;
+  label: string;
+  kind: UnitKind;
+  grams?: number | null;
+  ml?: number | null;
+  count?: number | null;
 };
 
 type CategoryLookup = {
@@ -47,6 +63,22 @@ type SupplierLookup = {
 
 type Product = ProductRow;
 
+type ProductUnitForm = {
+  id?: string;
+  label: string;
+  unitMeasureId: string;
+  unitSizeId: string;
+  contains: string;
+  costPrice: string;
+  sellingPrice: string;
+  barcode: string;
+  canSell: boolean;
+  canRestock: boolean;
+  isDefault: boolean;
+  saleType: ProductUnitSaleType;
+  active?: boolean;
+};
+
 type FormData = {
   name: string;
   sku: string;
@@ -54,13 +86,8 @@ type FormData = {
   barcode: string;
   supplierId: string;
   notes: string;
-  costPrice: string;
-  sellPrice: string;
-  quantityValue: string;
-  quantityUnit: QuantityUnit | "";
-  quantityMode: "preset" | "custom";
-  unitMeasureId: string;
   isSellable: boolean;
+  productUnits: ProductUnitForm[];
 };
 
 type FormErrors = Partial<Record<keyof FormData, string>>;
@@ -68,6 +95,21 @@ type FormErrors = Partial<Record<keyof FormData, string>>;
 /* ─────────────────────────────────────────────
    Constants
 ───────────────────────────────────────────── */
+const BLANK_PRODUCT_UNIT: ProductUnitForm = {
+  label: "",
+  unitMeasureId: "",
+  unitSizeId: "",
+  contains: "1",
+  costPrice: "",
+  sellingPrice: "",
+  barcode: "",
+  canSell: true,
+  canRestock: true,
+  isDefault: true,
+  saleType: "retail",
+  active: true,
+};
+
 const BLANK_FORM: FormData = {
   name: "",
   sku: "",
@@ -75,29 +117,16 @@ const BLANK_FORM: FormData = {
   barcode: "",
   supplierId: "",
   notes: "",
-  costPrice: "0",
-  sellPrice: "0",
-  quantityValue: "",
-  quantityUnit: "",
-  quantityMode: "preset",
-  unitMeasureId: "",
   isSellable: true,
+  productUnits: [{ ...BLANK_PRODUCT_UNIT }],
 };
 
 const PAGE_SIZE = 5;
 
-const UNIT_OPTIONS_BY_KIND: Record<UnitKind, QuantityUnit[]> = {
-  mass: ["g", "kg"],
-  volume: ["ml", "L"],
-  count: ["pc"],
-};
-
-const QUANTITY_PRESETS: Record<QuantityUnit, string[]> = {
-  g: ["50", "100", "125", "200", "250", "500", "1000", "2000"],
-  kg: ["0.5", "1", "2", "5", "10"],
-  ml: ["30", "50", "100", "125", "200", "250", "500", "750", "1000"],
-  L: ["1", "2", "5", "10", "20"],
-  pc: ["1", "2", "4", "6", "8", "12", "24", "45"],
+const SALE_TYPE_LABELS: Record<ProductUnitSaleType, string> = {
+  retail: "Retail / single unit",
+  wholesale: "Wholesale / package",
+  stock_only: "Stock only",
 };
 
 /* ─────────────────────────────────────────────
@@ -113,7 +142,7 @@ function fmt(v: number | string | null | undefined) {
 
 function margin(
   cost: number | string | null | undefined,
-  sell: number | string | null | undefined
+  sell: number | string | null | undefined,
 ) {
   const c = Number(cost || 0);
   const s = Number(sell || 0);
@@ -125,23 +154,9 @@ function getCategoryName(p: Product) {
   return p.category?.name ?? "";
 }
 
-function getAllowedQuantityUnits(
-  measureId: string,
-  measures: MeasureLookup[]
-): QuantityUnit[] {
-  const measure = measures.find((m) => m.id === measureId);
-  if (!measure?.allowed_kinds?.length) return [];
-
-  const units = new Set<QuantityUnit>();
-  for (const kind of measure.allowed_kinds) {
-    UNIT_OPTIONS_BY_KIND[kind].forEach((u) => units.add(u));
-  }
-  return Array.from(units);
-}
-
 function formatQuantity(
   value?: number | string | null,
-  unit?: QuantityUnit | string | null
+  unit?: QuantityUnit | string | null,
 ) {
   if (value === null || value === undefined || value === "") return "";
   if (!unit) return "";
@@ -179,20 +194,49 @@ function sanitizeQuantityInput(value: string) {
   return `${parts[0]}.${parts.slice(1).join("")}`;
 }
 
+function normalizeSaleType(value: unknown): ProductUnitSaleType {
+  if (value === "retail" || value === "wholesale" || value === "stock_only") {
+    return value;
+  }
+  return "retail";
+}
+
+function pluralize(value: string) {
+  const clean = value.trim();
+  if (!clean) return "base units";
+  if (clean.endsWith("s")) return clean;
+  return `${clean}s`;
+}
+
 function validateForm(form: FormData): FormErrors {
   const errors: FormErrors = {};
 
   if (!form.name.trim()) errors.name = "Product name is required";
   if (!form.categoryId) errors.categoryId = "Category is required";
-  if (!form.unitMeasureId) errors.unitMeasureId = "Container / form is required";
-  if (!form.quantityValue || Number(form.quantityValue) <= 0) {
-    errors.quantityValue = "Quantity is required";
+
+  const usableUnits = form.productUnits.filter((u) => u.active !== false);
+  if (usableUnits.length === 0) {
+    errors.productUnits = "Add at least one stock or selling unit";
   }
-  if (!form.quantityUnit) {
-    errors.quantityUnit = "Unit is required";
-  }
-  if (form.isSellable && Number(form.sellPrice || 0) <= 0) {
-    errors.sellPrice = "Sell price is required for sellable products";
+
+  const hasInvalidUnit = usableUnits.some((u, index) => {
+    const cost = Number(u.costPrice || 0);
+    const sell = Number(u.sellingPrice || 0);
+
+    return (
+      !u.unitMeasureId ||
+      (index === 0 && !u.unitSizeId) ||
+      !u.contains ||
+      Number(u.contains) <= 0 ||
+      cost <= 0 ||
+      sell < 0 ||
+      (u.canSell && u.saleType !== "stock_only" && sell <= 0)
+    );
+  });
+
+  if (hasInvalidUnit) {
+    errors.productUnits =
+      "Each unit needs a form, quantity, buying cost, and selling price if it can be sold.";
   }
 
   return errors;
@@ -216,19 +260,7 @@ function useBodyScrollLock(locked: boolean) {
 }
 
 /* ─────────────────────────────────────────────
-   Visual icons removed for a cleaner UI
-───────────────────────────────────────────── */
-const IconPlus = () => null;
-const IconSearch = () => null;
-const IconTrash = () => null;
-const IconEdit = () => null;
-const IconCheck = () => null;
-const IconX = () => null;
-const IconChevronLeft = () => null;
-const IconChevronRight = () => null;
-
-/* ─────────────────────────────────────────────
-   Toast
+   UI Helpers
 ───────────────────────────────────────────── */
 function Toast({
   message,
@@ -261,9 +293,6 @@ function Toast({
   );
 }
 
-/* ─────────────────────────────────────────────
-   KPI Card
-───────────────────────────────────────────── */
 function KpiCard({
   label,
   value,
@@ -276,38 +305,10 @@ function KpiCard({
   variant?: "neutral" | "success" | "warning" | "info";
 }) {
   const cfg = {
-    neutral: {
-      border: "#F1E4BF",
-      iconBg: "#FFF9E7",
-      iconColor: "#8A6A00",
-      val: "#2A2112",
-      sub: "#9A7A18",
-      shadow: "0 10px 25px rgba(245,197,24,0.06)",
-    },
-    success: {
-      border: "#CBE9D2",
-      iconBg: "#EAF8EE",
-      iconColor: "#166534",
-      val: "#166534",
-      sub: "#2C8F4B",
-      shadow: "0 10px 25px rgba(34,197,94,0.08)",
-    },
-    warning: {
-      border: "#F4D98C",
-      iconBg: "#FFF6D9",
-      iconColor: "#9A5B00",
-      val: "#8B5A00",
-      sub: "#C17A00",
-      shadow: "0 10px 25px rgba(245,158,11,0.08)",
-    },
-    info: {
-      border: "#E7D8A7",
-      iconBg: "#FFF7D6",
-      iconColor: "#7A6300",
-      val: "#7A6300",
-      sub: "#A28300",
-      shadow: "0 10px 25px rgba(245,197,24,0.08)",
-    },
+    neutral: { border: "#F1E4BF", val: "#2A2112", sub: "#9A7A18" },
+    success: { border: "#CBE9D2", val: "#166534", sub: "#2C8F4B" },
+    warning: { border: "#F4D98C", val: "#8B5A00", sub: "#C17A00" },
+    info: { border: "#E7D8A7", val: "#7A6300", sub: "#A28300" },
   }[variant];
 
   return (
@@ -315,7 +316,7 @@ function KpiCard({
       className="rounded-[22px] p-4 bg-white transition hover:-translate-y-0.5"
       style={{
         border: `1.5px solid ${cfg.border}`,
-        boxShadow: cfg.shadow,
+        boxShadow: "0 10px 25px rgba(245,197,24,0.06)",
       }}
     >
       <div
@@ -339,9 +340,6 @@ function KpiCard({
   );
 }
 
-/* ─────────────────────────────────────────────
-   Badges
-───────────────────────────────────────────── */
 function MarginBadge({ pct }: { pct: number | null }) {
   if (pct === null) return <span className="text-sm text-slate-300">—</span>;
 
@@ -349,8 +347,8 @@ function MarginBadge({ pct }: { pct: number | null }) {
     pct >= 30
       ? "bg-green-100 text-green-700 border border-green-200"
       : pct >= 10
-      ? "bg-amber-100 text-amber-700 border border-amber-200"
-      : "bg-red-100 text-red-700 border border-red-200";
+        ? "bg-amber-100 text-amber-700 border border-amber-200"
+        : "bg-red-100 text-red-700 border border-red-200";
 
   return (
     <span
@@ -426,7 +424,7 @@ function FormSection({
 }
 
 /* ─────────────────────────────────────────────
-   Inline Category Creator
+   Inline Creators
 ───────────────────────────────────────────── */
 function InlineCategoryCreator({
   orgId,
@@ -518,6 +516,115 @@ function InlineCategoryCreator({
   );
 }
 
+function InlineUnitSizeCreator({
+  orgId,
+  measure,
+  onCreated,
+}: {
+  orgId: string;
+  measure?: MeasureLookup;
+  onCreated: (unitSize: UnitSizeLookup) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [kind, setKind] = useState<UnitKind>("count");
+  const [value, setValue] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const allowedKinds = measure?.allowed_kinds?.length
+    ? measure.allowed_kinds
+    : (["count", "mass", "volume"] as UnitKind[]);
+
+  useEffect(() => {
+    if (open && !allowedKinds.includes(kind)) {
+      setKind(allowedKinds[0] ?? "count");
+    }
+  }, [open, allowedKinds, kind]);
+
+  async function handleCreate() {
+    const numericValue = Number(value);
+    if (!Number.isFinite(numericValue) || numericValue <= 0) {
+      setError("Enter a number greater than zero.");
+      return;
+    }
+
+    setSaving(true);
+    setError("");
+    try {
+      const created = await createUnitSize(orgId, kind, numericValue);
+      onCreated(created as UnitSizeLookup);
+      setValue("");
+      setOpen(false);
+    } catch (e: any) {
+      setError(e.message ?? "Failed to create size");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="mt-1">
+      {!open ? (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="text-xs font-semibold text-amber-600 hover:text-amber-700 transition"
+        >
+          Add custom size
+        </button>
+      ) : (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 space-y-2">
+          <div className="text-xs font-semibold text-amber-800">
+            Custom base size
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <select
+              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none"
+              value={kind}
+              onChange={(e) => setKind(e.target.value as UnitKind)}
+            >
+              {allowedKinds.map((k) => (
+                <option key={k} value={k}>
+                  {k === "mass" ? "grams" : k === "volume" ? "ml" : "pcs"}
+                </option>
+              ))}
+            </select>
+            <input
+              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none"
+              value={value}
+              inputMode="decimal"
+              placeholder={kind === "mass" ? "e.g. 250" : kind === "volume" ? "e.g. 750" : "e.g. 50"}
+              onChange={(e) => setValue(sanitizeQuantityInput(e.target.value))}
+            />
+          </div>
+          {error && <p className="text-xs text-red-500">{error}</p>}
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={handleCreate}
+              disabled={saving || !value}
+              className="rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-600 disabled:opacity-50 transition"
+            >
+              {saving ? "Creating…" : "Create size"}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                setValue("");
+                setError("");
+              }}
+              className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ─────────────────────────────────────────────
    Modals
 ───────────────────────────────────────────── */
@@ -542,14 +649,11 @@ function ArchiveModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-5">
-          <div>
-            <div className="text-lg font-bold text-slate-900">
-              Archive this product?
-            </div>
-            <div className="text-sm text-slate-500 mt-0.5">
-              It will be hidden from sales and new orders, but kept in your
-              records. You can restore it at any time.
-            </div>
+          <div className="text-lg font-bold text-slate-900">
+            Archive this product?
+          </div>
+          <div className="text-sm text-slate-500 mt-0.5">
+            It will be hidden from sales and new orders, but kept in your records.
           </div>
         </div>
 
@@ -559,9 +663,7 @@ function ArchiveModal({
           </div>
           {(product.sku || product.barcode) && (
             <div className="mt-1 text-xs text-slate-500 font-mono">
-              {product.sku
-                ? `SKU: ${product.sku}`
-                : `Barcode: ${product.barcode}`}
+              {product.sku ? `SKU: ${product.sku}` : `Barcode: ${product.barcode}`}
             </div>
           )}
         </div>
@@ -571,116 +673,14 @@ function ArchiveModal({
             onClick={onCancel}
             className="flex-1 rounded-xl border border-slate-200 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition"
           >
-            Keep it active
+            Keep active
           </button>
           <button
             onClick={onConfirm}
             disabled={loading}
             className="flex-1 rounded-xl bg-amber-500 py-2.5 text-sm font-semibold text-white hover:bg-amber-600 disabled:opacity-50 transition"
           >
-            {loading ? "Archiving…" : "Yes, archive it"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ConfirmSaveModal({
-  open,
-  mode,
-  form,
-  categories,
-  measures,
-  loading,
-  onConfirm,
-  onCancel,
-}: {
-  open: boolean;
-  mode: "add" | "edit";
-  form: FormData;
-  categories: CategoryLookup[];
-  measures: MeasureLookup[];
-  loading: boolean;
-  onConfirm: () => void;
-  onCancel: () => void;
-}) {
-  if (!open) return null;
-
-  const cat = categories.find((c) => c.id === form.categoryId);
-  const measure = measures.find((m) => m.id === form.unitMeasureId);
-
-  const rows = [
-    {
-      label: "Product",
-      value:
-        formatProductDisplayName({
-          name: form.name,
-          quantity_value: form.quantityValue,
-          quantity_unit: form.quantityUnit,
-        }) || "—",
-    },
-    { label: "SKU", value: form.sku || "—" },
-    { label: "Category", value: cat?.name || "—" },
-    { label: "Container / form", value: measure?.name || "—" },
-    {
-      label: "Quantity",
-      value: formatQuantity(form.quantityValue, form.quantityUnit) || "—",
-    },
-    { label: "Cost", value: fmt(form.costPrice) },
-    { label: "Sell price", value: fmt(form.sellPrice) },
-    { label: "Sellable", value: form.isSellable ? "Yes" : "No" },
-  ];
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
-      onClick={onCancel}
-    >
-      <div
-        className="w-full max-w-md rounded-2xl bg-white shadow-2xl p-6"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="text-lg font-bold text-slate-900 mb-1">
-          {mode === "add" ? "Add this product?" : "Save changes?"}
-        </div>
-        <div className="text-sm text-slate-500 mb-4">
-          {mode === "add"
-            ? "Please review the details before adding."
-            : `You're about to update "${form.name}".`}
-        </div>
-
-        <div className="rounded-xl border border-slate-200 divide-y divide-slate-100 mb-5 overflow-hidden">
-          {rows.map((r) => (
-            <div
-              key={r.label}
-              className="flex items-center justify-between px-4 py-2.5 text-sm"
-            >
-              <span className="text-slate-500">{r.label}</span>
-              <span className="font-semibold text-slate-900 text-right ml-4 truncate max-w-[60%]">
-                {r.value}
-              </span>
-            </div>
-          ))}
-        </div>
-
-        <div className="flex gap-3">
-          <button
-            onClick={onCancel}
-            className="flex-1 rounded-xl border border-slate-200 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition"
-          >
-            Go back
-          </button>
-          <button
-            onClick={onConfirm}
-            disabled={loading}
-            className="flex-1 rounded-xl bg-amber-500 py-2.5 text-sm font-semibold text-white hover:bg-amber-600 disabled:opacity-50 transition"
-          >
-            {loading
-              ? "Saving…"
-              : mode === "add"
-              ? "Confirm & add"
-              : "Confirm & save"}
+            {loading ? "Archiving…" : "Archive"}
           </button>
         </div>
       </div>
@@ -705,17 +705,13 @@ function Modal({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-2xl rounded-2xl bg-white shadow-2xl max-h-[90vh] flex flex-col overflow-hidden"
+        className="w-full max-w-5xl rounded-2xl bg-white shadow-2xl max-h-[90vh] flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4 shrink-0">
-          <div className="flex items-center gap-3">
-            <div>
-              <div className="text-base font-bold text-slate-900">{title}</div>
-              {sub && (
-                <div className="text-xs text-slate-500 mt-0.5">{sub}</div>
-              )}
-            </div>
+          <div>
+            <div className="text-base font-bold text-slate-900">{title}</div>
+            {sub && <div className="text-xs text-slate-500 mt-0.5">{sub}</div>}
           </div>
           <button
             onClick={onClose}
@@ -731,16 +727,314 @@ function Modal({
 }
 
 /* ─────────────────────────────────────────────
+   Product-unit helpers
+───────────────────────────────────────────── */
+function getUnitMeasureName(id: string, measures: MeasureLookup[]) {
+  return measures.find((m) => m.id === id)?.name ?? "unit";
+}
+
+function getUnitSizeLabel(id: string, sizes: UnitSizeLookup[]) {
+  return sizes.find((s) => s.id === id)?.label ?? "";
+}
+
+function makeProductUnitLabel(
+  unit: ProductUnitForm,
+  measures: MeasureLookup[],
+  sizes: UnitSizeLookup[],
+) {
+  const typed = unit.label.trim();
+  if (typed) return typed;
+
+  const measure = getUnitMeasureName(unit.unitMeasureId, measures);
+  const size = getUnitSizeLabel(unit.unitSizeId, sizes);
+
+  if (unit.isDefault && measure && size) return `${measure} (${size})`;
+  return measure || size || "Unit";
+}
+
+function getQuantityFromUnitSize(
+  unitSizeId: string,
+  sizes: UnitSizeLookup[],
+): { value: number | null; unit: QuantityUnit | null } {
+  const size = sizes.find((s) => s.id === unitSizeId);
+  if (!size) return { value: null, unit: null };
+
+  if (size.kind === "mass") return { value: Number(size.grams ?? 0), unit: "g" };
+  if (size.kind === "volume") return { value: Number(size.ml ?? 0), unit: "ml" };
+  if (size.kind === "count") return { value: Number(size.count ?? 0), unit: "pc" };
+
+  return { value: null, unit: null };
+}
+
+function getBaseUnitText(form: FormData, measures: MeasureLookup[]) {
+  const base = form.productUnits[0];
+  if (!base) return "base units";
+  return pluralize(getUnitMeasureName(base.unitMeasureId, measures));
+}
+
+function toProductUnitPayload(
+  form: FormData,
+  measures: MeasureLookup[],
+  sizes: UnitSizeLookup[],
+): SaveProductUnitPayload[] {
+  return form.productUnits
+    .filter((u) => u.active !== false)
+    .map((u, index) => ({
+      id: u.id,
+      product_id: "",
+      label: makeProductUnitLabel({ ...u, isDefault: index === 0 }, measures, sizes),
+      base_quantity: index === 0 ? 1 : Number(u.contains || 1),
+      cost_price: Number(u.costPrice || 0),
+      selling_price: Number(u.sellingPrice || 0),
+      can_sell: u.saleType === "stock_only" ? false : u.canSell,
+      can_restock: u.canRestock,
+      is_default: index === 0,
+      active: true,
+      sale_type: u.saleType,
+      unit_measure_id: u.unitMeasureId || null,
+      unit_size_id: index === 0 ? u.unitSizeId || null : null,
+      barcode: u.barcode || null,
+      sort_order: index,
+    }));
+}
+
+function productUnitsFromProduct(product: Product): ProductUnitForm[] {
+  const units = product.product_units?.length
+    ? product.product_units
+    : [
+        {
+          id: undefined,
+          label: product.unit_size?.label || "Default unit",
+          base_quantity: 1,
+          cost_price: Number(product.cost_price ?? 0),
+          selling_price: Number(product.unit_price ?? 0),
+          can_sell: product.is_sellable !== false,
+          can_restock: true,
+          is_default: true,
+          active: true,
+          sale_type: "retail",
+          unit_measure_id: product.unit_measure_id ?? null,
+          unit_size_id: product.unit_size_id ?? null,
+          barcode: product.barcode ?? null,
+          sort_order: 0,
+        } as any,
+      ];
+
+  return units
+    .filter((u: any) => u.active !== false)
+    .sort((a: any, b: any) => Number(a.sort_order ?? 0) - Number(b.sort_order ?? 0))
+    .map((u: any, index: number) => ({
+      id: u.id,
+      label: u.label ?? "",
+      unitMeasureId: u.unit_measure_id ?? "",
+      unitSizeId: index === 0 ? u.unit_size_id ?? "" : "",
+      contains: String(index === 0 ? 1 : u.base_quantity ?? 1),
+      costPrice: String(u.cost_price ?? ""),
+      sellingPrice: String(u.selling_price ?? ""),
+      barcode: u.barcode ?? "",
+      canSell: u.can_sell !== false,
+      canRestock: u.can_restock !== false,
+      isDefault: index === 0 || Boolean(u.is_default),
+      saleType: normalizeSaleType(u.sale_type),
+      active: u.active !== false,
+    }));
+}
+
+function SaleTypeBadge({ type }: { type: ProductUnitSaleType }) {
+  const classes =
+    type === "retail"
+      ? "bg-blue-50 text-blue-700 border-blue-200"
+      : type === "wholesale"
+        ? "bg-purple-50 text-purple-700 border-purple-200"
+        : "bg-slate-100 text-slate-600 border-slate-200";
+
+  return (
+    <span className={`rounded-full border px-2.5 py-1 text-xs font-bold ${classes}`}>
+      {SALE_TYPE_LABELS[type]}
+    </span>
+  );
+}
+
+function ConfirmSaveModal({
+  open,
+  mode,
+  form,
+  categories,
+  measures,
+  unitSizes,
+  loading,
+  onConfirm,
+  onCancel,
+}: {
+  open: boolean;
+  mode: "add" | "edit";
+  form: FormData;
+  categories: CategoryLookup[];
+  measures: MeasureLookup[];
+  unitSizes: UnitSizeLookup[];
+  loading: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  if (!open) return null;
+
+  const cat = categories.find((c) => c.id === form.categoryId);
+  const baseUnitText = getBaseUnitText(form, measures);
+  const firstUnit = form.productUnits[0];
+  const otherUnits = form.productUnits.slice(1);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+      onClick={onCancel}
+    >
+      <div
+        className="w-full max-w-2xl rounded-3xl bg-white shadow-2xl overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="border-b border-slate-100 bg-[#FFF9EC] px-6 py-5">
+          <div className="text-xl font-bold text-slate-900">
+            {mode === "add" ? "Review product before adding" : "Review product changes"}
+          </div>
+          <div className="text-sm text-slate-500 mt-1">
+            Confirm the product details and units are correct.
+          </div>
+        </div>
+
+        <div className="max-h-[70vh] overflow-y-auto p-6 space-y-5">
+          <div className="rounded-2xl border border-slate-200 p-4">
+            <div className="text-xs font-bold uppercase tracking-widest text-slate-400">
+              Product
+            </div>
+            <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+              <div>
+                <div className="text-slate-500">Name</div>
+                <div className="font-bold text-slate-900">{form.name || "—"}</div>
+              </div>
+              <div>
+                <div className="text-slate-500">Category</div>
+                <div className="font-bold text-slate-900">{cat?.name || "—"}</div>
+              </div>
+              <div>
+                <div className="text-slate-500">SKU</div>
+                <div className="font-bold text-slate-900">{form.sku || "—"}</div>
+              </div>
+              <div>
+                <div className="text-slate-500">Barcode</div>
+                <div className="font-bold text-slate-900">{form.barcode || "—"}</div>
+              </div>
+            </div>
+          </div>
+
+          {firstUnit && (
+            <div className="rounded-2xl border border-green-200 bg-green-50 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <div className="text-xs font-bold uppercase tracking-widest text-green-700">
+                    Smallest inventory unit
+                  </div>
+                  <div className="mt-1 text-lg font-bold text-green-950">
+                    {makeProductUnitLabel({ ...firstUnit, isDefault: true }, measures, unitSizes)}
+                  </div>
+                </div>
+                <SaleTypeBadge type={firstUnit.saleType} />
+              </div>
+              <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+                <div>
+                  <div className="text-green-700/70">Contains</div>
+                  <div className="font-bold text-green-950">1 {baseUnitText}</div>
+                </div>
+                <div>
+                  <div className="text-green-700/70">Buying cost</div>
+                  <div className="font-bold text-green-950">{fmt(firstUnit.costPrice)}</div>
+                </div>
+                <div>
+                  <div className="text-green-700/70">Selling price</div>
+                  <div className="font-bold text-green-950">{fmt(firstUnit.sellingPrice)}</div>
+                </div>
+                <div>
+                  <div className="text-green-700/70">Margin</div>
+                  <div className="font-bold text-green-950">
+                    {margin(firstUnit.costPrice, firstUnit.sellingPrice)?.toFixed(0) ?? "0"}%
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {otherUnits.length > 0 && (
+            <div className="space-y-3">
+              <div className="text-xs font-bold uppercase tracking-widest text-slate-400">
+                Retail / wholesale units
+              </div>
+              {otherUnits.map((u, i) => {
+                const contains = Number(u.contains || 0);
+                return (
+                  <div key={`${u.id ?? "new"}-${i}`} className="rounded-2xl border border-slate-200 p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="font-bold text-slate-900">
+                        {makeProductUnitLabel(u, measures, unitSizes)}
+                      </div>
+                      <SaleTypeBadge type={u.saleType} />
+                    </div>
+                    <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+                      <div>
+                        <div className="text-slate-500">Contains</div>
+                        <div className="font-bold text-slate-900">{contains} {baseUnitText}</div>
+                      </div>
+                      <div>
+                        <div className="text-slate-500">Buying cost</div>
+                        <div className="font-bold text-slate-900">{fmt(u.costPrice)}</div>
+                      </div>
+                      <div>
+                        <div className="text-slate-500">Selling price</div>
+                        <div className="font-bold text-slate-900">{fmt(u.sellingPrice)}</div>
+                      </div>
+                      <div>
+                        <div className="text-slate-500">Cost per base</div>
+                        <div className="font-bold text-slate-900">{fmt(contains > 0 ? Number(u.costPrice || 0) / contains : 0)}</div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <div className="flex gap-3 border-t border-slate-100 px-6 py-4 bg-slate-50">
+          <button
+            onClick={onCancel}
+            className="flex-1 rounded-xl border border-slate-200 bg-white py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition"
+          >
+            Go back
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={loading}
+            className="flex-1 rounded-xl bg-amber-500 py-2.5 text-sm font-semibold text-white hover:bg-amber-600 disabled:opacity-50 transition"
+          >
+            {loading ? "Saving…" : mode === "add" ? "Confirm & add" : "Confirm & save"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────
    Product Form
 ───────────────────────────────────────────── */
 function ProductForm({
   form,
   setForm,
   measures,
+  unitSizes,
   categories,
   suppliers,
   orgId,
   onCategoryCreated,
+  onUnitSizeCreated,
   onSubmit,
   onCancel,
   saving,
@@ -749,83 +1043,76 @@ function ProductForm({
   form: FormData;
   setForm: React.Dispatch<React.SetStateAction<FormData>>;
   measures: MeasureLookup[];
+  unitSizes: UnitSizeLookup[];
   categories: CategoryLookup[];
   suppliers: SupplierLookup[];
   orgId: string;
   onCategoryCreated: (id: string, name: string) => void;
+  onUnitSizeCreated: (size: UnitSizeLookup, targetIndex: number) => void;
   onSubmit: (e: React.FormEvent) => void;
   onCancel: () => void;
   saving: boolean;
   mode: "add" | "edit";
 }) {
-  const [touched, setTouched] = useState<
-    Partial<Record<keyof FormData, boolean>>
-  >({});
+  const [touched, setTouched] = useState<Partial<Record<keyof FormData, boolean>>>({});
   const [submitAttempted, setSubmitAttempted] = useState(false);
 
   const errors = validateForm(form);
   const hasErrors = Object.keys(errors).length > 0;
-
-  const allowedUnits = useMemo(
-    () => getAllowedQuantityUnits(form.unitMeasureId, measures),
-    [form.unitMeasureId, measures]
-  );
-
-  const presetValues = useMemo(() => {
-    if (!form.quantityUnit) return [];
-    return QUANTITY_PRESETS[form.quantityUnit] ?? [];
-  }, [form.quantityUnit]);
+  const baseUnitText = getBaseUnitText(form, measures);
 
   const setField =
     (k: keyof FormData) =>
-    (
-      e: React.ChangeEvent<
-        HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
-      >
-    ) => {
+    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
       const value = e.target.value;
       setForm((prev) => ({ ...prev, [k]: value as never }));
       setTouched((t) => ({ ...t, [k]: true }));
     };
 
-  const touch = (k: keyof FormData) =>
-    setTouched((t) => ({ ...t, [k]: true }));
-
+  const touch = (k: keyof FormData) => setTouched((t) => ({ ...t, [k]: true }));
   const showErr = (k: keyof FormData) =>
     errors[k] && (touched[k] || submitAttempted) ? errors[k] : undefined;
 
-  const marginPct = margin(form.costPrice, form.sellPrice);
+  function updateUnit(index: number, patch: Partial<ProductUnitForm>) {
+    setForm((prev) => ({
+      ...prev,
+      productUnits: prev.productUnits.map((unit, i) =>
+        i === index ? { ...unit, ...patch } : unit,
+      ),
+    }));
+  }
 
-  useEffect(() => {
-    if (!allowedUnits.length) return;
+  function addUnit(saleType: ProductUnitSaleType = "wholesale") {
+    setForm((prev) => ({
+      ...prev,
+      productUnits: [
+        ...prev.productUnits,
+        {
+          ...BLANK_PRODUCT_UNIT,
+          isDefault: false,
+          unitMeasureId: "",
+          unitSizeId: "",
+          contains: "",
+          costPrice: "",
+          sellingPrice: "",
+          saleType,
+          canSell: saleType !== "stock_only",
+          canRestock: true,
+        },
+      ],
+    }));
+  }
 
-    if (!form.quantityUnit || !allowedUnits.includes(form.quantityUnit)) {
-      const nextUnit = allowedUnits[0];
-      setForm((prev) => ({
+  function removeUnit(index: number) {
+    setForm((prev) => {
+      if (prev.productUnits.length <= 1) return prev;
+      const next = prev.productUnits.filter((_, i) => i !== index);
+      return {
         ...prev,
-        quantityUnit: nextUnit,
-        quantityValue:
-          prev.quantityMode === "preset"
-            ? (QUANTITY_PRESETS[nextUnit]?.[0] ?? "")
-            : prev.quantityValue,
-      }));
-    }
-  }, [allowedUnits, form.quantityUnit, setForm, form.quantityMode]);
-
-  useEffect(() => {
-    if (form.quantityMode !== "preset") return;
-    if (!form.quantityUnit) return;
-
-    const values = QUANTITY_PRESETS[form.quantityUnit] ?? [];
-    if (!values.length) return;
-
-    if (!form.quantityValue || !values.includes(form.quantityValue)) {
-      setForm((prev) => ({
-        ...prev,
-        quantityValue: values[0] ?? "",
-      }));
-    }
-  }, [form.quantityMode, form.quantityUnit, form.quantityValue, setForm]);
+        productUnits: next.map((u, i) => ({ ...u, isDefault: i === 0 })),
+      };
+    });
+  }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -837,22 +1124,18 @@ function ProductForm({
   return (
     <form onSubmit={handleSubmit} className="space-y-6" noValidate>
       {submitAttempted && hasErrors && (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 flex items-start gap-2">
-          <span>Please fix the highlighted fields before continuing.</span>
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          Please fix the highlighted fields before continuing.
         </div>
       )}
 
-      <FormSection title="Identity">
+      <FormSection title="Product information">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <Label required>Product name</Label>
             <input
-              className={`${S.inputCls} ${
-                showErr("name")
-                  ? "border-red-400 focus:border-red-400 focus:ring-red-100"
-                  : ""
-              }`}
-              placeholder="e.g. Granola or Raw Honey"
+              className={`${S.inputCls} ${showErr("name") ? "border-red-400 focus:border-red-400 focus:ring-red-100" : ""}`}
+              placeholder="e.g. Honey sachet, Soda, Eggs"
               value={form.name}
               onChange={setField("name")}
               onBlur={() => touch("name")}
@@ -862,36 +1145,20 @@ function ProductForm({
 
           <div>
             <Label>SKU</Label>
-            <input
-              className={S.inputCls}
-              placeholder="e.g. GRA-200"
-              value={form.sku}
-              onChange={setField("sku")}
-            />
+            <input className={S.inputCls} placeholder="e.g. HNY-SAC" value={form.sku} onChange={setField("sku")} />
           </div>
         </div>
 
-        <div>
-          <Label>Barcode</Label>
-          <input
-            className={`${S.inputCls} font-mono`}
-            placeholder="EAN / UPC (optional)"
-            value={form.barcode}
-            onChange={setField("barcode")}
-          />
-        </div>
-      </FormSection>
-
-      <FormSection title="Classification">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <Label>Barcode</Label>
+            <input className={`${S.inputCls} font-mono`} placeholder="Main product barcode (optional)" value={form.barcode} onChange={setField("barcode")} />
+          </div>
+
           <div>
             <Label required>Category</Label>
             <select
-              className={`${S.selectCls} ${
-                showErr("categoryId")
-                  ? "border-red-400 focus:border-red-400 focus:ring-red-100"
-                  : ""
-              }`}
+              className={`${S.selectCls} ${showErr("categoryId") ? "border-red-400 focus:border-red-400 focus:ring-red-100" : ""}`}
               value={form.categoryId}
               onChange={setField("categoryId")}
               onBlur={() => touch("categoryId")}
@@ -899,293 +1166,221 @@ function ProductForm({
             >
               <option value="">— Select category —</option>
               {categories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
+                <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
             <FieldError message={showErr("categoryId")} />
             <InlineCategoryCreator orgId={orgId} onCreated={onCategoryCreated} />
           </div>
-
-          {/* <div>
-            <Label>Supplier</Label>
-            <select
-              className={S.selectCls}
-              style={S.selectChevronStyle}
-              value={form.supplierId}
-              onChange={setField("supplierId")}
-            >
-              <option value="">— Select supplier —</option>
-              {suppliers.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-          </div> */}
-        </div>
-      </FormSection>
-
-      <FormSection title="Product structure">
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div>
-            <Label required>Container / form</Label>
-            <select
-              className={`${S.selectCls} ${
-                showErr("unitMeasureId")
-                  ? "border-red-400 focus:border-red-400 focus:ring-red-100"
-                  : ""
-              }`}
-              style={S.selectChevronStyle}
-              value={form.unitMeasureId}
-              onChange={setField("unitMeasureId")}
-              onBlur={() => touch("unitMeasureId")}
-            >
-              <option value="">— Select form —</option>
-              {measures.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.name}
-                </option>
-              ))}
-            </select>
-            <FieldError message={showErr("unitMeasureId")} />
-          </div>
-
-          <div>
-            <Label required>Unit</Label>
-            <select
-              className={`${S.selectCls} ${
-                showErr("quantityUnit")
-                  ? "border-red-400 focus:border-red-400 focus:ring-red-100"
-                  : ""
-              }`}
-              style={S.selectChevronStyle}
-              value={form.quantityUnit}
-              onChange={(e) => {
-                const nextUnit = e.target.value as QuantityUnit | "";
-                setForm((prev) => ({
-                  ...prev,
-                  quantityUnit: nextUnit,
-                  quantityValue:
-                    prev.quantityMode === "preset"
-                      ? (nextUnit ? QUANTITY_PRESETS[nextUnit]?.[0] ?? "" : "")
-                      : prev.quantityValue,
-                }));
-                setTouched((t) => ({ ...t, quantityUnit: true }));
-              }}
-              onBlur={() => touch("quantityUnit")}
-              disabled={!allowedUnits.length}
-            >
-              {!allowedUnits.length ? (
-                <option value="">Select form first</option>
-              ) : (
-                <>
-                  <option value="">— Select unit —</option>
-                  {allowedUnits.map((u) => (
-                    <option key={u} value={u}>
-                      {u}
-                    </option>
-                  ))}
-                </>
-              )}
-            </select>
-            <FieldError message={showErr("quantityUnit")} />
-          </div>
-
-          <div>
-            <Label required>Quantity mode</Label>
-            <select
-              className={S.selectCls}
-              style={S.selectChevronStyle}
-              value={form.quantityMode}
-              onChange={(e) => {
-                const nextMode = e.target.value as "preset" | "custom";
-                setForm((prev) => ({
-                  ...prev,
-                  quantityMode: nextMode,
-                  quantityValue:
-                    nextMode === "preset" && prev.quantityUnit
-                      ? (QUANTITY_PRESETS[prev.quantityUnit]?.[0] ?? "")
-                      : prev.quantityValue,
-                }));
-              }}
-            >
-              <option value="preset">Choose common quantity</option>
-              <option value="custom">Enter custom quantity</option>
-            </select>
-          </div>
         </div>
 
-        {form.quantityMode === "preset" ? (
-          <div>
-            <Label required>Quantity</Label>
-            <select
-              className={`${S.selectCls} ${
-                showErr("quantityValue")
-                  ? "border-red-400 focus:border-red-400 focus:ring-red-100"
-                  : ""
-              }`}
-              style={S.selectChevronStyle}
-              value={form.quantityValue}
-              onChange={setField("quantityValue")}
-              onBlur={() => touch("quantityValue")}
-              disabled={!form.quantityUnit}
-            >
-              {!form.quantityUnit ? (
-                <option value="">Select unit first</option>
-              ) : (
-                <>
-                  <option value="">— Select quantity —</option>
-                  {presetValues.map((value) => (
-                    <option key={value} value={value}>
-                      {value}
-                    </option>
-                  ))}
-                </>
-              )}
-            </select>
-            <FieldError message={showErr("quantityValue")} />
-          </div>
-        ) : (
-          <div>
-            <Label required>Custom quantity</Label>
-            <input
-              className={`${S.inputCls} ${
-                showErr("quantityValue")
-                  ? "border-red-400 focus:border-red-400 focus:ring-red-100"
-                  : ""
-              }`}
-              type="text"
-              inputMode="decimal"
-              placeholder="e.g. 200"
-              value={form.quantityValue}
-              onChange={(e) => {
-                const value = sanitizeQuantityInput(e.target.value);
-                setForm((prev) => ({ ...prev, quantityValue: value }));
-                setTouched((t) => ({ ...t, quantityValue: true }));
-              }}
-              onBlur={() => touch("quantityValue")}
-            />
-            <FieldError message={showErr("quantityValue")} />
-          </div>
-        )}
-
-        <div className="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm">
-          <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-amber-700">
-            Preview
-          </div>
-          <div className="mt-1 text-slate-900 font-semibold">
-            {formatProductDisplayName({
-              name: form.name,
-              quantity_value: form.quantityValue,
-              quantity_unit: form.quantityUnit,
-            })}
-          </div>
-        </div>
-      </FormSection>
-
-      <FormSection title="Pricing">
         <div>
-          <Label>Sellable</Label>
-          <select
-            className={S.selectCls}
-            style={S.selectChevronStyle}
-            value={form.isSellable ? "yes" : "no"}
-            onChange={(e) =>
-              setForm((prev) => ({
-                ...prev,
-                isSellable: e.target.value === "yes",
-              }))
-            }
-          >
-            <option value="yes">Yes — available for sale</option>
-            <option value="no">No — internal use only</option>
+          <Label>Supplier</Label>
+          <select className={S.selectCls} style={S.selectChevronStyle} value={form.supplierId} onChange={setField("supplierId")}>
+            <option value="">— Select supplier —</option>
+            {suppliers.map((s) => (
+              <option key={s.id} value={s.id}>{s.name}</option>
+            ))}
           </select>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div>
-            <Label>Cost price (Ksh)</Label>
-            <input
-              className={S.inputCls}
-              type="text"
-              inputMode="decimal"
-              value={form.costPrice}
-              onChange={(e) =>
-                setForm((prev) => ({
-                  ...prev,
-                  costPrice: sanitizeQuantityInput(e.target.value),
-                }))
-              }
-            />
-          </div>
-
-          <div>
-            <Label required={form.isSellable}>Sell price (Ksh)</Label>
-            <input
-              className={`${S.inputCls} ${
-                showErr("sellPrice")
-                  ? "border-red-400 focus:border-red-400 focus:ring-red-100"
-                  : ""
-              }`}
-              type="text"
-              inputMode="decimal"
-              value={form.sellPrice}
-              onChange={(e) =>
-                setForm((prev) => ({
-                  ...prev,
-                  sellPrice: sanitizeQuantityInput(e.target.value),
-                }))
-              }
-              onBlur={() => touch("sellPrice")}
-            />
-            <FieldError message={showErr("sellPrice")} />
-          </div>
-
-          <div>
-            <Label>Margin</Label>
-            <div className="flex h-[42px] items-center rounded-xl border border-slate-200 bg-slate-50 px-3.5 text-base font-bold">
-              {marginPct !== null ? (
-                <span
-                  className={
-                    marginPct >= 30
-                      ? "text-green-600"
-                      : marginPct >= 10
-                      ? "text-amber-600"
-                      : "text-red-600"
-                  }
-                >
-                  {marginPct.toFixed(1)}%
-                </span>
-              ) : (
-                <span className="text-slate-300 text-sm">—</span>
-              )}
-            </div>
-          </div>
+        <div>
+          <Label>Notes</Label>
+          <textarea rows={3} className={`${S.inputCls} resize-none`} placeholder="Batch details, storage info, supplier notes…" value={form.notes} onChange={setField("notes")} />
         </div>
       </FormSection>
 
-      <FormSection title="Notes">
-        <textarea
-          rows={3}
-          className={`${S.inputCls} resize-none`}
-          placeholder="Batch details, storage info, allergens…"
-          value={form.notes}
-          onChange={setField("notes")}
-        />
+      <FormSection title="Stock & selling units">
+        <div className="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <strong>Start with the smallest inventory unit.</strong> This is the smallest item you can track or sell individually. Add boxes, cartons, trays, or wholesale packs below.
+        </div>
+
+        <FieldError message={showErr("productUnits")} />
+
+        <div className="space-y-4">
+          {form.productUnits.map((unit, index) => {
+            const contains = index === 0 ? 1 : Number(unit.contains || 0);
+            const cost = Number(unit.costPrice || 0);
+            const sell = Number(unit.sellingPrice || 0);
+            const displayUnit = makeProductUnitLabel({ ...unit, isDefault: index === 0 }, measures, unitSizes);
+            const costPerBase = contains > 0 ? cost / contains : 0;
+            const sellPerBase = contains > 0 ? sell / contains : 0;
+            const profit = sell - cost;
+            const marginPct = sell > 0 ? ((sell - cost) / sell) * 100 : null;
+            const currentMeasureName = getUnitMeasureName(unit.unitMeasureId, measures);
+            const selectedMeasure = measures.find((m) => m.id === unit.unitMeasureId);
+
+            return (
+              <div key={`${unit.id ?? "new"}-${index}`} className="rounded-[22px] border border-[#EADFC2] bg-white p-4 shadow-[0_10px_28px_rgba(15,23,42,0.04)]">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between mb-4">
+                  <div>
+                    <div className="text-sm font-bold text-slate-900">
+                      {index === 0 ? "Smallest inventory unit" : `Retail / wholesale unit ${index}`}
+                    </div>
+                    <div className="text-xs text-slate-500 mt-0.5">
+                      {index === 0
+                        ? "Inventory is counted using this unit. It always contains 1 of itself."
+                        : `This unit contains ${unit.contains || "—"} ${baseUnitText}.`}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {index === 0 && <span className="rounded-full bg-green-50 px-3 py-1 text-xs font-bold text-green-700 border border-green-200">Default</span>}
+                    {index > 0 && <SaleTypeBadge type={unit.saleType} />}
+                    {form.productUnits.length > 1 && (
+                      <button type="button" onClick={() => removeUnit(index)} className="rounded-xl border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-100 transition">
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div>
+                    <Label required>{index === 0 ? "Smallest item form" : "Selling / stock unit"}</Label>
+                    <select
+                      className={S.selectCls}
+                      style={S.selectChevronStyle}
+                      value={unit.unitMeasureId}
+                      onChange={(e) => updateUnit(index, { unitMeasureId: e.target.value, unitSizeId: index === 0 ? unit.unitSizeId : "", label: "" })}
+                    >
+                      <option value="">— Select —</option>
+                      {measures.map((m) => (
+                        <option key={m.id} value={m.id}>{m.name}</option>
+                      ))}
+                    </select>
+                    {index === 0 && <p className="mt-1 text-xs text-slate-400">Examples: sachet, packet, bottle, piece.</p>}
+                  </div>
+
+                  {index === 0 ? (
+                    <div>
+                      <Label required>Base size</Label>
+                      <select className={S.selectCls} style={S.selectChevronStyle} value={unit.unitSizeId} onChange={(e) => updateUnit(index, { unitSizeId: e.target.value, label: "" })}>
+                        <option value="">— Select —</option>
+                        {unitSizes.map((s) => (
+                          <option key={s.id} value={s.id}>{s.label}</option>
+                        ))}
+                      </select>
+                      <InlineUnitSizeCreator orgId={orgId} measure={selectedMeasure} onCreated={(size) => onUnitSizeCreated(size, index)} />
+                    </div>
+                  ) : (
+                    <div>
+                      <Label>Unit type</Label>
+                      <select
+                        className={S.selectCls}
+                        style={S.selectChevronStyle}
+                        value={unit.saleType}
+                        onChange={(e) => {
+                          const saleType = e.target.value as ProductUnitSaleType;
+                          updateUnit(index, { saleType, canSell: saleType !== "stock_only" });
+                        }}
+                      >
+                        <option value="retail">Retail / small pack</option>
+                        <option value="wholesale">Wholesale / package</option>
+                        <option value="stock_only">Stock only</option>
+                      </select>
+                    </div>
+                  )}
+
+                  <div>
+                    <Label required>{index === 0 ? "Contains" : `Contains (${baseUnitText})`}</Label>
+                    <input
+                      className={`${S.inputCls} ${index === 0 ? "bg-slate-50 text-slate-500" : ""}`}
+                      type="text"
+                      inputMode="decimal"
+                      value={index === 0 ? "1" : unit.contains}
+                      disabled={index === 0}
+                      onChange={(e) => updateUnit(index, { contains: sanitizeQuantityInput(e.target.value) })}
+                    />
+                    <p className="mt-1 text-xs text-slate-400">
+                      {index === 0 ? "Always 1 for the smallest unit." : `Example: 1 box = 6 ${baseUnitText}.`}
+                    </p>
+                  </div>
+
+                  <div>
+                    <Label>Unit barcode</Label>
+                    <input className={`${S.inputCls} font-mono`} placeholder="Optional" value={unit.barcode} onChange={(e) => updateUnit(index, { barcode: e.target.value })} />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
+                  <div>
+                    <Label required>Buying cost (Ksh)</Label>
+                    <input className={S.inputCls} type="text" inputMode="decimal" value={unit.costPrice} onChange={(e) => updateUnit(index, { costPrice: sanitizeQuantityInput(e.target.value) })} />
+                  </div>
+
+                  <div>
+                    <Label required={unit.canSell && unit.saleType !== "stock_only"}>Selling price (Ksh)</Label>
+                    <input className={S.inputCls} type="text" inputMode="decimal" value={unit.sellingPrice} onChange={(e) => updateUnit(index, { sellingPrice: sanitizeQuantityInput(e.target.value) })} disabled={unit.saleType === "stock_only"} />
+                  </div>
+
+                  <div>
+                    <Label>Can sell?</Label>
+                    <select className={S.selectCls} style={S.selectChevronStyle} value={unit.canSell ? "yes" : "no"} disabled={unit.saleType === "stock_only"} onChange={(e) => updateUnit(index, { canSell: e.target.value === "yes" })}>
+                      <option value="yes">Yes</option>
+                      <option value="no">No</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <Label>Can restock?</Label>
+                    <select className={S.selectCls} style={S.selectChevronStyle} value={unit.canRestock ? "yes" : "no"} onChange={(e) => updateUnit(index, { canRestock: e.target.value === "yes" })}>
+                      <option value="yes">Yes</option>
+                      <option value="no">No</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="mt-4 rounded-2xl border border-slate-100 bg-slate-50 p-3 grid grid-cols-1 sm:grid-cols-4 gap-3 text-sm">
+                  <div>
+                    <div className="text-[10px] uppercase tracking-wide text-slate-400 font-bold">Unit</div>
+                    <div className="font-semibold text-slate-900 mt-0.5">{displayUnit}</div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] uppercase tracking-wide text-slate-400 font-bold">Cost per base unit</div>
+                    <div className="font-semibold text-slate-900 mt-0.5">{fmt(costPerBase)}</div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] uppercase tracking-wide text-slate-400 font-bold">Sell per base unit</div>
+                    <div className="font-semibold text-slate-900 mt-0.5">{fmt(sellPerBase)}</div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] uppercase tracking-wide text-slate-400 font-bold">Profit / Margin</div>
+                    <div className="font-semibold text-slate-900 mt-0.5">{fmt(profit)} {marginPct !== null ? `• ${marginPct.toFixed(0)}%` : ""}</div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <button type="button" onClick={() => addUnit("retail")} className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-bold text-blue-700 hover:bg-blue-100 transition">
+            Add retail unit
+          </button>
+          <button type="button" onClick={() => addUnit("wholesale")} className="rounded-2xl border border-purple-200 bg-purple-50 px-4 py-2.5 text-sm font-bold text-purple-700 hover:bg-purple-100 transition">
+            Add wholesale unit
+          </button>
+          <button type="button" onClick={() => addUnit("stock_only")} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-100 transition">
+            Add stock-only unit
+          </button>
+        </div>
+      </FormSection>
+
+      <FormSection title="Status">
+        <div>
+          <Label>Available at checkout</Label>
+          <select className={S.selectCls} style={S.selectChevronStyle} value={form.isSellable ? "yes" : "no"} onChange={(e) => setForm((prev) => ({ ...prev, isSellable: e.target.value === "yes" }))}>
+            <option value="yes">Yes — show this product on POS</option>
+            <option value="no">No — internal use only</option>
+          </select>
+        </div>
       </FormSection>
 
       <div className="flex justify-end gap-3 pt-2 border-t border-slate-100">
-        <button type="button" onClick={onCancel} className={S.btnGhost}>
-          Cancel
-        </button>
+        <button type="button" onClick={onCancel} className={S.btnGhost}>Cancel</button>
         <button type="submit" disabled={saving} className={S.btnPrimary}>
-          {saving
-            ? "Saving…"
-            : mode === "add"
-            ? "Review & add"
-            : "Review & save"}
+          {saving ? "Saving…" : mode === "add" ? "Review & add" : "Review & save"}
         </button>
       </div>
     </form>
@@ -1213,69 +1408,13 @@ function Pagination({
   const start = (page - 1) * pageSize + 1;
   const end = Math.min(page * pageSize, totalItems);
 
-  const pages: (number | "…")[] = [];
-  if (totalPages <= 7) {
-    for (let i = 1; i <= totalPages; i++) pages.push(i);
-  } else {
-    pages.push(1);
-    if (page > 3) pages.push("…");
-    for (
-      let i = Math.max(2, page - 1);
-      i <= Math.min(totalPages - 1, page + 1);
-      i++
-    ) {
-      pages.push(i);
-    }
-    if (page < totalPages - 2) pages.push("…");
-    pages.push(totalPages);
-  }
-
   return (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-t border-[#F1E6C9] bg-[#FFFDF8] px-6 py-4">
-      <span className="text-xs text-slate-500">
-        Showing {start}–{end} of {totalItems} product
-        {totalItems !== 1 ? "s" : ""}
-      </span>
-
+      <span className="text-xs text-slate-500">Showing {start}–{end} of {totalItems} product{totalItems !== 1 ? "s" : ""}</span>
       <div className="flex items-center gap-1.5">
-        <button
-          onClick={() => onPage(page - 1)}
-          disabled={page === 1}
-          className="h-9 rounded-xl border border-[#EADFC2] bg-white px-3 text-xs font-bold text-slate-600 hover:bg-[#FFF8E6] disabled:opacity-40 disabled:cursor-not-allowed transition"
-        >
-          Prev
-        </button>
-
-        {pages.map((p, i) =>
-          p === "…" ? (
-            <span
-              key={`ellipsis-${i}`}
-              className="w-8 text-center text-slate-400 text-sm"
-            >
-              …
-            </span>
-          ) : (
-            <button
-              key={p}
-              onClick={() => onPage(p as number)}
-              className={`h-9 min-w-[36px] px-2 rounded-xl text-sm font-semibold transition ${
-                p === page
-                  ? "bg-amber-500 text-white border border-amber-500 shadow-[0_10px_24px_rgba(245,197,24,0.28)]"
-                  : "border border-[#EADFC2] bg-white text-slate-700 hover:bg-[#FFF8E6]"
-              }`}
-            >
-              {p}
-            </button>
-          )
-        )}
-
-        <button
-          onClick={() => onPage(page + 1)}
-          disabled={page === totalPages}
-          className="h-9 rounded-xl border border-[#EADFC2] bg-white px-3 text-xs font-bold text-slate-600 hover:bg-[#FFF8E6] disabled:opacity-40 disabled:cursor-not-allowed transition"
-        >
-          Next
-        </button>
+        <button onClick={() => onPage(page - 1)} disabled={page === 1} className="h-9 rounded-xl border border-[#EADFC2] bg-white px-3 text-xs font-bold text-slate-600 hover:bg-[#FFF8E6] disabled:opacity-40 disabled:cursor-not-allowed transition">Prev</button>
+        <span className="px-3 text-sm font-semibold text-slate-600">{page} / {totalPages}</span>
+        <button onClick={() => onPage(page + 1)} disabled={page === totalPages} className="h-9 rounded-xl border border-[#EADFC2] bg-white px-3 text-xs font-bold text-slate-600 hover:bg-[#FFF8E6] disabled:opacity-40 disabled:cursor-not-allowed transition">Next</button>
       </div>
     </div>
   );
@@ -1288,20 +1427,16 @@ export default function ProductsPage() {
   const [orgId, setOrgId] = useState<string | null>(null);
   const [items, setItems] = useState<Product[]>([]);
   const [err, setErr] = useState("");
-  const [toast, setToast] = useState<{
-    message: string;
-    type: "success" | "error";
-  } | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
   const [measures, setMeasures] = useState<MeasureLookup[]>([]);
+  const [unitSizes, setUnitSizes] = useState<UnitSizeLookup[]>([]);
   const [categories, setCategories] = useState<CategoryLookup[]>([]);
   const [suppliers, setSuppliers] = useState<SupplierLookup[]>([]);
 
   const [search, setSearch] = useState("");
   const [filterCat, setFilterCat] = useState("");
-  const [filterStatus, setFilterStatus] = useState<
-    "" | "sellable" | "not_sellable"
-  >("");
+  const [filterStatus, setFilterStatus] = useState<"" | "sellable" | "not_sellable">("");
   const [showArchived, setShowArchived] = useState(false);
   const [page, setPage] = useState(1);
 
@@ -1317,18 +1452,23 @@ export default function ProductsPage() {
   const [pendingAddConfirm, setPendingAddConfirm] = useState(false);
   const [pendingEditConfirm, setPendingEditConfirm] = useState(false);
 
-  const isAnyModalOpen =
-    showAddModal ||
-    !!editProduct ||
-    !!deletingProduct ||
-    pendingAddConfirm ||
-    pendingEditConfirm;
-
+  const isAnyModalOpen = showAddModal || !!editProduct || !!deletingProduct || pendingAddConfirm || pendingEditConfirm;
   useBodyScrollLock(isAnyModalOpen);
 
   async function refresh(o: string) {
     const rows = await listProducts(o, !showArchived);
     setItems(rows);
+  }
+
+  function makeInitialUnit(measureId = measures[0]?.id ?? "", sizeId = unitSizes[0]?.id ?? "") {
+    return {
+      ...BLANK_PRODUCT_UNIT,
+      unitMeasureId: measureId,
+      unitSizeId: sizeId,
+      contains: "1",
+      saleType: "retail" as ProductUnitSaleType,
+      isDefault: true,
+    };
   }
 
   useEffect(() => {
@@ -1337,28 +1477,26 @@ export default function ProductsPage() {
         const o = await bootstrapOrg();
         setOrgId(o);
 
-        const [uoms, cats, sups] = await Promise.all([
+        const [uoms, sizes, cats, sups] = await Promise.all([
           listUnitMeasures(o),
+          listUnitSizes(o),
           listCategories(o),
           listSuppliers(o),
         ]);
 
         const typedMeasures = uoms as MeasureLookup[];
+        const typedSizes = sizes as UnitSizeLookup[];
         setMeasures(typedMeasures);
+        setUnitSizes(typedSizes);
         setCategories(cats as CategoryLookup[]);
         setSuppliers(sups as SupplierLookup[]);
 
-        const firstId = typedMeasures?.[0]?.id ?? "";
-        const firstAllowedUnit =
-          getAllowedQuantityUnits(firstId, typedMeasures)[0] ?? "";
+        const firstMeasureId = typedMeasures?.[0]?.id ?? "";
+        const firstSizeId = typedSizes?.[0]?.id ?? "";
 
         setAddForm((f) => ({
           ...f,
-          unitMeasureId: firstId,
-          quantityUnit: firstAllowedUnit,
-          quantityValue: firstAllowedUnit
-            ? (QUANTITY_PRESETS[firstAllowedUnit]?.[0] ?? "")
-            : "",
+          productUnits: [makeInitialUnit(firstMeasureId, firstSizeId)],
         }));
 
         await refresh(o);
@@ -1366,6 +1504,7 @@ export default function ProductsPage() {
         setErr(e.message ?? String(e));
       }
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showArchived]);
 
   useEffect(() => {
@@ -1373,10 +1512,7 @@ export default function ProductsPage() {
   }, [search, filterCat, filterStatus, showArchived]);
 
   const allCategories = useMemo(() => {
-    return categories
-      .map((c) => c.name)
-      .filter(Boolean)
-      .sort((a, b) => a.localeCompare(b));
+    return categories.map((c) => c.name).filter(Boolean).sort((a, b) => a.localeCompare(b));
   }, [categories]);
 
   const filtered = useMemo(() => {
@@ -1387,22 +1523,11 @@ export default function ProductsPage() {
       const catName = getCategoryName(p).toLowerCase();
       const sku = (p.sku ?? "").toLowerCase();
       const supplierName = (p.supplier?.name ?? "").toLowerCase();
-      const qty = formatQuantity(p.quantity_value, p.quantity_unit).toLowerCase();
+      const unitNames = (p.product_units ?? []).map((u) => u.label).join(" ").toLowerCase();
 
-      const matchText =
-        !t ||
-        displayName.includes(t) ||
-        qty.includes(t) ||
-        sku.includes(t) ||
-        (p.barcode ?? "").toLowerCase().includes(t) ||
-        supplierName.includes(t) ||
-        catName.includes(t);
-
+      const matchText = !t || displayName.includes(t) || sku.includes(t) || (p.barcode ?? "").toLowerCase().includes(t) || supplierName.includes(t) || catName.includes(t) || unitNames.includes(t);
       const matchCat = !filterCat || getCategoryName(p) === filterCat;
-      const matchStatus =
-        !filterStatus ||
-        (filterStatus === "sellable" && p.is_sellable !== false) ||
-        (filterStatus === "not_sellable" && p.is_sellable === false);
+      const matchStatus = !filterStatus || (filterStatus === "sellable" && p.is_sellable !== false) || (filterStatus === "not_sellable" && p.is_sellable === false);
 
       return matchText && matchCat && matchStatus;
     });
@@ -1410,54 +1535,49 @@ export default function ProductsPage() {
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
-  const paginated = filtered.slice(
-    (safePage - 1) * PAGE_SIZE,
-    safePage * PAGE_SIZE
-  );
+  const paginated = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
   useEffect(() => {
-    if (page > totalPages) {
-      setPage(totalPages);
-    }
+    if (page > totalPages) setPage(totalPages);
   }, [page, totalPages]);
 
   const kpis = useMemo(() => {
     const total = items.length;
     const activeSellable = items.filter((p) => p.is_sellable !== false).length;
     const archived = items.filter((p) => p.active === false).length;
-    const margins = items
-      .map((p) => margin(p.cost_price, p.unit_price))
-      .filter((m) => m !== null) as number[];
-    const avgMargin = margins.length
-      ? margins.reduce((a, b) => a + b, 0) / margins.length
-      : 0;
-    const categoriesCount = new Set(
-      items.map((p) => getCategoryName(p)).filter(Boolean)
-    ).size;
+    const margins = items.map((p) => margin(p.cost_price, p.unit_price)).filter((m) => m !== null) as number[];
+    const avgMargin = margins.length ? margins.reduce((a, b) => a + b, 0) / margins.length : 0;
+    const categoriesCount = new Set(items.map((p) => getCategoryName(p)).filter(Boolean)).size;
 
-    return {
-      total,
-      activeSellable,
-      archived,
-      avgMargin,
-      categories: categoriesCount,
-    };
+    return { total, activeSellable, archived, avgMargin, categories: categoriesCount };
   }, [items]);
 
   function handleAddCategoryCreated(id: string, name: string) {
-    setCategories((prev) =>
-      [...prev, { id, name }].sort((a, b) => a.name.localeCompare(b.name))
-    );
+    setCategories((prev) => [...prev, { id, name }].sort((a, b) => a.name.localeCompare(b.name)));
     setAddForm((f) => ({ ...f, categoryId: id }));
     setToast({ message: `Category "${name}" created`, type: "success" });
   }
 
   function handleEditCategoryCreated(id: string, name: string) {
-    setCategories((prev) =>
-      [...prev, { id, name }].sort((a, b) => a.name.localeCompare(b.name))
-    );
+    setCategories((prev) => [...prev, { id, name }].sort((a, b) => a.name.localeCompare(b.name)));
     setEditForm((f) => ({ ...f, categoryId: id }));
     setToast({ message: `Category "${name}" created`, type: "success" });
+  }
+
+  function handleUnitSizeCreated(size: UnitSizeLookup, targetIndex: number, mode: "add" | "edit") {
+    setUnitSizes((prev) => {
+      const exists = prev.some((s) => s.id === size.id);
+      const next = exists ? prev : [...prev, size];
+      return next.sort((a, b) => a.label.localeCompare(b.label));
+    });
+
+    const setter = mode === "add" ? setAddForm : setEditForm;
+    setter((prev) => ({
+      ...prev,
+      productUnits: prev.productUnits.map((unit, index) =>
+        index === targetIndex ? { ...unit, unitSizeId: size.id, label: "" } : unit,
+      ),
+    }));
   }
 
   function handleAdd(e: React.FormEvent) {
@@ -1473,49 +1593,35 @@ export default function ProductsPage() {
     setErr("");
 
     try {
-      const productDisplay = formatProductDisplayName({
-        name: addForm.name.trim(),
-        quantity_value: addForm.quantityValue,
-        quantity_unit: addForm.quantityUnit,
-      });
+      const firstUnit = addForm.productUnits[0];
+      const quantity = getQuantityFromUnitSize(firstUnit?.unitSizeId ?? "", unitSizes);
+      const productDisplay = addForm.name.trim();
 
-      await createProduct(orgId, {
+      const created = await createProduct(orgId, {
         name: addForm.name.trim(),
         sku: addForm.sku.trim() || undefined,
         category_id: addForm.categoryId || null,
         barcode: addForm.barcode.trim() || undefined,
         supplier_id: addForm.supplierId || null,
         notes: addForm.notes.trim() || undefined,
-        cost_price: Number(addForm.costPrice || 0),
-        unit_price: Number(addForm.sellPrice || 0),
-        quantity_value: Number(addForm.quantityValue),
-        quantity_unit: addForm.quantityUnit || null,
-        unit_measure_id: addForm.unitMeasureId || null,
+        cost_price: Number(firstUnit?.costPrice || 0),
+        unit_price: Number(firstUnit?.sellingPrice || 0),
+        quantity_value: quantity.value,
+        quantity_unit: quantity.unit,
+        unit_measure_id: firstUnit?.unitMeasureId || null,
+        unit_size_id: firstUnit?.unitSizeId || null,
         is_sellable: addForm.isSellable,
+        create_default_unit: false,
       });
 
-      const allowedUnits = getAllowedQuantityUnits(
-        addForm.unitMeasureId,
-        measures
-      );
-      const nextUnit = allowedUnits[0] ?? "";
+      const unitsPayload = toProductUnitPayload(addForm, measures, unitSizes).map((u) => ({ ...u, product_id: created.id }));
+      await saveProductUnits(orgId, created.id, unitsPayload);
 
-      setAddForm({
-        ...BLANK_FORM,
-        unitMeasureId: addForm.unitMeasureId,
-        quantityUnit: nextUnit,
-        quantityMode: "preset",
-        quantityValue: nextUnit ? (QUANTITY_PRESETS[nextUnit]?.[0] ?? "") : "",
-      });
-
+      setAddForm({ ...BLANK_FORM, productUnits: [makeInitialUnit()] });
       setShowAddModal(false);
       setPendingAddConfirm(false);
       await refresh(orgId);
-
-      setToast({
-        message: `"${productDisplay}" added successfully`,
-        type: "success",
-      });
+      setToast({ message: `"${productDisplay}" added successfully`, type: "success" });
     } catch (e: any) {
       setErr(e.message ?? String(e));
       setToast({ message: "Failed to add product", type: "error" });
@@ -1538,12 +1644,9 @@ export default function ProductsPage() {
     setErr("");
 
     try {
-      const updatedDisplay = formatProductDisplayName({
-        name: editForm.name.trim(),
-        quantity_value: editForm.quantityValue,
-        quantity_unit: editForm.quantityUnit,
-      });
-
+      const firstUnit = editForm.productUnits[0];
+      const quantity = getQuantityFromUnitSize(firstUnit?.unitSizeId ?? "", unitSizes);
+      const updatedDisplay = editForm.name.trim();
       const supabase = createClient();
 
       const { error } = await supabase
@@ -1555,11 +1658,12 @@ export default function ProductsPage() {
           barcode: editForm.barcode.trim() || null,
           supplier_id: editForm.supplierId || null,
           notes: editForm.notes.trim() || null,
-          cost_price: Number(editForm.costPrice || 0),
-          unit_price: Number(editForm.sellPrice || 0),
-          quantity_value: Number(editForm.quantityValue),
-          quantity_unit: editForm.quantityUnit || null,
-          unit_measure_id: editForm.unitMeasureId || null,
+          cost_price: Number(firstUnit?.costPrice || 0),
+          unit_price: Number(firstUnit?.sellingPrice || 0),
+          quantity_value: quantity.value,
+          quantity_unit: quantity.unit,
+          unit_measure_id: firstUnit?.unitMeasureId || null,
+          unit_size_id: firstUnit?.unitSizeId || null,
           is_sellable: editForm.isSellable,
         })
         .eq("org_id", orgId)
@@ -1567,10 +1671,12 @@ export default function ProductsPage() {
 
       if (error) throw new Error(error.message);
 
+      const unitsPayload = toProductUnitPayload(editForm, measures, unitSizes).map((u) => ({ ...u, product_id: editProduct.id }));
+      await saveProductUnits(orgId, editProduct.id, unitsPayload);
+
       setEditProduct(null);
       setPendingEditConfirm(false);
       await refresh(orgId);
-
       setToast({ message: `"${updatedDisplay}" updated`, type: "success" });
     } catch (e: any) {
       setErr(e.message ?? String(e));
@@ -1589,11 +1695,7 @@ export default function ProductsPage() {
       const productName = formatProductDisplayName(deletingProduct);
       await archiveProduct(orgId, deletingProduct.id);
       await refresh(orgId);
-
-      setToast({
-        message: productName ? `"${productName}" archived` : "Product archived",
-        type: "success",
-      });
+      setToast({ message: productName ? `"${productName}" archived` : "Product archived", type: "success" });
     } catch (e: any) {
       setErr(e.message ?? String(e));
       setToast({ message: "Failed to archive", type: "error" });
@@ -1609,12 +1711,7 @@ export default function ProductsPage() {
     try {
       await restoreProduct(orgId, id);
       await refresh(orgId);
-      setToast({
-        message: product
-          ? `"${formatProductDisplayName(product)}" restored`
-          : "Product restored",
-        type: "success",
-      });
+      setToast({ message: product ? `"${formatProductDisplayName(product)}" restored` : "Product restored", type: "success" });
     } catch (e: any) {
       setErr(e.message ?? String(e));
       setToast({ message: "Failed to restore", type: "error" });
@@ -1622,21 +1719,14 @@ export default function ProductsPage() {
   }
 
   function openEdit(p: Product) {
-    const allowedUnits = getAllowedQuantityUnits(
-      p.unit_measure_id ?? measures[0]?.id ?? "",
-      measures
-    );
-
-    const quantityUnit =
-      (p.quantity_unit as QuantityUnit | null) ?? allowedUnits[0] ?? "";
-    const quantityValue =
-      p.quantity_value !== null && p.quantity_value !== undefined
-        ? String(p.quantity_value)
-        : "";
-
-    const presetValues = quantityUnit ? QUANTITY_PRESETS[quantityUnit] ?? [] : [];
-    const quantityMode =
-      quantityValue && presetValues.includes(quantityValue) ? "preset" : "custom";
+    const fallbackMeasureId = p.unit_measure_id ?? measures[0]?.id ?? "";
+    const fallbackSizeId = p.unit_size_id ?? unitSizes[0]?.id ?? "";
+    const units = productUnitsFromProduct(p).map((u, index) => ({
+      ...u,
+      unitMeasureId: u.unitMeasureId || fallbackMeasureId,
+      unitSizeId: index === 0 ? u.unitSizeId || fallbackSizeId : "",
+      isDefault: index === 0,
+    }));
 
     setEditForm({
       name: p.name ?? "",
@@ -1645,13 +1735,8 @@ export default function ProductsPage() {
       barcode: p.barcode ?? "",
       supplierId: p.supplier_id ?? p.supplier?.id ?? "",
       notes: p.notes ?? "",
-      costPrice: String(p.cost_price ?? "0"),
-      sellPrice: String(p.unit_price ?? "0"),
-      quantityValue,
-      quantityUnit,
-      quantityMode,
-      unitMeasureId: p.unit_measure_id ?? measures[0]?.id ?? "",
       isSellable: p.is_sellable ?? true,
+      productUnits: units.length ? units : [makeInitialUnit(fallbackMeasureId, fallbackSizeId)],
     });
 
     setEditProduct(p);
@@ -1664,295 +1749,107 @@ export default function ProductsPage() {
   }
 
   const hasFilters = !!(search || filterCat || filterStatus);
-
   const TABLE_COLS = S.tableGridCols;
-  const HEADERS = [
-    "Product",
-    "Category",
-    "Supplier",
-    "Barcode",
-    "Cost",
-    "Sell",
-    "Margin",
-    "Status",
-    "",
-  ];
+  const HEADERS = ["Product", "Category", "Supplier", "Units", "Cost", "Sell", "Margin", "Status", ""];
 
   if (!orgId && !err) {
-    return (
-      <div className="flex h-64 items-center justify-center">
-        <div className="text-slate-400 text-sm font-semibold">Loading catalog…</div>
-      </div>
-    );
+    return <div className="flex h-64 items-center justify-center"><div className="text-slate-400 text-sm font-semibold">Loading catalog…</div></div>;
   }
 
   return (
     <div className="flex flex-col gap-6">
-      {toast && (
-        <Toast
-          message={toast.message}
-          type={toast.type}
-          onClose={() => setToast(null)}
-        />
-      )}
+      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
 
       {err && (
         <div className="flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           <span className="flex-1">{err}</span>
-          <button
-            onClick={() => setErr("")}
-            className="shrink-0 text-red-400 hover:text-red-600 text-lg leading-none"
-          >
-            ×
-          </button>
+          <button onClick={() => setErr("")} className="shrink-0 text-red-400 hover:text-red-600 text-lg leading-none">×</button>
         </div>
       )}
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        {/* <div>
-          <div className="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-amber-700">
-            Catalog
-          </div>
-          <h1 className="mt-3 text-[32px] font-bold text-slate-900 tracking-tight">
-            Product Catalog
-          </h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Manage products, sizes, pricing and availability
-          </p>
-        </div> */}
-
-        <button
-          className={`${S.btnPrimary} shadow-[0_12px_28px_rgba(245,197,24,0.25)]`}
-          onClick={() => setShowAddModal(true)}
-        >
+        <button className={`${S.btnPrimary} shadow-[0_12px_28px_rgba(245,197,24,0.25)]`} onClick={() => setShowAddModal(true)}>
           Add product
         </button>
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-        <KpiCard
-          label="Total products"
-          value={String(kpis.total)}
-          sub={showArchived ? "active + archived" : "active only"}
-        />
-        <KpiCard
-          label="For sale"
-          value={String(kpis.activeSellable)}
-          sub="active listings"
-          variant="success"
-        />
-        <KpiCard
-          label="Archived"
-          value={String(kpis.archived)}
-          sub="hidden from sales"
-          variant="warning"
-        />
-        <KpiCard
-          label="Categories"
-          value={String(kpis.categories)}
-          sub="product groups"
-          variant="info"
-        />
-        <KpiCard
-          label="Avg margin"
-          value={`${kpis.avgMargin.toFixed(0)}%`}
-          sub="gross margin"
-          variant={
-            kpis.avgMargin >= 30
-              ? "success"
-              : kpis.avgMargin >= 10
-              ? "warning"
-              : "neutral"
-          }
-        />
+        <KpiCard label="Total products" value={String(kpis.total)} sub={showArchived ? "active + archived" : "active only"} />
+        <KpiCard label="For sale" value={String(kpis.activeSellable)} sub="active listings" variant="success" />
+        <KpiCard label="Archived" value={String(kpis.archived)} sub="hidden from sales" variant="warning" />
+        <KpiCard label="Categories" value={String(kpis.categories)} sub="product groups" variant="info" />
+        <KpiCard label="Avg margin" value={`${kpis.avgMargin.toFixed(0)}%`} sub="gross margin" variant={kpis.avgMargin >= 30 ? "success" : kpis.avgMargin >= 10 ? "warning" : "neutral"} />
       </div>
 
       <div className="rounded-[24px] border border-[#EADFC2] bg-white shadow-[0_12px_36px_rgba(245,197,24,0.06)] overflow-hidden">
         <div className="border-b border-[#F1E6C9] bg-[linear-gradient(180deg,#FFFDF8_0%,#FFF9EC_100%)] px-5 py-4 lg:px-6">
           <div className="flex flex-wrap items-center gap-2">
             <label className="relative flex-1 min-w-[220px] max-w-sm">
-              <input
-                className="w-full rounded-2xl border border-[#EADFC2] bg-white px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 focus:border-amber-500 focus:ring-2 focus:ring-amber-100 outline-none transition"
-                placeholder="Search products…"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-              {search && (
-                <button
-                  onClick={() => setSearch("")}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                >
-                  Clear
-                </button>
-              )}
+              <input className="w-full rounded-2xl border border-[#EADFC2] bg-white px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 focus:border-amber-500 focus:ring-2 focus:ring-amber-100 outline-none transition" placeholder="Search products, units, SKU…" value={search} onChange={(e) => setSearch(e.target.value)} />
+              {search && <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">Clear</button>}
             </label>
 
-            <select
-              className="rounded-2xl border border-[#EADFC2] bg-white px-3.5 py-2.5 text-sm text-slate-700 focus:border-amber-500 focus:ring-2 focus:ring-amber-100 outline-none transition cursor-pointer"
-              style={S.selectChevronStyle}
-              value={filterCat}
-              onChange={(e) => setFilterCat(e.target.value)}
-            >
+            <select className="rounded-2xl border border-[#EADFC2] bg-white px-3.5 py-2.5 text-sm text-slate-700 focus:border-amber-500 focus:ring-2 focus:ring-amber-100 outline-none transition cursor-pointer" style={S.selectChevronStyle} value={filterCat} onChange={(e) => setFilterCat(e.target.value)}>
               <option value="">All categories</option>
-              {allCategories.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
+              {allCategories.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
 
-            <select
-              className="rounded-2xl border border-[#EADFC2] bg-white px-3.5 py-2.5 text-sm text-slate-700 focus:border-amber-500 focus:ring-2 focus:ring-amber-100 outline-none transition cursor-pointer"
-              style={S.selectChevronStyle}
-              value={filterStatus}
-              onChange={(e) =>
-                setFilterStatus(
-                  e.target.value as "" | "sellable" | "not_sellable"
-                )
-              }
-            >
+            <select className="rounded-2xl border border-[#EADFC2] bg-white px-3.5 py-2.5 text-sm text-slate-700 focus:border-amber-500 focus:ring-2 focus:ring-amber-100 outline-none transition cursor-pointer" style={S.selectChevronStyle} value={filterStatus} onChange={(e) => setFilterStatus(e.target.value as "" | "sellable" | "not_sellable")}>
               <option value="">All statuses</option>
               <option value="sellable">For sale</option>
               <option value="not_sellable">Not for sale</option>
             </select>
 
-            {hasFilters && (
-              <button
-                onClick={clearFilters}
-                className="text-sm font-semibold text-amber-600 hover:text-amber-700 transition px-1"
-              >
-                Clear
-              </button>
-            )}
+            {hasFilters && <button onClick={clearFilters} className="text-sm font-semibold text-amber-600 hover:text-amber-700 transition px-1">Clear</button>}
 
-            <button
-              type="button"
-              onClick={() => setShowArchived((v) => !v)}
-              className={`rounded-2xl border px-3.5 py-2.5 text-sm font-semibold transition ${
-                showArchived
-                  ? "border-amber-300 bg-amber-50 text-amber-700 shadow-[0_8px_20px_rgba(245,197,24,0.12)]"
-                  : "border-[#EADFC2] bg-white text-slate-700 hover:bg-[#FFF8E6]"
-              }`}
-            >
+            <button type="button" onClick={() => setShowArchived((v) => !v)} className={`rounded-2xl border px-3.5 py-2.5 text-sm font-semibold transition ${showArchived ? "border-amber-300 bg-amber-50 text-amber-700 shadow-[0_8px_20px_rgba(245,197,24,0.12)]" : "border-[#EADFC2] bg-white text-slate-700 hover:bg-[#FFF8E6]"}`}>
               {showArchived ? "Showing archived too" : "Show archived"}
             </button>
 
-            <span className="ml-auto text-xs text-slate-500 whitespace-nowrap">
-              {filtered.length} of {items.length}
-            </span>
+            <span className="ml-auto text-xs text-slate-500 whitespace-nowrap">{filtered.length} of {items.length}</span>
           </div>
         </div>
 
         <div className="px-3 py-3 sm:px-4 sm:py-4">
           <div className="hidden lg:block">
-            <div
-              className="grid items-center gap-4 px-6 py-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500"
-              style={{ gridTemplateColumns: TABLE_COLS }}
-            >
-              {HEADERS.map((h, i) => (
-                <div key={i} className={i >= 4 && i <= 6 ? "text-right" : ""}>
-                  {h}
-                </div>
-              ))}
+            <div className="grid items-center gap-4 px-6 py-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500" style={{ gridTemplateColumns: TABLE_COLS }}>
+              {HEADERS.map((h, i) => <div key={i} className={i >= 4 && i <= 6 ? "text-right" : ""}>{h}</div>)}
             </div>
           </div>
 
           <div className="space-y-3">
             {paginated.length === 0 ? (
               <div className="py-20 text-center">
-                <p className="text-lg font-semibold text-slate-700">
-                  {items.length === 0 ? "No products yet" : "No matching products"}
-                </p>
-                <p className="text-sm text-slate-400 mt-1">
-                  {items.length === 0
-                    ? 'Click "Add product" to get started'
-                    : "Try adjusting your filters"}
-                </p>
+                <p className="text-lg font-semibold text-slate-700">{items.length === 0 ? "No products yet" : "No matching products"}</p>
+                <p className="text-sm text-slate-400 mt-1">{items.length === 0 ? 'Click "Add product" to get started' : "Try adjusting your filters"}</p>
               </div>
             ) : (
               paginated.map((p) => {
                 const mgn = margin(p.cost_price, p.unit_price);
                 const categoryName = getCategoryName(p);
                 const displayName = formatProductDisplayName(p);
+                const unitSummary = (p.product_units ?? []).slice(0, 3).map((u) => u.label).join(", ");
 
                 return (
-                  <div
-                    key={p.id}
-                    className="group rounded-[24px] border border-[#EFE4C6] bg-[linear-gradient(180deg,#FFFFFF_0%,#FFFCF4_100%)] shadow-[0_8px_30px_rgba(15,23,42,0.04)] transition-all duration-200 hover:-translate-y-px hover:shadow-[0_16px_34px_rgba(245,197,24,0.10)] hover:border-[#E5D28D]"
-                  >
-                    <div
-                      className="hidden lg:grid items-center gap-4 px-6 py-5 text-sm"
-                      style={{ gridTemplateColumns: TABLE_COLS }}
-                    >
+                  <div key={p.id} className="group rounded-[24px] border border-[#EFE4C6] bg-[linear-gradient(180deg,#FFFFFF_0%,#FFFCF4_100%)] shadow-[0_8px_30px_rgba(15,23,42,0.04)] transition-all duration-200 hover:-translate-y-px hover:shadow-[0_16px_34px_rgba(245,197,24,0.10)] hover:border-[#E5D28D]">
+                    <div className="hidden lg:grid items-center gap-4 px-6 py-5 text-sm" style={{ gridTemplateColumns: TABLE_COLS }}>
                       <div className="min-w-0 space-y-1">
-                        <div className="font-semibold text-slate-900 truncate text-[15px]">
-                          {displayName}
-                        </div>
-                        <div className="text-xs text-slate-500 truncate">
-                          {p.unit_measure?.name || "—"}
-                        </div>
-                        {p.sku && (
-                          <div className="text-[11px] font-mono text-slate-400 truncate">
-                            SKU {p.sku}
-                          </div>
-                        )}
+                        <div className="font-semibold text-slate-900 truncate text-[15px]">{displayName}</div>
+                        {p.sku && <div className="text-[11px] font-mono text-slate-400 truncate">SKU {p.sku}</div>}
                       </div>
-
-                      <div className="truncate text-sm text-slate-700">
-                        {categoryName || <span className="text-slate-300">—</span>}
-                      </div>
-
-                      <div className="truncate text-sm text-slate-700">
-                        {p.supplier?.name || (
-                          <span className="text-slate-300">—</span>
-                        )}
-                      </div>
-
-                      <div className="truncate font-mono text-xs text-slate-500">
-                        {p.barcode || p.sku || (
-                          <span className="text-slate-300">—</span>
-                        )}
-                      </div>
-
-                      <div className="text-right text-slate-700 font-medium">
-                        {fmt(p.cost_price)}
-                      </div>
-
-                      <div className="text-right font-bold text-slate-900">
-                        {fmt(p.unit_price)}
-                      </div>
-
-                      <div className="text-right">
-                        <MarginBadge pct={mgn} />
-                      </div>
-
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <SellBadge isSellable={p.is_sellable} />
-                        <ArchiveBadge active={p.active} />
-                      </div>
-
+                      <div className="truncate text-sm text-slate-700">{categoryName || <span className="text-slate-300">—</span>}</div>
+                      <div className="truncate text-sm text-slate-700">{p.supplier?.name || <span className="text-slate-300">—</span>}</div>
+                      <div className="truncate text-xs text-slate-500">{unitSummary || <span className="text-slate-300">—</span>}</div>
+                      <div className="text-right text-slate-700 font-medium">{fmt(p.cost_price)}</div>
+                      <div className="text-right font-bold text-slate-900">{fmt(p.unit_price)}</div>
+                      <div className="text-right"><MarginBadge pct={mgn} /></div>
+                      <div className="flex items-center gap-2 flex-wrap"><SellBadge isSellable={p.is_sellable} /><ArchiveBadge active={p.active} /></div>
                       <div className="flex items-center justify-end gap-2">
-                        <button
-                          onClick={() => openEdit(p)}
-                          className="rounded-xl border border-slate-200 bg-white px-3.5 h-9 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition opacity-0 group-hover:opacity-100"
-                        >
-                          Edit
-                        </button>
-
+                        <button onClick={() => openEdit(p)} className="rounded-xl border border-slate-200 bg-white px-3.5 h-9 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition opacity-0 group-hover:opacity-100">Edit</button>
                         {p.active === false ? (
-                          <button
-                            onClick={() => handleRestore(p.id, p)}
-                            className="rounded-xl border border-green-200 bg-green-50 px-3.5 h-9 text-xs font-semibold text-green-700 hover:bg-green-100 transition opacity-0 group-hover:opacity-100"
-                          >
-                            Restore
-                          </button>
+                          <button onClick={() => handleRestore(p.id, p)} className="rounded-xl border border-green-200 bg-green-50 px-3.5 h-9 text-xs font-semibold text-green-700 hover:bg-green-100 transition opacity-0 group-hover:opacity-100">Restore</button>
                         ) : (
-                          <button
-                            onClick={() => setDeletingProduct(p)}
-                            className="rounded-xl border border-red-200 bg-red-50 px-3.5 h-9 text-xs font-semibold text-red-600 hover:bg-red-100 transition opacity-0 group-hover:opacity-100"
-                          >
-                            Archive
-                          </button>
+                          <button onClick={() => setDeletingProduct(p)} className="rounded-xl border border-red-200 bg-red-50 px-3.5 h-9 text-xs font-semibold text-red-600 hover:bg-red-100 transition opacity-0 group-hover:opacity-100">Archive</button>
                         )}
                       </div>
                     </div>
@@ -1960,88 +1857,25 @@ export default function ProductsPage() {
                     <div className="lg:hidden px-5 py-4 space-y-3">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <div className="font-semibold text-slate-900 truncate">
-                            {displayName}
-                          </div>
-                          {categoryName && (
-                            <div className="mt-0.5 text-xs text-slate-500">
-                              {categoryName}
-                            </div>
-                          )}
-                          {(p.unit_measure?.name || p.sku) && (
-                            <div className="text-xs text-slate-400 mt-1">
-                              {p.unit_measure?.name || p.sku}
-                            </div>
-                          )}
+                          <div className="font-semibold text-slate-900 truncate">{displayName}</div>
+                          {categoryName && <div className="mt-0.5 text-xs text-slate-500">{categoryName}</div>}
+                          {unitSummary && <div className="text-xs text-slate-400 mt-1">Units: {unitSummary}</div>}
                         </div>
-
-                        <div className="flex items-center gap-2 flex-wrap justify-end">
-                          <SellBadge isSellable={p.is_sellable} />
-                          <ArchiveBadge active={p.active} />
-                        </div>
+                        <div className="flex items-center gap-2 flex-wrap justify-end"><SellBadge isSellable={p.is_sellable} /><ArchiveBadge active={p.active} /></div>
                       </div>
 
                       <div className="grid grid-cols-3 gap-3 rounded-2xl bg-[#FFF9EC] border border-[#F1E6C9] p-3 text-sm">
-                        <div>
-                          <div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">
-                            Cost
-                          </div>
-                          <div className="font-medium text-slate-800 mt-0.5">
-                            {fmt(p.cost_price)}
-                          </div>
-                        </div>
-                        <div>
-                          <div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">
-                            Sell
-                          </div>
-                          <div className="font-bold text-slate-900 mt-0.5">
-                            {fmt(p.unit_price)}
-                          </div>
-                        </div>
-                        <div>
-                          <div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">
-                            Margin
-                          </div>
-                          <div className="mt-0.5">
-                            <MarginBadge pct={mgn} />
-                          </div>
-                        </div>
+                        <div><div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">Cost</div><div className="font-medium text-slate-800 mt-0.5">{fmt(p.cost_price)}</div></div>
+                        <div><div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">Sell</div><div className="font-bold text-slate-900 mt-0.5">{fmt(p.unit_price)}</div></div>
+                        <div><div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">Margin</div><div className="mt-0.5"><MarginBadge pct={mgn} /></div></div>
                       </div>
 
-                      {(p.supplier?.name || p.barcode || p.sku) && (
-                        <div className="text-xs text-slate-500 flex flex-wrap gap-x-4 gap-y-0.5">
-                          {p.supplier?.name && (
-                            <span>Supplier: {p.supplier.name}</span>
-                          )}
-                          {p.sku && <span className="font-mono">SKU: {p.sku}</span>}
-                          {p.barcode && (
-                            <span className="font-mono">Barcode: {p.barcode}</span>
-                          )}
-                        </div>
-                      )}
-
                       <div className="flex gap-2 pt-1">
-                        <button
-                          onClick={() => openEdit(p)}
-                          className="flex-1 flex items-center justify-center gap-2 rounded-2xl border border-blue-200 bg-blue-50 py-2.5 text-xs font-semibold text-blue-700 hover:bg-blue-100 transition"
-                        >
-                          Edit
-                        </button>
-
+                        <button onClick={() => openEdit(p)} className="flex-1 flex items-center justify-center gap-2 rounded-2xl border border-blue-200 bg-blue-50 py-2.5 text-xs font-semibold text-blue-700 hover:bg-blue-100 transition">Edit</button>
                         {p.active === false ? (
-                          <button
-                            onClick={() => handleRestore(p.id, p)}
-                            className="flex-1 flex items-center justify-center gap-2 rounded-2xl border border-green-200 bg-green-50 py-2.5 text-xs font-semibold text-green-700 hover:bg-green-100 transition"
-                          >
-                            Restore
-                          </button>
+                          <button onClick={() => handleRestore(p.id, p)} className="flex-1 flex items-center justify-center gap-2 rounded-2xl border border-green-200 bg-green-50 py-2.5 text-xs font-semibold text-green-700 hover:bg-green-100 transition">Restore</button>
                         ) : (
-                          <button
-                            onClick={() => setDeletingProduct(p)}
-                            className="flex-1 flex items-center justify-center gap-2 rounded-2xl border border-red-200 bg-red-50 py-2.5 text-xs font-semibold text-red-600 hover:bg-red-100 transition"
-                          >
-                            Archive
-                          </button>
+                          <button onClick={() => setDeletingProduct(p)} className="flex-1 flex items-center justify-center gap-2 rounded-2xl border border-red-200 bg-red-50 py-2.5 text-xs font-semibold text-red-600 hover:bg-red-100 transition">Archive</button>
                         )}
                       </div>
                     </div>
@@ -2052,89 +1886,25 @@ export default function ProductsPage() {
           </div>
         </div>
 
-        <Pagination
-          page={safePage}
-          totalPages={totalPages}
-          totalItems={filtered.length}
-          pageSize={PAGE_SIZE}
-          onPage={setPage}
-        />
+        <Pagination page={safePage} totalPages={totalPages} totalItems={filtered.length} pageSize={PAGE_SIZE} onPage={setPage} />
       </div>
 
       {showAddModal && orgId && (
-        <Modal
-          title="Add product"
-          sub="Fill in the details below"
-          onClose={() => setShowAddModal(false)}
-        >
-          <ProductForm
-            form={addForm}
-            setForm={setAddForm}
-            measures={measures}
-            categories={categories}
-            suppliers={suppliers}
-            orgId={orgId}
-            onCategoryCreated={handleAddCategoryCreated}
-            onSubmit={handleAdd}
-            onCancel={() => setShowAddModal(false)}
-            saving={saving}
-            mode="add"
-          />
+        <Modal title="Add product" sub="Fill in the details below" onClose={() => setShowAddModal(false)}>
+          <ProductForm form={addForm} setForm={setAddForm} measures={measures} unitSizes={unitSizes} categories={categories} suppliers={suppliers} orgId={orgId} onCategoryCreated={handleAddCategoryCreated} onUnitSizeCreated={(size, index) => handleUnitSizeCreated(size, index, "add")} onSubmit={handleAdd} onCancel={() => setShowAddModal(false)} saving={saving} mode="add" />
         </Modal>
       )}
 
       {editProduct && orgId && (
-        <Modal
-          title="Edit product"
-          sub={formatProductDisplayName(editProduct)}
-          onClose={() => setEditProduct(null)}
-        >
-          <ProductForm
-            form={editForm}
-            setForm={setEditForm}
-            measures={measures}
-            categories={categories}
-            suppliers={suppliers}
-            orgId={orgId}
-            onCategoryCreated={handleEditCategoryCreated}
-            onSubmit={handleEdit}
-            onCancel={() => setEditProduct(null)}
-            saving={saving}
-            mode="edit"
-          />
+        <Modal title="Edit product" sub={formatProductDisplayName(editProduct)} onClose={() => setEditProduct(null)}>
+          <ProductForm form={editForm} setForm={setEditForm} measures={measures} unitSizes={unitSizes} categories={categories} suppliers={suppliers} orgId={orgId} onCategoryCreated={handleEditCategoryCreated} onUnitSizeCreated={(size, index) => handleUnitSizeCreated(size, index, "edit")} onSubmit={handleEdit} onCancel={() => setEditProduct(null)} saving={saving} mode="edit" />
         </Modal>
       )}
 
-      {deletingProduct && (
-        <ArchiveModal
-          product={deletingProduct}
-          onConfirm={handleArchive}
-          onCancel={() => setDeletingProduct(null)}
-          loading={deleting}
-        />
-      )}
+      {deletingProduct && <ArchiveModal product={deletingProduct} onConfirm={handleArchive} onCancel={() => setDeletingProduct(null)} loading={deleting} />}
 
-      <ConfirmSaveModal
-        open={pendingAddConfirm}
-        mode="add"
-        form={addForm}
-        categories={categories}
-        measures={measures}
-        loading={saving}
-        onConfirm={performAdd}
-        onCancel={() => setPendingAddConfirm(false)}
-      />
-
-      <ConfirmSaveModal
-        open={pendingEditConfirm}
-        mode="edit"
-        form={editForm}
-        categories={categories}
-        measures={measures}
-        loading={saving}
-        onConfirm={performEdit}
-        onCancel={() => setPendingEditConfirm(false)}
-      />
+      <ConfirmSaveModal open={pendingAddConfirm} mode="add" form={addForm} categories={categories} measures={measures} unitSizes={unitSizes} loading={saving} onConfirm={performAdd} onCancel={() => setPendingAddConfirm(false)} />
+      <ConfirmSaveModal open={pendingEditConfirm} mode="edit" form={editForm} categories={categories} measures={measures} unitSizes={unitSizes} loading={saving} onConfirm={performEdit} onCancel={() => setPendingEditConfirm(false)} />
     </div>
   );
 }

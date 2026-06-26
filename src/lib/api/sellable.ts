@@ -1,5 +1,16 @@
 import { createClient } from "@/lib/supabase/client";
 
+export type SellableProductUnit = {
+  id: string;
+  label: string;
+  base_quantity: number;
+  selling_price: number;
+  cost_price: number;
+  can_sell: boolean;
+  is_default: boolean;
+  active: boolean;
+};
+
 export type SellableProduct = {
   id: string;
   name: string | null;
@@ -9,6 +20,7 @@ export type SellableProduct = {
   unit_price?: number | null;
   quantity_value?: number | null;
   quantity_unit?: string | null;
+  product_units?: SellableProductUnit[];
 };
 
 export type SellableRow = {
@@ -39,7 +51,17 @@ export async function listSellable(orgId: string): Promise<SellableRow[]> {
         quantity_value,
         quantity_unit,
         is_sellable,
-        active
+        active,
+        product_units (
+          id,
+          label,
+          base_quantity,
+          selling_price,
+          cost_price,
+          can_sell,
+          is_default,
+          active
+        )
       )
     `)
     .eq("org_id", orgId)
@@ -59,7 +81,6 @@ export async function listSellable(orgId: string): Promise<SellableRow[]> {
         product_id: String(r.product_id),
         qty_on_hand: Number(r.qty_on_hand ?? 0),
         reorder_level: r.reorder_level == null ? null : Number(r.reorder_level),
-
         products: p
           ? {
               id: String(p.id),
@@ -71,6 +92,18 @@ export async function listSellable(orgId: string): Promise<SellableRow[]> {
               quantity_value:
                 p.quantity_value == null ? null : Number(p.quantity_value),
               quantity_unit: p.quantity_unit ?? null,
+              product_units: (p.product_units ?? [])
+                .filter((u: any) => u.active !== false && u.can_sell !== false)
+                .map((u: any) => ({
+                  id: String(u.id),
+                  label: String(u.label),
+                  base_quantity: Number(u.base_quantity ?? 1),
+                  selling_price: Number(u.selling_price ?? 0),
+                  cost_price: Number(u.cost_price ?? 0),
+                  can_sell: u.can_sell !== false,
+                  is_default: Boolean(u.is_default),
+                  active: u.active !== false,
+                })),
             }
           : null,
       };
