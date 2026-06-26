@@ -24,6 +24,7 @@ import {
    Types
 ───────────────────────────────────────────── */
 type RangePreset =
+  | "all"
   | "today"
   | "yesterday"
   | "7d"
@@ -101,6 +102,14 @@ const getPresetRange = (preset: Exclude<RangePreset, "custom">) => {
   const from = new Date(today);
   const to = new Date(today);
 
+  if (preset === "all") {
+    return {
+      from: "1970-01-01",
+      to: dateToLocalIso(today),
+      label: "All time",
+    };
+  }
+
   if (preset === "today") {
     return {
       from: dateToLocalIso(today),
@@ -155,6 +164,13 @@ const getPresetRange = (preset: Exclude<RangePreset, "custom">) => {
 const fmtMoney = (v: number) =>
   `Ksh ${Number(v || 0).toLocaleString("en-KE", { maximumFractionDigits: 0 })}`;
 
+const fmtPercent = (v: number) =>
+  `${Number(v || 0).toLocaleString("en-KE", {
+    maximumFractionDigits: 1,
+  })}%`;
+
+const num = (value: unknown) => Number(value ?? 0) || 0;
+
 const isCancelledSale = (status?: string | null) =>
   ["cancelled", "voided", "void", "refunded"].includes(
     String(status ?? "").toLowerCase(),
@@ -191,7 +207,9 @@ const fmtDateOnly = (v: string) => {
   }
 };
 
-const fmtRangeLabel = (from: string, to: string) => {
+const fmtRangeLabel = (from: string, to: string, label?: string) => {
+  if (label === "All time") return "All time";
+
   try {
     const f = new Date(`${from}T00:00:00`);
     const t = new Date(`${to}T00:00:00`);
@@ -380,6 +398,7 @@ function KpiCard({
   spark,
   sparkColor,
   isCurrency = true,
+  displayValue,
 }: {
   label: string;
   rawValue: number;
@@ -389,6 +408,7 @@ function KpiCard({
   spark?: number[];
   sparkColor?: string;
   isCurrency?: boolean;
+  displayValue?: string;
 }) {
   const cfg = {
     neutral: {
@@ -423,24 +443,26 @@ function KpiCard({
 
   return (
     <div
-      className="rounded-2xl p-5 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md"
+      className="rounded-2xl p-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
       style={{ background: cfg.bg, border: `1px solid ${cfg.border}` }}
     >
-      <div className="mb-3 flex items-start justify-between gap-3">
+      <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div
-            className="mb-1.5 text-xs font-bold uppercase tracking-widest"
+            className="text-xs font-semibold uppercase tracking-wide opacity-80"
             style={{ color: cfg.sub }}
           >
             {label}
           </div>
 
           <div
-            className="text-2xl font-extrabold leading-tight"
+            className="mt-2 text-2xl font-bold leading-tight tracking-tight"
             style={{ color: cfg.val }}
           >
             {loading ? (
-              <Skeleton w="80%" h={28} />
+              <Skeleton w="80%" h={26} />
+            ) : displayValue ? (
+              displayValue
             ) : isCurrency ? (
               <span>
                 Ksh <Counter to={rawValue} />
@@ -452,14 +474,14 @@ function KpiCard({
         </div>
 
         {spark && spark.length > 1 && !loading && (
-          <div className="shrink-0 pt-1">
-            <Sparkline data={spark} color={sparkColor ?? cfg.accent} />
+          <div className="hidden shrink-0 pt-1 sm:block">
+            <Sparkline data={spark} color={sparkColor ?? cfg.accent} w={56} h={28} />
           </div>
         )}
       </div>
 
       {sub && (
-        <div className="mt-1.5 text-xs font-medium" style={{ color: cfg.sub }}>
+        <div className="mt-1 text-xs font-medium leading-relaxed opacity-80" style={{ color: cfg.sub }}>
           {loading ? <Skeleton w="60%" h={14} /> : sub}
         </div>
       )}
@@ -528,6 +550,7 @@ function SummaryDateRangePicker({
   });
 
   const presetItems: { id: RangePreset; label: string }[] = [
+    { id: "all", label: "All time" },
     { id: "today", label: "Today" },
     { id: "yesterday", label: "Yesterday" },
     { id: "7d", label: "Last 7 days" },
@@ -539,10 +562,14 @@ function SummaryDateRangePicker({
 
   useEffect(() => {
     setTempPreset(valuePreset);
-    setTempRange({
-      from: localIsoToDate(valueFrom),
-      to: localIsoToDate(valueTo),
-    });
+    setTempRange(
+      valuePreset === "all"
+        ? undefined
+        : {
+            from: localIsoToDate(valueFrom),
+            to: localIsoToDate(valueTo),
+          },
+    );
   }, [valuePreset, valueFrom, valueTo]);
 
   useEffect(() => {
@@ -557,6 +584,11 @@ function SummaryDateRangePicker({
   const handlePresetClick = (preset: RangePreset) => {
     setTempPreset(preset);
 
+    if (preset === "all") {
+      setTempRange(undefined);
+      return;
+    }
+
     if (preset !== "custom") {
       const next = getPresetRange(preset);
       setTempRange({
@@ -567,6 +599,13 @@ function SummaryDateRangePicker({
   };
 
   const handleApply = () => {
+    if (tempPreset === "all") {
+      const next = getPresetRange("all");
+      onApply("all", next.from, next.to);
+      onClose();
+      return;
+    }
+
     if (!tempRange?.from) return;
 
     const nextFrom = dateToLocalIso(tempRange.from);
@@ -578,16 +617,23 @@ function SummaryDateRangePicker({
 
   const handleCancel = () => {
     setTempPreset(valuePreset);
-    setTempRange({
-      from: localIsoToDate(valueFrom),
-      to: localIsoToDate(valueTo),
-    });
+    setTempRange(
+      valuePreset === "all"
+        ? undefined
+        : {
+            from: localIsoToDate(valueFrom),
+            to: localIsoToDate(valueTo),
+          },
+    );
     onClose();
   };
 
-  const footerLabel = tempRange?.from
-    ? `${dateToLocalIso(tempRange.from)} → ${dateToLocalIso(tempRange.to ?? tempRange.from)}`
-    : "Select a date range";
+  const footerLabel =
+    tempPreset === "all"
+      ? "All available records"
+      : tempRange?.from
+      ? `${dateToLocalIso(tempRange.from)} → ${dateToLocalIso(tempRange.to ?? tempRange.from)}`
+      : "Select a date range";
 
   return (
     <div
@@ -629,7 +675,7 @@ function SummaryDateRangePicker({
               setTempRange(nextRange);
             }}
             numberOfMonths={2}
-            defaultMonth={tempRange?.from ?? new Date()}
+            defaultMonth={tempPreset === "all" ? new Date() : tempRange?.from ?? new Date()}
             showOutsideDays
             disabled={{ after: new Date() }}
             className="rdp-summary"
@@ -677,7 +723,7 @@ function SummaryDateRangePicker({
 
           <button
             onClick={handleApply}
-            disabled={!tempRange?.from}
+            disabled={tempPreset !== "all" && !tempRange?.from}
             className="rounded-xl bg-slate-950 px-4 py-2 text-sm font-bold text-white transition hover:bg-slate-800 disabled:opacity-50"
           >
             Apply
@@ -1049,6 +1095,8 @@ export default function DashboardPage() {
     return getPresetRange(preset);
   }, [preset, customFrom, customTo]);
 
+  const chartGranularity = preset === "all" ? "month" : "day";
+
   useEffect(() => {
     (async () => {
       try {
@@ -1074,32 +1122,43 @@ export default function DashboardPage() {
           reportPnL(orgId, {
             from: range.from,
             to: range.to,
-            granularity: "day",
+            granularity: chartGranularity,
           }),
           getInventoryValuation(orgId),
           reportExpenses(orgId, {
             from: range.from,
             to: range.to,
-            granularity: "day",
+            granularity: chartGranularity,
           }),
         ]);
 
         const supabase = createClient();
 
+        const fromStart = `${range.from}T00:00:00`;
+        const toEnd = `${range.to}T23:59:59.999`;
+
+        const salesQuery = supabase
+          .from("sales")
+          .select(
+            "id,sale_no,customer_name,total,discount_total,status,edit_count,cancelled_at,sold_at,created_at",
+          )
+          .eq("org_id", orgId)
+          .gte("sold_at", fromStart)
+          .lte("sold_at", toEnd)
+          .order("sold_at", { ascending: false })
+          .limit(6);
+
+        const expensesQuery = supabase
+          .from("expenses")
+          .select("id,category,amount,expense_date,created_at")
+          .eq("org_id", orgId)
+          .gte("expense_date", range.from)
+          .lte("expense_date", range.to)
+          .order("expense_date", { ascending: false })
+          .limit(6);
+
         const [{ data: sData, error: sErr }, { data: eData, error: eErr }] =
-          await Promise.all([
-            supabase
-              .from("sales")
-              .select(
-"id,sale_no,customer_name,total,discount_total,status,edit_count,cancelled_at,sold_at,created_at"              )
-              .eq("org_id", orgId)
-.order("sold_at", { ascending: false })              .limit(6),
-            supabase
-              .from("expenses")
-              .select("id,category,amount,expense_date,created_at")
-              .eq("org_id", orgId)
-.order("expense_date", { ascending: false })              .limit(6),
-          ]);
+          await Promise.all([salesQuery, expensesQuery]);
 
         if (sErr) throw new Error(sErr.message);
         if (eErr) throw new Error(eErr.message);
@@ -1117,24 +1176,104 @@ export default function DashboardPage() {
         setRefreshing(false);
       }
     },
-    [orgId, range.from, range.to],
+    [orgId, range.from, range.to, chartGranularity],
   );
 
   useEffect(() => {
     if (orgId) loadAll();
   }, [orgId, range.from, range.to, loadAll]);
 
-  const kpis = useMemo(
-    () => ({
-      revenue: Number(pnl?.totals?.revenue ?? 0),
-      expenses: Number(pnl?.totals?.expenses ?? 0),
-      net: Number(pnl?.totals?.net_profit ?? 0),
-      invValue: Number(inventory?.totals?.total_value ?? 0),
-      lowCount: Number(inventory?.totals?.low_count ?? 0),
-      outCount: Number(inventory?.totals?.out_count ?? 0),
-    }),
-    [pnl, inventory],
-  );
+  const kpis = useMemo(() => {
+    const rows = ((inventory?.rows ?? []) as any[]);
+    const totals = (inventory?.totals ?? {}) as any;
+
+    const inventoryCostFromRows = rows.reduce((sum, row) => {
+      const product = row.products ?? row.product ?? {};
+      const qty = num(
+        row.qty_on_hand ??
+          row.qty ??
+          row.quantity ??
+          row.stock_qty ??
+          row.current_stock,
+      );
+
+      const rowCostValue = num(
+        row.cost_value ?? row.total_cost_value ?? row.stock_cost_value,
+      );
+      if (rowCostValue > 0) return sum + rowCostValue;
+
+      const costPrice = num(
+        row.cost_price ??
+          row.purchase_price ??
+          row.buying_price ??
+          product.cost_price ??
+          product.purchase_price ??
+          product.buying_price,
+      );
+
+      return sum + qty * costPrice;
+    }, 0);
+
+    const retailValueFromRows = rows.reduce((sum, row) => {
+      const product = row.products ?? row.product ?? {};
+      const qty = num(
+        row.qty_on_hand ??
+          row.qty ??
+          row.quantity ??
+          row.stock_qty ??
+          row.current_stock,
+      );
+
+      const rowRetailValue = num(
+        row.retail_value ?? row.total_retail_value ?? row.stock_retail_value,
+      );
+      if (rowRetailValue > 0) return sum + rowRetailValue;
+
+      const sellingPrice = num(
+        row.unit_price ??
+          row.selling_price ??
+          row.sale_price ??
+          row.retail_price ??
+          product.unit_price ??
+          product.selling_price ??
+          product.sale_price ??
+          product.retail_price,
+      );
+
+      return sum + qty * sellingPrice;
+    }, 0);
+
+    // Important: older getInventoryValuation() versions used total_value as retail value.
+    // So the dashboard should prefer explicit cost fields or row calculations for cost,
+    // otherwise inventory cost can incorrectly become equal to retail value.
+    const inventoryCost =
+      num(totals.total_cost_value ?? totals.stock_cost_value ?? totals.cost_value) ||
+      inventoryCostFromRows;
+
+    const retailValue =
+      num(
+        totals.total_retail_value ??
+          totals.stock_retail_value ??
+          totals.retail_value ??
+          totals.potential_sales_value,
+      ) || retailValueFromRows;
+
+    const potentialGrossProfit = retailValue - inventoryCost;
+    const grossMargin =
+      retailValue > 0 ? (potentialGrossProfit / retailValue) * 100 : 0;
+
+    return {
+      revenue: num(pnl?.totals?.revenue),
+      expenses: num(pnl?.totals?.expenses),
+      net: num(pnl?.totals?.net_profit),
+      inventoryCost,
+      retailValue,
+      potentialGrossProfit,
+      grossMargin,
+      lowCount: num(totals.low_count),
+      outCount: num(totals.out_count),
+    };
+  }, [pnl, inventory]);
 
   const areaPoints = useMemo(() => {
     const rM = new Map(
@@ -1301,7 +1440,7 @@ at: s.cancelled_at ?? s.sold_at ?? s.created_at,        href: `/dashboard/sales/
         }
       `}</style>
 
-      <div className="flex flex-col gap-5">
+      <div className="flex flex-col gap-6">
         {err && (
           <div className="fade-in flex items-center gap-3 rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700">
             <span className="text-base">⚠️</span>
@@ -1338,7 +1477,7 @@ at: s.cancelled_at ?? s.sold_at ?? s.created_at,        href: `/dashboard/sales/
                 onClick={() => setShowDatePicker((v) => !v)}
                 className="inline-flex items-center rounded-2xl border border-amber-100 bg-white px-4 py-3 text-sm font-bold text-slate-700 shadow-sm transition hover:border-amber-200 hover:bg-amber-50/40"
               >
-                <span>{fmtRangeLabel(range.from, range.to)}</span>
+                <span>{fmtRangeLabel(range.from, range.to, range.label)}</span>
               </button>
 
               {showDatePicker && (
@@ -1368,21 +1507,21 @@ at: s.cancelled_at ?? s.sold_at ?? s.created_at,        href: `/dashboard/sales/
 
         <QuickActions />
 
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <KpiCard
             label="Revenue"
             rawValue={kpis.revenue}
             loading={loading}
             spark={revSpark}
             sparkColor="#f59e0b"
-            sub="Sales collected"
+            sub="Sales collected in selected period"
           />
           <KpiCard
             label="Net profit"
             rawValue={kpis.net}
             variant={kpis.net < 0 ? "danger" : "success"}
             loading={loading}
-            sub={kpis.net < 0 ? "Loss this period" : "Profit this period"}
+            sub={kpis.net < 0 ? "Loss in selected period" : "Profit in selected period"}
           />
           <KpiCard
             label="Expenses"
@@ -1391,29 +1530,43 @@ at: s.cancelled_at ?? s.sold_at ?? s.created_at,        href: `/dashboard/sales/
             loading={loading}
             spark={expSpark}
             sparkColor="#f97316"
-            sub="Operating spend"
+            sub="Expenses in selected period"
           />
           <KpiCard
-            label="Inventory value"
-            rawValue={kpis.invValue}
+            label="Inventory cost"
+            rawValue={kpis.inventoryCost}
             loading={loading}
-            sub="Qty × cost price"
+            sub="Current stock at purchase cost"
           />
           <KpiCard
-            label="Low / critical"
-            rawValue={kpis.lowCount}
-            variant={kpis.lowCount > 0 ? "warning" : "neutral"}
+            label="Retail value"
+            rawValue={kpis.retailValue}
+            loading={loading}
+            sub="Current stock at selling prices"
+          />
+          <KpiCard
+            label="Potential profit"
+            rawValue={kpis.potentialGrossProfit}
+            variant={kpis.potentialGrossProfit < 0 ? "danger" : "success"}
+            loading={loading}
+            sub="Retail value minus inventory cost"
+          />
+          <KpiCard
+            label="Gross margin"
+            rawValue={kpis.grossMargin}
+            displayValue={fmtPercent(kpis.grossMargin)}
+            variant={kpis.grossMargin < 0 ? "danger" : "neutral"}
             loading={loading}
             isCurrency={false}
-            sub="Need monitoring"
+            sub="Potential margin on current stock"
           />
           <KpiCard
-            label="Out of stock"
-            rawValue={kpis.outCount}
-            variant={kpis.outCount > 0 ? "danger" : "neutral"}
+            label="Stock alerts"
+            rawValue={kpis.lowCount + kpis.outCount}
+            variant={kpis.outCount > 0 ? "danger" : kpis.lowCount > 0 ? "warning" : "neutral"}
             loading={loading}
             isCurrency={false}
-            sub="Need action now"
+            sub={`${kpis.lowCount} low / critical · ${kpis.outCount} out of stock`}
           />
         </div>
 

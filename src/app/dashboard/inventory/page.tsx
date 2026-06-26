@@ -64,6 +64,14 @@ function fmtMoney(v: number | string | null | undefined) {
   })}`;
 }
 
+function fmtPercent(v: number | string | null | undefined) {
+  const n = Number(v || 0);
+  return `${n.toLocaleString("en-KE", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 1,
+  })}%`;
+}
+
 function formatQuantity(
   value?: number | string | null,
   unit?: QuantityUnit | string | null
@@ -714,12 +722,18 @@ export default function InventoryPage() {
       0
     );
 
+    const potentialGrossProfit = stockRetailValue - stockCostValue;
+    const grossMargin =
+      stockRetailValue > 0 ? (potentialGrossProfit / stockRetailValue) * 100 : 0;
+
     return {
       totalItems,
       outOfStock,
       lowStock,
       stockCostValue,
       stockRetailValue,
+      potentialGrossProfit,
+      grossMargin,
     };
   }, [rows]);
 
@@ -1038,7 +1052,7 @@ export default function InventoryPage() {
     "Category",
     "On hand",
     "Reorder at",
-    "Cost value",
+    "Values",
     "Status",
     "Actions",
   ];
@@ -1087,38 +1101,56 @@ export default function InventoryPage() {
 
       {tab === "overview" && (
         <>
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatCard
-          title="Total products"
-          value={String(kpis.totalItems)}
-          sub="tracked stock items"
-          variant="neutral"
-          active={stockFilter === "all"}
-          onClick={() => setStockFilter("all")}
-        />
-        <StatCard
-          title="Low stock"
-          value={String(kpis.lowStock)}
-          sub="below reorder level"
-          variant="warning"
-          active={stockFilter === "low"}
-          onClick={() => handleStockCardFilter("low")}
-        />
-        <StatCard
-          title="Out of stock"
-          value={String(kpis.outOfStock)}
-          sub="no packs left"
-          variant="danger"
-          active={stockFilter === "out"}
-          onClick={() => handleStockCardFilter("out")}
-        />
-        <StatCard
-          title="Stock cost value"
-          value={fmtMoney(kpis.stockCostValue)}
-          sub={`Retail value ${fmtMoney(kpis.stockRetailValue)}`}
-          variant="success"
-        />
-      </div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <StatCard
+            title="Total products"
+            value={String(kpis.totalItems)}
+            sub="tracked stock items"
+            variant="neutral"
+            active={stockFilter === "all"}
+            onClick={() => setStockFilter("all")}
+          />
+          <StatCard
+            title="Low stock"
+            value={String(kpis.lowStock)}
+            sub="below reorder level"
+            variant="warning"
+            active={stockFilter === "low"}
+            onClick={() => handleStockCardFilter("low")}
+          />
+          <StatCard
+            title="Out of stock"
+            value={String(kpis.outOfStock)}
+            sub="no packs left"
+            variant="danger"
+            active={stockFilter === "out"}
+            onClick={() => handleStockCardFilter("out")}
+          />
+          <StatCard
+            title="Inventory cost"
+            value={fmtMoney(kpis.stockCostValue)}
+            sub="Based on purchase cost"
+            variant="success"
+          />
+          <StatCard
+            title="Retail value"
+            value={fmtMoney(kpis.stockRetailValue)}
+            sub="Based on selling prices"
+            variant="neutral"
+          />
+          <StatCard
+            title="Potential gross profit"
+            value={fmtMoney(kpis.potentialGrossProfit)}
+            sub="Retail value minus inventory cost"
+            variant={kpis.potentialGrossProfit < 0 ? "danger" : "success"}
+          />
+          <StatCard
+            title="Gross margin"
+            value={fmtPercent(kpis.grossMargin)}
+            sub="Potential profit as a share of retail value"
+            variant={kpis.grossMargin < 0 ? "danger" : "neutral"}
+          />
+        </div>
 
         <div className="rounded-[28px] border border-[#EADFC2] bg-white shadow-[0_12px_36px_rgba(92,64,16,0.06)] overflow-hidden">
           <div className="border-b border-[#F1E6C9] bg-[linear-gradient(180deg,#FFFDF8_0%,#FFF9EC_100%)] px-5 py-4 lg:px-6">
@@ -1186,6 +1218,7 @@ export default function InventoryPage() {
                   const costPrice = Number(p?.cost_price ?? 0);
                   const retailPrice = Number(p?.unit_price ?? 0);
                   const totalCostValue = costPrice * qty;
+                  const totalRetailValue = retailPrice * qty;
                   const isSaving = savingId === r.product_id;
 
                   return (
@@ -1242,7 +1275,10 @@ export default function InventoryPage() {
                             {fmtMoney(totalCostValue)}
                           </div>
                           <div className="text-xs text-slate-400">
-                            {fmtMoney(retailPrice)} each
+                            Cost · {fmtMoney(costPrice)} each
+                          </div>
+                          <div className="mt-1 text-xs font-semibold text-green-700">
+                            Retail {fmtMoney(totalRetailValue)}
                           </div>
                         </div>
 
@@ -1342,13 +1378,16 @@ export default function InventoryPage() {
 
                           <div>
                             <div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">
-                              Cost value
+                              Inventory cost
                             </div>
                             <div className="font-semibold text-slate-900 mt-0.5">
                               {fmtMoney(totalCostValue)}
                             </div>
                             <div className="text-[11px] text-slate-400">
-                              {fmtMoney(retailPrice)} each
+                              Cost · {fmtMoney(costPrice)} each
+                            </div>
+                            <div className="mt-1 text-[11px] font-semibold text-green-700">
+                              Retail {fmtMoney(totalRetailValue)}
                             </div>
                           </div>
                         </div>

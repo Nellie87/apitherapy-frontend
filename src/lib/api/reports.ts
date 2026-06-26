@@ -123,10 +123,18 @@ export type InventoryValuationRow = {
   name: string;
   sku: string | null;
   category: string | null;
+  /** Selling price / retail price */
   unit_price: number;
+  /** Purchase cost per unit */
+  cost_price: number;
   qty_on_hand: number;
   reorder_level: number;
   status: "out" | "critical" | "low" | "ok";
+  /** Cost value: qty_on_hand × cost_price */
+  cost_value: number;
+  /** Retail value: qty_on_hand × unit_price */
+  retail_value: number;
+  /** Kept for old pages that still read total_value. This is cost value. */
   total_value: number;
   updated_at: string;
 };
@@ -138,7 +146,13 @@ export type InventoryValuationResult = {
     total_qty: number;
     low_count: number;
     out_count: number;
+    /** Cost value of current stock */
     total_value: number;
+    total_cost_value: number;
+    /** Retail value of current stock */
+    total_retail_value: number;
+    potential_gross_profit: number;
+    gross_margin: number;
   };
 };
 
@@ -158,7 +172,8 @@ export async function getInventoryValuation(orgId: string) {
         name,
         sku,
         category,
-        unit_price
+        unit_price,
+        cost_price
       )
     `
     )
@@ -170,10 +185,13 @@ export async function getInventoryValuation(orgId: string) {
   const rows: InventoryValuationRow[] = (data ?? []).map((r: any) => {
     const p = Array.isArray(r.products) ? r.products[0] : r.products;
     const unit_price = numSafe(p?.unit_price);
+    const cost_price = numSafe(p?.cost_price);
     const qty = numSafe(r.qty_on_hand);
     const reorder = numSafe(r.reorder_level);
     const status = getStockStatus(qty, reorder);
-    const total_value = unit_price * qty;
+    const cost_value = cost_price * qty;
+    const retail_value = unit_price * qty;
+    const total_value = cost_value;
 
     return {
       product_id: r.product_id,
@@ -181,9 +199,12 @@ export async function getInventoryValuation(orgId: string) {
       sku: p?.sku ?? null,
       category: p?.category ?? null,
       unit_price,
+      cost_price,
       qty_on_hand: qty,
       reorder_level: reorder,
       status,
+      cost_value,
+      retail_value,
       total_value,
       updated_at: r.updated_at,
     };
@@ -193,13 +214,31 @@ export async function getInventoryValuation(orgId: string) {
     (acc, x) => {
       acc.products_count += 1;
       acc.total_qty += x.qty_on_hand;
-      acc.total_value += x.total_value;
+      acc.total_value += x.cost_value;
+      acc.total_cost_value += x.cost_value;
+      acc.total_retail_value += x.retail_value;
       if (x.status === "out") acc.out_count += 1;
       if (x.status === "low" || x.status === "critical") acc.low_count += 1;
       return acc;
     },
-    { products_count: 0, total_qty: 0, low_count: 0, out_count: 0, total_value: 0 }
+    {
+      products_count: 0,
+      total_qty: 0,
+      low_count: 0,
+      out_count: 0,
+      total_value: 0,
+      total_cost_value: 0,
+      total_retail_value: 0,
+      potential_gross_profit: 0,
+      gross_margin: 0,
+    }
   );
+
+  totals.potential_gross_profit = totals.total_retail_value - totals.total_cost_value;
+  totals.gross_margin =
+    totals.total_retail_value > 0
+      ? (totals.potential_gross_profit / totals.total_retail_value) * 100
+      : 0;
 
   return { rows, totals } as InventoryValuationResult;
 }
