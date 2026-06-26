@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { DayPicker, type DateRange } from "react-day-picker";
 import "react-day-picker/dist/style.css";
 
@@ -163,12 +164,14 @@ function CompactCalendar({
   valueTo,
   onApply,
   onClose,
+  style,
 }: {
   valuePreset: RangePreset;
   valueFrom: string;
   valueTo: string;
   onApply: (preset: RangePreset, from: string, to: string) => void;
   onClose: () => void;
+  style?: React.CSSProperties;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [preset, setPreset] = useState<RangePreset>(valuePreset);
@@ -222,7 +225,8 @@ function CompactCalendar({
   return (
     <div
       ref={ref}
-      className="absolute right-0 top-full z-[120] mt-2 w-[min(92vw,360px)] overflow-hidden rounded-[22px] border border-[#EADFC2] bg-white shadow-[0_24px_70px_rgba(47,39,24,0.18)]"
+      style={style}
+      className="fixed z-[9999] max-h-[calc(100vh-24px)] overflow-y-auto rounded-[22px] border border-[#EADFC2] bg-white shadow-[0_24px_70px_rgba(47,39,24,0.22)]"
     >
       <div className="border-b border-[#F1E6C9] bg-[#FFFDF8] p-3">
         <div className="grid grid-cols-3 gap-1">
@@ -329,8 +333,57 @@ function DateRangeButton({
   setOpen: (value: boolean) => void;
   onApply: (preset: RangePreset, from: string, to: string) => void;
 }) {
+  const anchorRef = useRef<HTMLDivElement>(null);
+  const [calendarStyle, setCalendarStyle] = useState<React.CSSProperties>({
+    top: 0,
+    left: 0,
+    width: 360,
+  });
+
+  const updateCalendarPosition = useCallback(() => {
+    const anchor = anchorRef.current;
+    if (!anchor || typeof window === "undefined") return;
+
+    const rect = anchor.getBoundingClientRect();
+    const margin = 12;
+    const calendarWidth = Math.min(360, window.innerWidth - margin * 2);
+    const estimatedCalendarHeight = 470;
+
+    let left = rect.right - calendarWidth;
+    left = Math.max(margin, Math.min(left, window.innerWidth - calendarWidth - margin));
+
+    let top = rect.bottom + 8;
+    const wouldOverflowBottom = top + estimatedCalendarHeight > window.innerHeight - margin;
+
+    if (wouldOverflowBottom && rect.top > estimatedCalendarHeight) {
+      top = rect.top - estimatedCalendarHeight - 8;
+    }
+
+    top = Math.max(margin, Math.min(top, window.innerHeight - margin));
+
+    setCalendarStyle({
+      top,
+      left,
+      width: calendarWidth,
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+
+    updateCalendarPosition();
+
+    window.addEventListener("resize", updateCalendarPosition);
+    window.addEventListener("scroll", updateCalendarPosition, true);
+
+    return () => {
+      window.removeEventListener("resize", updateCalendarPosition);
+      window.removeEventListener("scroll", updateCalendarPosition, true);
+    };
+  }, [open, updateCalendarPosition]);
+
   return (
-    <div className="relative">
+    <div ref={anchorRef} className="relative z-[50]">
       <button
         type="button"
         onClick={() => setOpen(!open)}
@@ -350,15 +403,19 @@ function DateRangeButton({
         </span>
       </button>
 
-      {open && (
-        <CompactCalendar
-          valuePreset={preset}
-          valueFrom={from}
-          valueTo={to}
-          onApply={onApply}
-          onClose={() => setOpen(false)}
-        />
-      )}
+      {open &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <CompactCalendar
+            valuePreset={preset}
+            valueFrom={from}
+            valueTo={to}
+            onApply={onApply}
+            onClose={() => setOpen(false)}
+            style={calendarStyle}
+          />,
+          document.body,
+        )}
     </div>
   );
 }
