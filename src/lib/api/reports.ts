@@ -450,6 +450,8 @@ export async function reportExpenses(orgId: string, a: any, b?: any, c?: any) {
 export type PnLTrendPoint = {
   period: string;
   revenue: number;
+  product_revenue: number;
+  service_income: number;
   discounts: number;
   cogs: number;
   expenses: number;
@@ -459,6 +461,8 @@ export type PnLTrendPoint = {
 
 export type PnLSummary = {
   revenue: number;
+  product_revenue: number;
+  service_income: number;
   discounts: number;
   cogs: number;
   expenses: number;
@@ -522,6 +526,17 @@ itemsQ = itemsQ
 
   if (expErr) throw new Error(expErr.message);
 
+  // 4) Service income via payment records
+  const { data: servicePayments, error: svcErr } = await supabase
+    .from("service_payments")
+    .select("payment_date,amount")
+    .eq("org_id", orgId)
+    .gte("payment_date", args.from)
+    .lte("payment_date", args.to)
+    .order("payment_date", { ascending: true });
+
+  if (svcErr) throw new Error(svcErr.message);
+
   const map = new Map<string, PnLTrendPoint>();
 
   const ensure = (k: string) => {
@@ -530,6 +545,8 @@ itemsQ = itemsQ
     const fresh: PnLTrendPoint = {
       period: k,
       revenue: 0,
+      product_revenue: 0,
+      service_income: 0,
       discounts: 0,
       cogs: 0,
       expenses: 0,
@@ -540,14 +557,26 @@ itemsQ = itemsQ
     return fresh;
   };
 
-  // Sales -> revenue/discounts
+  // Sales -> product revenue / discounts
   for (const s of sales ?? []) {
     const dtRaw = (s as any).sold_at ?? (s as any).created_at;
     const d = new Date(dtRaw);
     const k = periodKeyUTC(d, g);
     const row = ensure(k);
-    row.revenue += numSafe((s as any).total);
+    const saleTotal = numSafe((s as any).total);
+    row.product_revenue += saleTotal;
+    row.revenue += saleTotal;
     row.discounts += numSafe((s as any).discount_total);
+  }
+
+  // Service payments -> service income (no COGS)
+  for (const pay of servicePayments ?? []) {
+    const d = new Date(`${String((pay as any).payment_date)}T00:00:00.000Z`);
+    const k = periodKeyUTC(d, g);
+    const row = ensure(k);
+    const amt = numSafe((pay as any).amount);
+    row.service_income += amt;
+    row.revenue += amt;
   }
 
   // Items -> cogs
@@ -591,6 +620,8 @@ itemsQ = itemsQ
   const totals = points.reduce(
     (acc, p) => {
       acc.revenue += p.revenue;
+      acc.product_revenue += p.product_revenue;
+      acc.service_income += p.service_income;
       acc.discounts += p.discounts;
       acc.cogs += p.cogs;
       acc.expenses += p.expenses;
@@ -598,7 +629,16 @@ itemsQ = itemsQ
       acc.net_profit += p.net_profit;
       return acc;
     },
-    { revenue: 0, discounts: 0, cogs: 0, expenses: 0, gross_profit: 0, net_profit: 0 }
+    {
+      revenue: 0,
+      product_revenue: 0,
+      service_income: 0,
+      discounts: 0,
+      cogs: 0,
+      expenses: 0,
+      gross_profit: 0,
+      net_profit: 0,
+    }
   );
 
   const summary: PnLSummary = {
@@ -640,6 +680,8 @@ export type BalanceSheetResult = {
   };
   pnl_to_date: {
     revenue: number;
+    product_revenue: number;
+    service_income: number;
     discounts: number;
     cogs: number;
     expenses: number;
@@ -687,13 +729,27 @@ export async function getBalanceSheet(orgId: string, args: { as_of: string }) {
   if (salesErr) throw new Error(salesErr.message);
 
   const saleIds = (sales ?? []).map((s: any) => String(s.id));
-  let revenue = 0;
+  let productRevenue = 0;
   let discounts = 0;
 
   for (const s of sales ?? []) {
-    revenue += numSafe((s as any).total);
+    productRevenue += numSafe((s as any).total);
     discounts += numSafe((s as any).discount_total);
   }
+
+  // Service income up to as_of (from payment records)
+  const { data: servicePayments, error: svcErr } = await supabase
+    .from("service_payments")
+    .select("amount,payment_date")
+    .eq("org_id", orgId)
+    .lte("payment_date", asOf);
+
+  if (svcErr) throw new Error(svcErr.message);
+
+  let serviceIncome = 0;
+  for (const pay of servicePayments ?? []) serviceIncome += numSafe((pay as any).amount);
+
+  const revenue = productRevenue + serviceIncome;
 
   // COGS for those sales
   let cogs = 0;
@@ -742,7 +798,15 @@ export async function getBalanceSheet(orgId: string, args: { as_of: string }) {
     assets,
     liabilities,
     equity,
-    pnl_to_date: { revenue, discounts, cogs, expenses, net_profit: netProfit },
+    pnl_to_date: {
+      revenue,
+      product_revenue: productRevenue,
+      service_income: serviceIncome,
+      discounts,
+      cogs,
+      expenses,
+      net_profit: netProfit,
+    },
     check: { assets_minus_liabilities_minus_equity: checkVal },
   } as BalanceSheetResult;
 }

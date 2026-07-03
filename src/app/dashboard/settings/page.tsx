@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { bootstrapOrg } from "@/lib/org/bootstrapOrg";
 import { getOrgId } from "@/lib/org/org";
 import { useOrgRole } from "@/contexts/OrgRoleContext";
 import type { User } from "@supabase/supabase-js";
+import * as S from "./page.styles";
 
 function initialsFromUser(user: User) {
   const meta =
@@ -43,49 +44,9 @@ function formatWhen(iso: string | undefined) {
   }
 }
 
-const pageShell =
-  "min-h-screen bg-slate-50 px-4 py-8 text-slate-950 sm:px-6 lg:px-8";
-
-const sectionCard =
-  "rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden";
-
-const sectionHeader =
-  "border-b border-slate-100 bg-gradient-to-br from-amber-50 via-white to-white px-5 py-5 sm:px-7";
-
-const sectionBody = "px-5 py-5 sm:px-7 sm:py-6";
-
-const labelClass =
-  "mb-2 block text-xs font-bold uppercase tracking-[0.16em] text-slate-500";
-
-const inputClass =
-  "w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-amber-500 focus:ring-4 focus:ring-amber-100";
-
-const primaryButton =
-  "inline-flex w-full items-center justify-center rounded-2xl bg-amber-500 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-amber-600 active:scale-[.98] disabled:pointer-events-none disabled:opacity-50 sm:w-auto";
-
-const darkButton =
-  "inline-flex w-full items-center justify-center rounded-2xl bg-slate-950 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-slate-800 active:scale-[.98] disabled:pointer-events-none disabled:opacity-50 sm:w-auto";
-
-const softButton =
-  "inline-flex w-full items-center justify-center rounded-2xl border border-amber-200 bg-white px-4 py-2.5 text-sm font-bold text-amber-900 transition hover:bg-amber-50 active:scale-[.98] sm:w-auto";
-
-function Notice({
-  type,
-  text,
-}: {
-  type: "ok" | "err";
-  text: string;
-}) {
+function Notice({ type, text }: { type: "ok" | "err"; text: string }) {
   return (
-    <div
-      className={
-        type === "ok"
-          ? "rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900"
-          : "rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-800"
-      }
-    >
-      {text}
-    </div>
+    <div className={type === "ok" ? S.alertOk : S.alertErr}>{text}</div>
   );
 }
 
@@ -99,20 +60,37 @@ function DetailItem({
   mono?: boolean;
 }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-      <dt className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
-        {label}
-      </dt>
+    <div className={S.detailItem}>
+      <dt className={S.label}>{label}</dt>
       <dd
         className={
           mono
-            ? "mt-1 break-all font-mono text-xs text-slate-700"
-            : "mt-1 break-words text-sm font-semibold text-slate-950"
+            ? "mt-0.5 break-all font-mono text-[11px] text-slate-600"
+            : "mt-0.5 break-words text-sm font-medium text-slate-900"
         }
       >
         {value}
       </dd>
     </div>
+  );
+}
+
+function CardSection({
+  title,
+  children,
+  className = "",
+}: {
+  title: string;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <section className={`${S.card} ${className}`}>
+      <div className={S.cardHeader}>
+        <h2 className="text-sm font-bold text-slate-900">{title}</h2>
+      </div>
+      <div className={S.cardBody}>{children}</div>
+    </section>
   );
 }
 
@@ -273,246 +251,146 @@ export default function SettingsPage() {
   }
 
   return (
-    <main className={pageShell}>
-      <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
-        <header className="rounded-3xl border border-amber-100 bg-gradient-to-br from-amber-50 via-white to-white px-5 py-6 shadow-sm sm:px-8 sm:py-8">
-          <p className="text-xs font-bold uppercase tracking-[0.2em] text-amber-600">
-            Account
-          </p>
-          <h1 className="mt-2 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">
-            Settings and profile
-          </h1>
-          <p className="mt-3 max-w-2xl text-sm leading-relaxed text-slate-600 sm:text-base">
-            Manage your profile, workspace context, and password from one clean
-            settings area.
-          </p>
-        </header>
+    <div className="flex flex-col gap-4">
+      <div>
+        <h1 className="text-xl font-bold text-slate-900">Settings</h1>
+        <p className="text-xs text-slate-500">Profile, workspace, and password</p>
+      </div>
 
-        {loadError ? <Notice type="err" text={loadError} /> : null}
+      {loadError ? <Notice type="err" text={loadError} /> : null}
 
-        {!user && !loadError ? (
-          <section className={sectionCard}>
-            <div className="flex min-h-48 items-center justify-center p-8 text-center">
-              <div>
-                <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-slate-200 border-t-amber-500" />
-                <p className="mt-3 text-sm font-medium text-slate-500">
-                  Loading your profile…
-                </p>
-              </div>
-            </div>
-          </section>
-        ) : null}
+      {!user && !loadError ? (
+        <div className="flex h-40 items-center justify-center">
+          <div className="flex items-center gap-3 text-slate-500">
+            <svg className="h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="12" cy="12" r="10" strokeOpacity="0.2" />
+              <path d="M12 2a10 10 0 0110 10" />
+            </svg>
+            <span className="text-sm font-medium">Loading profile…</span>
+          </div>
+        </div>
+      ) : null}
 
-        {user ? (
-          <>
-            <section className={sectionCard}>
-              <div className={sectionHeader}>
-                <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
-                  Profile details
-                </p>
-                <h2 className="mt-1 text-xl font-black tracking-tight text-slate-950">
-                  Your account information
-                </h2>
-                <p className="mt-1 text-sm leading-relaxed text-slate-600">
-                  This is the information connected to your signed-in account.
-                </p>
-              </div>
-
-              <div className={sectionBody}>
-                <div className="flex flex-col gap-5 lg:flex-row lg:items-start">
-                  <div className="flex items-center gap-4 rounded-3xl border border-amber-100 bg-amber-50/70 p-4 lg:w-72 lg:flex-col lg:items-start">
-                    <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-amber-500 text-xl font-black text-white shadow-sm">
-                      {initialsFromUser(user)}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="truncate text-base font-black text-slate-950">
-                        {displayName || "No display name"}
-                      </p>
-                      <p className="mt-1 break-all text-sm text-slate-600">
-                        {user.email ?? "—"}
-                      </p>
-                    </div>
-                  </div>
-
-                  <dl className="grid flex-1 gap-3 sm:grid-cols-2">
-                    <DetailItem label="Email" value={user.email ?? "—"} />
-                    <DetailItem label="User ID" value={user.id} mono />
-                    <DetailItem
-                      label="Member since"
-                      value={formatWhen(user.created_at)}
-                    />
-                    <DetailItem
-                      label="Last sign-in"
-                      value={formatWhen(user.last_sign_in_at)}
-                    />
-                  </dl>
+      {user ? (
+        <div className="grid gap-4 lg:grid-cols-2">
+          <CardSection title="Profile">
+            <div className="space-y-3">
+              <div className={S.profileBanner}>
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-amber-500 text-sm font-bold text-white">
+                  {initialsFromUser(user)}
+                </div>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-bold text-slate-900">
+                    {displayName || "No display name"}
+                  </p>
+                  <p className="truncate text-xs text-slate-500">{user.email ?? "—"}</p>
                 </div>
               </div>
-            </section>
 
-            <section className={sectionCard}>
-              <div className={sectionHeader}>
-                <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
-                  Personal profile
-                </p>
-                <h2 className="mt-1 text-xl font-black tracking-tight text-slate-950">
-                  Display name
-                </h2>
-                <p className="mt-1 text-sm leading-relaxed text-slate-600">
-                  Update the name teammates see in the workspace.
-                </p>
-              </div>
+              <dl className="grid gap-2 sm:grid-cols-2">
+                <DetailItem label="Member since" value={formatWhen(user.created_at)} />
+                <DetailItem label="Last sign-in" value={formatWhen(user.last_sign_in_at)} />
+                <DetailItem label="User ID" value={user.id} mono />
+              </dl>
 
-              <form onSubmit={onSaveProfile} className={`${sectionBody} space-y-5`}>
-                <label className="block max-w-xl">
-                  <span className={labelClass}>Display name</span>
+              <form onSubmit={onSaveProfile} className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                <label className="block flex-1">
+                  <span className={S.label}>Display name</span>
                   <input
                     value={displayName}
                     onChange={(e) => setDisplayName(e.target.value)}
-                    className={inputClass}
+                    className={S.input}
                     placeholder="e.g. Jane Mwangi"
                     autoComplete="name"
                   />
                 </label>
-
-                {profileMsg ? (
-                  <Notice type={profileMsg.type} text={profileMsg.text} />
-                ) : null}
-
-                <button
-                  type="submit"
-                  disabled={savingProfile}
-                  className={primaryButton}
-                >
-                  {savingProfile ? "Saving…" : "Save profile"}
+                <button type="submit" disabled={savingProfile} className={S.btnPrimary}>
+                  {savingProfile ? "Saving…" : "Save"}
                 </button>
               </form>
-            </section>
 
-            <section className={sectionCard}>
-              <div className={sectionHeader}>
-                <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
-                  Workspace
-                </p>
-                <h2 className="mt-1 text-xl font-black tracking-tight text-slate-950">
-                  Active organization
-                </h2>
-                <p className="mt-1 text-sm leading-relaxed text-slate-600">
-                  This controls which organization your dashboard uses for sales,
-                  products, reports, and inventory.
-                </p>
-              </div>
+              {profileMsg ? (
+                <Notice type={profileMsg.type} text={profileMsg.text} />
+              ) : null}
+            </div>
+          </CardSection>
 
-              <div className={sectionBody}>
-                <div className="flex flex-col gap-4 rounded-3xl border border-amber-100 bg-amber-50/60 p-4 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="min-w-0">
-                    <p className="text-xs font-bold uppercase tracking-[0.16em] text-amber-700">
-                      Current workspace
-                    </p>
-                    <p className="mt-1 truncate text-lg font-black text-slate-950">
-                      {orgName ?? (orgId ? "Unnamed organization" : "None selected")}
-                    </p>
-                    {orgId ? (
-                      <p className="mt-1 break-all font-mono text-xs text-slate-500">
-                        {orgId}
-                      </p>
-                    ) : (
-                      <p className="mt-1 text-sm text-slate-600">
-                        Choose an organization to sync data across the app.
-                      </p>
-                    )}
-                  </div>
-
-                  <Link href="/dashboard/org" className={softButton}>
-                    Switch organization
-                  </Link>
+          <CardSection title="Workspace">
+            <div className="space-y-3">
+              <div className={S.workspaceBanner}>
+                <div className="min-w-0">
+                  <p className={S.label}>Current organization</p>
+                  <p className="truncate text-sm font-bold text-slate-900">
+                    {orgName ?? (orgId ? "Unnamed organization" : "None selected")}
+                  </p>
+                  {orgId ? (
+                    <p className="mt-0.5 truncate font-mono text-[11px] text-slate-400">{orgId}</p>
+                  ) : null}
                 </div>
+                <Link href="/dashboard/org" className={S.btnSecondary}>
+                  Switch
+                </Link>
+              </div>
 
-                {!roleLoading && isAdmin ? (
-                  <div className="mt-6 border-t border-slate-100 pt-5">
-                    <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
-                      Admin shortcuts
-                    </p>
-                    <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-                      {[
-                        { href: "/dashboard/team", label: "Team & invites" },
-                        { href: "/dashboard/summarydashboard", label: "Dashboard" },
-                        { href: "/dashboard/reports", label: "Reports" },
-                        { href: "/dashboard/products", label: "Products" },
-                      ].map((item) => (
-                        <Link
-                          key={item.href}
-                          href={item.href}
-                          className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition hover:border-amber-200 hover:bg-amber-50"
-                        >
-                          {item.label}
-                        </Link>
-                      ))}
-                    </div>
+              {!roleLoading && isAdmin ? (
+                <div>
+                  <p className={S.label}>Admin shortcuts</p>
+                  <div className="mt-1.5 grid grid-cols-2 gap-1.5">
+                    {[
+                      { href: "/dashboard/team", label: "Team" },
+                      { href: "/dashboard/summarydashboard", label: "Dashboard" },
+                      { href: "/dashboard/reports", label: "Reports" },
+                      { href: "/dashboard/products", label: "Products" },
+                    ].map((item) => (
+                      <Link key={item.href} href={item.href} className={S.shortcutLink}>
+                        {item.label}
+                      </Link>
+                    ))}
                   </div>
-                ) : null}
-              </div>
-            </section>
-
-            <section className={sectionCard}>
-              <div className={sectionHeader}>
-                <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
-                  Security
-                </p>
-                <h2 className="mt-1 text-xl font-black tracking-tight text-slate-950">
-                  Change password
-                </h2>
-                <p className="mt-1 text-sm leading-relaxed text-slate-600">
-                  Set a new password for this account while staying signed in on
-                  this device.
-                </p>
-              </div>
-
-              <form onSubmit={onChangePassword} className={`${sectionBody} space-y-5`}>
-                <div className="grid max-w-3xl gap-5 sm:grid-cols-2">
-                  <label className="block">
-                    <span className={labelClass}>New password</span>
-                    <input
-                      type="password"
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                      className={inputClass}
-                      autoComplete="new-password"
-                      placeholder="At least 8 characters"
-                    />
-                  </label>
-
-                  <label className="block">
-                    <span className={labelClass}>Confirm password</span>
-                    <input
-                      type="password"
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      className={inputClass}
-                      autoComplete="new-password"
-                      placeholder="Repeat password"
-                    />
-                  </label>
                 </div>
+              ) : null}
+            </div>
+          </CardSection>
 
-                {passwordMsg ? (
-                  <Notice type={passwordMsg.type} text={passwordMsg.text} />
-                ) : null}
+          <CardSection title="Password" className="lg:col-span-2">
+            <form onSubmit={onChangePassword} className="space-y-3">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_auto] lg:items-end">
+                <label className="block">
+                  <span className={S.label}>New password</span>
+                  <input
+                    type="password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    className={S.input}
+                    autoComplete="new-password"
+                    placeholder="At least 8 characters"
+                  />
+                </label>
 
-                <button
-                  type="submit"
-                  disabled={savingPassword}
-                  className={darkButton}
-                >
+                <label className="block">
+                  <span className={S.label}>Confirm password</span>
+                  <input
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    className={S.input}
+                    autoComplete="new-password"
+                    placeholder="Repeat password"
+                  />
+                </label>
+
+                <button type="submit" disabled={savingPassword} className={S.btnPrimary}>
                   {savingPassword ? "Updating…" : "Update password"}
                 </button>
-              </form>
-            </section>
+              </div>
 
-           
-          </>
-        ) : null}
-      </div>
-    </main>
+              {passwordMsg ? (
+                <Notice type={passwordMsg.type} text={passwordMsg.text} />
+              ) : null}
+            </form>
+          </CardSection>
+        </div>
+      ) : null}
+    </div>
   );
 }
