@@ -19,6 +19,11 @@ import {
   reportExpenses,
   type InventoryValuationRow,
 } from "@/lib/api/reports";
+import {
+  listDueReminders,
+  listUpcomingScheduled,
+  type ServiceRow,
+} from "@/lib/api/services";
 
 /* ─────────────────────────────────────────────
    Types
@@ -54,9 +59,19 @@ type RecentExpense = {
   created_at: string;
 };
 
+type RecentServicePayment = {
+  id: string;
+  amount: number;
+  payment_date: string;
+  payment_method: string;
+  created_at: string;
+  service_type: string;
+  customer_name: string | null;
+};
+
 type ActivityItem = {
   id: string;
-  type: "sale" | "expense";
+  type: "sale" | "expense" | "service";
   title: string;
   sub: string;
   amount: number;
@@ -364,14 +379,14 @@ function Skeleton({
 function QuickActions() {
   const actions = [
     { href: "/dashboard/sales/new", label: "New Sale", primary: true },
-   
+  
   ];
 
   return (
     <div className="flex gap-2 overflow-x-auto pb-1 sm:flex-wrap">
       {actions.map((a) => (
         <Link
-          key={a.href}
+          key={a.label}
           href={a.href}
           className={`whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-bold transition-all duration-150 hover:-translate-y-0.5 hover:shadow-sm ${
             a.primary
@@ -1056,6 +1071,122 @@ function StockBadge({ status }: { status: InventoryValuationRow["status"] }) {
 }
 
 /* ─────────────────────────────────────────────
+   Income breakdown
+───────────────────────────────────────────── */
+function IncomeBreakdown({
+  loading,
+  revenue,
+  productRevenue,
+  serviceIncome,
+  expenses,
+  net,
+}: {
+  loading?: boolean;
+  revenue: number;
+  productRevenue: number;
+  serviceIncome: number;
+  expenses: number;
+  net: number;
+}) {
+  const salesPct = revenue > 0 ? (productRevenue / revenue) * 100 : 0;
+  const svcPct = revenue > 0 ? (serviceIncome / revenue) * 100 : 0;
+  const expRatio = revenue > 0 ? (expenses / revenue) * 100 : 0;
+
+  return (
+    <Card
+      title="Income Breakdown"
+      sub="Sales, services, expenses & profit"
+      className="h-fit"
+      action={
+        <Link
+          href="/dashboard/reports/revenue-health"
+          className="text-xs font-bold text-amber-500 transition-colors hover:text-amber-600"
+        >
+          Details →
+        </Link>
+      }
+    >
+      {loading ? (
+        <div className="flex flex-col gap-3 p-5">
+          <Skeleton w="100%" h={12} />
+          <div className="grid grid-cols-2 gap-3">
+            {[1, 2, 3, 4].map((i) => (
+              <Skeleton key={i} w="100%" h={48} />
+            ))}
+          </div>
+        </div>
+      ) : revenue <= 0 && expenses <= 0 ? (
+        <div className="py-10 text-center text-sm font-semibold text-slate-400">
+          No financial activity in this period
+        </div>
+      ) : (
+        <>
+          {revenue > 0 && (
+            <div className="border-b border-slate-100 px-5 py-4">
+              <div className="mb-2 flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                <span>Revenue mix</span>
+                <span>{fmtMoney(revenue)} total</span>
+              </div>
+              <div className="flex h-2.5 overflow-hidden rounded-full bg-slate-100">
+                {salesPct > 0 && (
+                  <div className="h-full bg-amber-400" style={{ width: `${salesPct}%` }} />
+                )}
+                {svcPct > 0 && (
+                  <div className="h-full bg-green-500" style={{ width: `${svcPct}%` }} />
+                )}
+              </div>
+              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs font-semibold text-slate-500">
+                <span className="flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full bg-amber-400" />
+                  Sales {fmtMoney(productRevenue)} ({salesPct.toFixed(0)}%)
+                </span>
+                {serviceIncome > 0 && (
+                  <span className="flex items-center gap-1.5">
+                    <span className="h-2 w-2 rounded-full bg-green-500" />
+                    Services {fmtMoney(serviceIncome)} ({svcPct.toFixed(0)}%)
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 divide-x divide-y divide-slate-100 sm:grid-cols-4 sm:divide-y-0">
+            {[
+              { label: "Product Sales", value: fmtMoney(productRevenue), color: "#92400e" },
+              { label: "Service Income", value: fmtMoney(serviceIncome), color: "#166534" },
+              {
+                label: "Expenses",
+                value: fmtMoney(expenses),
+                color: "#0f172a",
+                sub: expRatio > 0 ? `${expRatio.toFixed(0)}% of revenue` : undefined,
+              },
+              {
+                label: "Net Profit",
+                value: fmtMoney(net),
+                color: net >= 0 ? "#059669" : "#dc2626",
+                sub: net >= 0 ? "After all costs" : "Loss this period",
+              },
+            ].map(({ label, value, color, sub }) => (
+              <div key={label} className="px-4 py-4 sm:px-5">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                  {label}
+                </div>
+                <div className="mt-1 text-base font-extrabold" style={{ color }}>
+                  {value}
+                </div>
+                {sub && (
+                  <div className="mt-0.5 text-[11px] font-medium text-slate-400">{sub}</div>
+                )}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </Card>
+  );
+}
+
+/* ─────────────────────────────────────────────
    Main Page
 ───────────────────────────────────────────── */
 export default function DashboardPage() {
@@ -1082,6 +1213,10 @@ export default function DashboardPage() {
   > | null>(null);
   const [recentSales, setRecentSales] = useState<RecentSale[]>([]);
   const [recentExpenses, setRecentExpenses] = useState<RecentExpense[]>([]);
+  const [recentServicePayments, setRecentServicePayments] = useState<RecentServicePayment[]>([]);
+  const [upcomingServices, setUpcomingServices] = useState<ServiceRow[]>([]);
+  const [dueReminders, setDueReminders] = useState<ServiceRow[]>([]);
+  const [serviceOutstanding, setServiceOutstanding] = useState(0);
 
   const range = useMemo(() => {
     if (preset === "custom") {
@@ -1157,17 +1292,74 @@ export default function DashboardPage() {
           .order("expense_date", { ascending: false })
           .limit(6);
 
-        const [{ data: sData, error: sErr }, { data: eData, error: eErr }] =
-          await Promise.all([salesQuery, expensesQuery]);
+        const servicePaymentsQuery = supabase
+          .from("service_payments")
+          .select(
+            "id,amount,payment_date,payment_method,created_at,services:service_id(service_type,customer_name)",
+          )
+          .eq("org_id", orgId)
+          .gte("payment_date", range.from)
+          .lte("payment_date", range.to)
+          .order("payment_date", { ascending: false })
+          .limit(6);
+
+        const openServicesQuery = supabase
+          .from("services")
+          .select("amount,total_amount,payment_plan,status")
+          .eq("org_id", orgId)
+          .in("status", ["scheduled", "in_progress"])
+          .neq("payment_plan", "full");
+
+        const [
+          { data: sData, error: sErr },
+          { data: eData, error: eErr },
+          { data: spData, error: spErr },
+          { data: openSvc, error: openErr },
+          upcoming,
+          reminders,
+        ] = await Promise.all([
+          salesQuery,
+          expensesQuery,
+          servicePaymentsQuery,
+          openServicesQuery,
+          listUpcomingScheduled(orgId, 14),
+          listDueReminders(orgId),
+        ]);
 
         if (sErr) throw new Error(sErr.message);
         if (eErr) throw new Error(eErr.message);
+        if (spErr) throw new Error(spErr.message);
+        if (openErr) throw new Error(openErr.message);
+
+        const mappedPayments: RecentServicePayment[] = (spData ?? []).map((row: any) => {
+          const svc = Array.isArray(row.services) ? row.services[0] : row.services;
+          return {
+            id: String(row.id),
+            amount: Number(row.amount ?? 0),
+            payment_date: String(row.payment_date),
+            payment_method: String(row.payment_method ?? "cash"),
+            created_at: String(row.created_at),
+            service_type: String(svc?.service_type ?? "Service"),
+            customer_name: svc?.customer_name ?? null,
+          };
+        });
+
+        let outstanding = 0;
+        for (const row of openSvc ?? []) {
+          const total = Number((row as any).total_amount ?? 0);
+          const collected = Number((row as any).amount ?? 0);
+          outstanding += Math.max(0, total - collected);
+        }
 
         setPnl(pl);
         setInventory(inv);
         setExpData(ex);
         setRecentSales((sData ?? []) as any);
         setRecentExpenses((eData ?? []) as any);
+        setRecentServicePayments(mappedPayments);
+        setUpcomingServices(upcoming);
+        setDueReminders(reminders);
+        setServiceOutstanding(outstanding);
         setLastRefreshed(new Date());
       } catch (e: any) {
         setErr(e.message ?? String(e));
@@ -1264,6 +1456,8 @@ export default function DashboardPage() {
 
     return {
       revenue: num(pnl?.totals?.revenue),
+      productRevenue: num((pnl?.totals as any)?.product_revenue),
+      serviceIncome: num((pnl?.totals as any)?.service_income),
       expenses: num(pnl?.totals?.expenses),
       net: num(pnl?.totals?.net_profit),
       inventoryCost,
@@ -1303,6 +1497,12 @@ export default function DashboardPage() {
     [expData],
   );
 
+  const svcSpark = useMemo(
+    () =>
+      (pnl?.points ?? []).slice(-10).map((p: any) => Number(p.service_income ?? 0)),
+    [pnl],
+  );
+
   const alertRows = useMemo(() => {
     const rank = (r: InventoryValuationRow) =>
       r.status === "out" ? 0 : r.status === "critical" ? 1 : 2;
@@ -1331,7 +1531,8 @@ export default function DashboardPage() {
           ? `Discount given · ${fmtMoney(discountTotal)}`
           : s.customer_name ?? "Walk-in customer",
         amount: Number(s.total ?? 0),
-at: s.cancelled_at ?? s.sold_at ?? s.created_at,        href: `/dashboard/sales/${s.id}`,
+        at: s.cancelled_at ?? s.sold_at ?? s.created_at,
+        href: `/dashboard/sales/${s.id}`,
         status: s.status,
         edit_count: editCount,
         discount_total: discountTotal,
@@ -1348,10 +1549,22 @@ at: s.cancelled_at ?? s.sold_at ?? s.created_at,        href: `/dashboard/sales/
       href: "/dashboard/expenses",
     }));
 
-    return [...sales, ...expenses]
+    const services: ActivityItem[] = recentServicePayments.map((p) => ({
+      id: `service-${p.id}`,
+      type: "service",
+      title: p.service_type,
+      sub: p.customer_name
+        ? `${p.customer_name} · ${fmtDateOnly(p.payment_date)}`
+        : `Service payment · ${fmtDateOnly(p.payment_date)}`,
+      amount: Number(p.amount ?? 0),
+      at: p.created_at || `${p.payment_date}T12:00:00`,
+      href: "/dashboard/services",
+    }));
+
+    return [...sales, ...expenses, ...services]
       .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())
       .slice(0, 8);
-  }, [recentSales, recentExpenses]);
+  }, [recentSales, recentExpenses, recentServicePayments]);
 
   if (!orgId && !err) {
     return (
@@ -1514,7 +1727,20 @@ at: s.cancelled_at ?? s.sold_at ?? s.created_at,        href: `/dashboard/sales/
             loading={loading}
             spark={revSpark}
             sparkColor="#f59e0b"
-            sub="Sales collected in selected period"
+            sub={
+              kpis.serviceIncome > 0
+                ? `${fmtMoney(kpis.productRevenue)} sales · ${fmtMoney(kpis.serviceIncome)} services`
+                : "Sales + services in selected period"
+            }
+          />
+          <KpiCard
+            label="Service income"
+            rawValue={kpis.serviceIncome}
+            variant="success"
+            loading={loading}
+            spark={svcSpark}
+            sparkColor="#16a34a"
+            sub="Payments received for services"
           />
           <KpiCard
             label="Net profit"
@@ -1531,6 +1757,28 @@ at: s.cancelled_at ?? s.sold_at ?? s.created_at,        href: `/dashboard/sales/
             spark={expSpark}
             sparkColor="#f97316"
             sub="Expenses in selected period"
+          />
+          <KpiCard
+            label="Outstanding services"
+            rawValue={serviceOutstanding}
+            variant={serviceOutstanding > 0 ? "warning" : "neutral"}
+            loading={loading}
+            sub={
+              upcomingServices.length > 0
+                ? `${upcomingServices.length} upcoming · awaiting collection`
+                : "Awaiting collection on open jobs"
+            }
+          />
+          <KpiCard
+            label="Scheduled"
+            rawValue={upcomingServices.length + dueReminders.length}
+            loading={loading}
+            isCurrency={false}
+            sub={
+              dueReminders.length > 0
+                ? `${dueReminders.length} reminder${dueReminders.length !== 1 ? "s" : ""} due`
+                : "Upcoming in next 14 days"
+            }
           />
           <KpiCard
             label="Inventory cost"
@@ -1570,16 +1818,17 @@ at: s.cancelled_at ?? s.sold_at ?? s.created_at,        href: `/dashboard/sales/
           />
         </div>
 
-        <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1fr_340px]">
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1fr_340px] lg:items-start">
           <Card
             title="Revenue vs Expenses"
+            className="h-fit"
             sub={`${range.label} · hover the chart for breakdown`}
             action={
               <Link
-                href="/dashboard/reports/expenses-pnl"
+                href="/dashboard/reports/revenue-health"
                 className="text-xs font-bold text-amber-500 transition-colors hover:text-amber-600"
               >
-                Full P&L →
+                Full report →
               </Link>
             }
           >
@@ -1614,47 +1863,14 @@ at: s.cancelled_at ?? s.sold_at ?? s.created_at,        href: `/dashboard/sales/
               )}
             </div>
 
-            <div className="px-4 pb-2">
+            <div className="px-4 pb-4">
               <AreaChart points={areaPoints} loading={loading} height={220} />
             </div>
-
-            {!loading && areaPoints.length > 0 && (
-              <div className="grid grid-cols-3 divide-x divide-slate-100 border-t border-slate-100">
-                {[
-                  {
-                    label: "Total Revenue",
-                    value: fmtMoney(kpis.revenue),
-                    color: "#0f172a",
-                  },
-                  {
-                    label: "Total Expenses",
-                    value: fmtMoney(kpis.expenses),
-                    color: "#0f172a",
-                  },
-                  {
-                    label: "Net Profit / Loss",
-                    value: fmtMoney(kpis.net),
-                    color: kpis.net >= 0 ? "#059669" : "#dc2626",
-                  },
-                ].map(({ label, value, color }) => (
-                  <div key={label} className="px-6 py-4">
-                    <div className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                      {label}
-                    </div>
-                    <div
-                      className="mt-1 text-base font-extrabold"
-                      style={{ color }}
-                    >
-                      {value}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
           </Card>
 
           <Card
             title="Needs Attention"
+            className="h-fit"
             sub="Low, critical & out-of-stock items"
             action={
               <Link
@@ -1727,11 +1943,123 @@ at: s.cancelled_at ?? s.sold_at ?? s.created_at,        href: `/dashboard/sales/
               </div>
             )}
           </Card>
+
+          <IncomeBreakdown
+            loading={loading}
+            revenue={kpis.revenue}
+            productRevenue={kpis.productRevenue}
+            serviceIncome={kpis.serviceIncome}
+            expenses={kpis.expenses}
+            net={kpis.net}
+          />
+
+          <Card
+            title="Services"
+            className="h-fit"
+            sub="Scheduled jobs, reminders & collections"
+            action={
+              <Link
+                href="/dashboard/services"
+                className="text-xs font-bold text-amber-500 transition-colors hover:text-amber-600"
+              >
+                View all →
+              </Link>
+            }
+          >
+            {loading ? (
+              <div className="flex flex-col gap-4 p-5">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="flex flex-col gap-2">
+                    <Skeleton w="65%" h={16} />
+                    <Skeleton w="40%" h={12} />
+                  </div>
+                ))}
+              </div>
+            ) : dueReminders.length === 0 && upcomingServices.length === 0 && serviceOutstanding <= 0 ? (
+              <div className="py-14 text-center">
+                <p className="text-sm font-bold text-slate-600">No open service items</p>
+                <p className="mt-1 text-xs text-slate-400">
+                  Schedule a job or record service income
+                </p>
+                <Link
+                  href="/dashboard/services"
+                  className="mt-4 inline-flex rounded-xl bg-slate-950 px-4 py-2 text-xs font-bold text-white hover:bg-slate-800"
+                >
+                  Go to Services
+                </Link>
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-100">
+                {dueReminders.slice(0, 3).map((r) => (
+                  <div
+                    key={r.id}
+                    className="flex items-start justify-between gap-3 px-5 py-4 bg-amber-50/50"
+                  >
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm">🔔</span>
+                        <div className="truncate text-sm font-bold text-slate-900">
+                          {r.service_type}
+                        </div>
+                      </div>
+                      <div className="mt-1 text-xs font-medium text-amber-800">
+                        Reminder due · {r.scheduled_date ?? r.service_date}
+                        {r.customer_name ? ` · ${r.customer_name}` : ""}
+                      </div>
+                    </div>
+                    <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-amber-800">
+                      Due
+                    </span>
+                  </div>
+                ))}
+
+                {upcomingServices.slice(0, dueReminders.length > 0 ? 2 : 4).map((r) => (
+                  <div
+                    key={r.id}
+                    className="flex items-start justify-between gap-3 px-5 py-4 transition-colors hover:bg-slate-50"
+                  >
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-bold text-slate-900">
+                        {r.service_type}
+                      </div>
+                      <div className="mt-1 text-xs font-medium text-slate-400">
+                        {r.scheduled_date}
+                        {r.customer_name ? ` · ${r.customer_name}` : ""}
+                      </div>
+                    </div>
+                    <span className="shrink-0 rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-blue-700">
+                      Scheduled
+                    </span>
+                  </div>
+                ))}
+
+                {serviceOutstanding > 0 && (
+                  <div className="bg-[#FFFDF5] px-5 py-3.5 text-center">
+                    <div className="text-xs font-bold uppercase tracking-wider text-amber-700">
+                      {fmtMoney(serviceOutstanding)} outstanding
+                    </div>
+                    <div className="mt-0.5 text-[11px] text-slate-400">
+                      On installment & periodic jobs
+                    </div>
+                  </div>
+                )}
+
+                <div className="bg-slate-50 px-5 py-3.5 text-center">
+                  <Link
+                    href="/dashboard/services"
+                    className="text-xs font-bold text-amber-500 transition-colors hover:text-amber-600"
+                  >
+                    Manage services →
+                  </Link>
+                </div>
+              </div>
+            )}
+          </Card>
         </div>
 
         <Card
           title="Recent Activity"
-          sub="Sales and expenses — newest first"
+          sub="Sales, services, and expenses — newest first"
           action={
             <div className="flex items-center gap-4">
               <Link
@@ -1739,6 +2067,12 @@ at: s.cancelled_at ?? s.sold_at ?? s.created_at,        href: `/dashboard/sales/
                 className="text-xs font-bold text-amber-500 transition-colors hover:text-amber-600"
               >
                 Sales →
+              </Link>
+              <Link
+                href="/dashboard/services"
+                className="text-xs font-bold text-amber-500 transition-colors hover:text-amber-600"
+              >
+                Services →
               </Link>
               <Link
                 href="/dashboard/expenses"
@@ -1781,6 +2115,8 @@ at: s.cancelled_at ?? s.sold_at ?? s.created_at,        href: `/dashboard/sales/
                         ? isCancelledSale(a.status)
                           ? "hover:bg-red-50"
                           : "hover:bg-amber-50"
+                        : a.type === "service"
+                        ? "hover:bg-green-50"
                         : "hover:bg-slate-50"
                     }`}
                     style={{ gridTemplateColumns: "1fr auto" }}
@@ -1812,6 +2148,12 @@ at: s.cancelled_at ?? s.sold_at ?? s.created_at,        href: `/dashboard/sales/
                               Discount
                             </span>
                           )}
+
+                        {a.type === "service" && (
+                          <span className="shrink-0 rounded-full bg-green-50 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-green-700">
+                            Service
+                          </span>
+                        )}
                       </div>
 
                       <div className="mt-0.5 truncate text-xs font-medium text-slate-400">
@@ -1824,12 +2166,18 @@ at: s.cancelled_at ?? s.sold_at ?? s.created_at,        href: `/dashboard/sales/
                         className={`text-sm font-extrabold ${
                           a.type === "expense"
                             ? "text-red-500"
+                            : a.type === "service"
+                            ? "text-green-700"
                             : isCancelledSale(a.status)
                             ? "text-slate-400"
                             : "text-slate-900"
                         }`}
                       >
-                        {a.type === "expense" ? "−" : isCancelledSale(a.status) ? "" : "+"}
+                        {a.type === "expense"
+                          ? "−"
+                          : isCancelledSale(a.status)
+                          ? ""
+                          : "+"}
                         <span
                           className={
                             isCancelledSale(a.status)

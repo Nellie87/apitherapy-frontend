@@ -1060,17 +1060,7 @@ export default function InventoryAnalyticsPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <Link href="/dashboard/reports" className={S.btnGhost}>
-            Reports
-          </Link>
-
-          <button
-            className={S.btnGhost}
-            onClick={fetchData}
-            disabled={loading || !orgId}
-          >
-            Refresh
-          </button>
+         
 
           <button
             className={S.btnGhost}

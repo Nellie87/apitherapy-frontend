@@ -14,7 +14,7 @@ export default function ReportsHomePage() {
     // next ones we’ll add:
     { title: "Inventory Valuation", desc: "Stock value per product + totals", href: "/dashboard/reports/inventory", icon: "📦" },
     { title: "Discount Report", desc: "Which products got discounts", href: "/dashboard/reports/discounts", icon: "🏷️" },
-    { title: "Expenses Summary", desc: "Spend by category + totals", href: "/dashboard/reports/expenses-pnl", icon: "💳" },
+    { title: "Revenue Health", desc: "Sales, services, expenses & profit overview", href: "/dashboard/reports/revenue-health", icon: "📈" },
   ];
 
   return (
@@ -22,7 +22,7 @@ export default function ReportsHomePage() {
       <div className={`${S.card} p-6`}>
         <div className="text-3xl font-black text-slate-900">Reports</div>
         <div className="mt-1 text-sm text-slate-500">
-          Sales · Inventory · Discounts · Expenses (downloadable)
+          Sales · Inventory · Discounts · Revenue Health (downloadable)
         </div>
       </div>
 

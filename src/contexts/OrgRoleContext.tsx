@@ -18,6 +18,7 @@ type Ctx = {
   canViewReports: boolean;
   canManageInventory: boolean;
   canManageExpenses: boolean;
+  canManageServices: boolean;
   canManageTeam: boolean;
   canManageSettings: boolean;
 };
@@ -46,6 +47,7 @@ export function OrgRoleProvider({
   const canViewReports = isOwner || isAdmin || isManager;
   const canManageInventory = isOwner || isAdmin || isManager;
   const canManageExpenses = isOwner || isAdmin || isManager;
+  const canManageServices = isOwner || isAdmin || isManager;
   const canManageTeam = isOwner || isAdmin;
   const canManageSettings = isOwner || isAdmin;
 
@@ -64,6 +66,7 @@ export function OrgRoleProvider({
     canViewReports,
     canManageInventory,
     canManageExpenses,
+    canManageServices,
     canManageTeam,
     canManageSettings,
   };
@@ -94,6 +97,7 @@ export function useOrgRole(): Ctx {
       canViewReports: false,
       canManageInventory: false,
       canManageExpenses: false,
+      canManageServices: false,
       canManageTeam: false,
       canManageSettings: false,
     };

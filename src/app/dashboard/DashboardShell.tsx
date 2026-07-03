@@ -30,6 +30,7 @@ const Icons: Record<string, ReactNode> = {
   sales: <span>↗</span>,
   reports: <span>▤</span>,
   expenses: <span>KES</span>,
+  services: <span>◷</span>,
   suppliers: <span>▣</span>,
   team: <span>👥</span>,
   org: <span>⌂</span>,
@@ -40,10 +41,10 @@ const Icons: Record<string, ReactNode> = {
 };
 
 const REPORT_NAV: NavItem[] = [
-  { href: "/dashboard/reports/sales-analytics", label: "Sales Summary", icon: "sales" },
+  { href: "/dashboard/reports/sales-analytics", label: "Sales Report", icon: "sales" },
   { href: "/dashboard/reports/inventory", label: "Inventory Valuation", icon: "inventory" },
   { href: "/dashboard/reports/discounts", label: "Discount Report", icon: "expenses" },
-  { href: "/dashboard/reports/expenses-pnl", label: "Expenses Summary", icon: "expenses" },
+  { href: "/dashboard/reports/revenue-health", label: "Revenue Health", icon: "expenses" },
 ];
 
 const ADMIN_NAV: (NavItem | NavGroup)[] = [
@@ -51,6 +52,7 @@ const ADMIN_NAV: (NavItem | NavGroup)[] = [
   { href: "/dashboard/inventory", label: "Our Stock", icon: "inventory" },
   { href: "/dashboard/products", label: "Products", icon: "products" },
   { href: "/dashboard/sales", label: "Sales", icon: "sales" },
+  { href: "/dashboard/services", label: "Services", icon: "services" },
   { href: "/dashboard/reports", label: "Reports", icon: "reports", children: REPORT_NAV },
   { href: "/dashboard/expenses", label: "Expenses", icon: "expenses" },
   { href: "/dashboard/suppliers", label: "Suppliers", icon: "suppliers" },
