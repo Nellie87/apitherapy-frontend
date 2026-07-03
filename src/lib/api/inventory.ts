@@ -89,45 +89,25 @@ export type RestockProductUnitArgs = {
   note?: string | null;
 };
 
-function normalizeSingle<T>(
-  value: T | T[] | null | undefined,
-): T | null {
+function normalizeSingle<T>(value: T | T[] | null | undefined): T | null {
   if (Array.isArray(value)) return value[0] ?? null;
   return value ?? null;
 }
 
 function toNumberOrNull(value: unknown): number | null {
-  if (value === null || value === undefined || value === "") {
-    return null;
-  }
-
+  if (value === null || value === undefined || value === "") return null;
   const numberValue = Number(value);
   return Number.isFinite(numberValue) ? numberValue : null;
 }
 
 function normalizeSaleType(value: unknown): ProductUnitSaleType {
-  if (
-    value === "retail" ||
-    value === "wholesale" ||
-    value === "stock_only"
-  ) {
+  if (value === "retail" || value === "wholesale" || value === "stock_only") {
     return value;
   }
-
   return "retail";
 }
 
-/**
- * Lists inventory in base units.
- *
- * qty_on_hand always represents the product's smallest inventory unit.
- * Example:
- * - 1 sachet = 1 base unit
- * - 1 box of 50 sachets = 50 base units
- */
-export async function listInventory(
-  orgId: string,
-): Promise<InventoryRow[]> {
+export async function listInventory(orgId: string): Promise<InventoryRow[]> {
   const supabase = createClient();
 
   const { data, error } = await supabase
@@ -169,21 +149,14 @@ export async function listInventory(
     .eq("org_id", orgId)
     .order("updated_at", { ascending: false });
 
-  if (error) {
-    throw new Error(error.message);
-  }
+  if (error) throw new Error(error.message);
 
   return (data ?? []).map((row: any): InventoryRow => {
     const rawProduct = normalizeSingle(row.products);
     const rawCategory = normalizeSingle(rawProduct?.category);
 
-    const productUnits: InventoryProductUnit[] = (
-      rawProduct?.product_units ?? []
-    )
-      .filter(
-        (unit: any) =>
-          unit.active !== false && unit.can_restock !== false,
-      )
+    const productUnits: InventoryProductUnit[] = (rawProduct?.product_units ?? [])
+      .filter((unit: any) => unit.active !== false)
       .map(
         (unit: any): InventoryProductUnit => ({
           id: String(unit.id),
@@ -198,23 +171,18 @@ export async function listInventory(
           sale_type: normalizeSaleType(unit.sale_type),
           barcode: unit.barcode ?? null,
           sort_order:
-            unit.sort_order === null ||
-            unit.sort_order === undefined
+            unit.sort_order === null || unit.sort_order === undefined
               ? null
               : Number(unit.sort_order),
           unit_measure_id: unit.unit_measure_id ?? null,
           unit_size_id: unit.unit_size_id ?? null,
         }),
       )
-.sort((a: InventoryProductUnit, b: InventoryProductUnit) => {        if (a.is_default !== b.is_default) {
-          return a.is_default ? -1 : 1;
-        }
-
+      .sort((a: InventoryProductUnit, b: InventoryProductUnit) => {
+        if (a.is_default !== b.is_default) return a.is_default ? -1 : 1;
         const sortA = a.sort_order ?? Number.MAX_SAFE_INTEGER;
         const sortB = b.sort_order ?? Number.MAX_SAFE_INTEGER;
-
         if (sortA !== sortB) return sortA - sortB;
-
         return a.base_quantity - b.base_quantity;
       });
 
@@ -232,9 +200,7 @@ export async function listInventory(
             barcode: rawProduct.barcode ?? null,
             cost_price: toNumberOrNull(rawProduct.cost_price),
             unit_price: toNumberOrNull(rawProduct.unit_price),
-            quantity_value: toNumberOrNull(
-              rawProduct.quantity_value,
-            ),
+            quantity_value: toNumberOrNull(rawProduct.quantity_value),
             quantity_unit: rawProduct.quantity_unit ?? null,
             category: rawCategory?.name ?? null,
             product_units: productUnits,
@@ -246,21 +212,15 @@ export async function listInventory(
 
 export async function createInventoryRow(
   orgId: string,
-  payload: {
-    product_id: string;
-    qty_on_hand: number;
-    reorder_level: number;
-  },
+  payload: { product_id: string; qty_on_hand: number; reorder_level: number },
 ) {
   const supabase = createClient();
-
   const qtyOnHand = Number(payload.qty_on_hand);
   const reorderLevel = Number(payload.reorder_level);
 
   if (!Number.isFinite(qtyOnHand) || qtyOnHand < 0) {
     throw new Error("Opening stock cannot be below zero.");
   }
-
   if (!Number.isFinite(reorderLevel) || reorderLevel < 0) {
     throw new Error("Reorder level cannot be below zero.");
   }
@@ -274,17 +234,9 @@ export async function createInventoryRow(
     },
   ]);
 
-  if (error) {
-    throw new Error(error.message);
-  }
+  if (error) throw new Error(error.message);
 }
 
-/**
- * Atomic quantity change using the existing database RPC.
- *
- * Important:
- * args.amount must already be in base units.
- */
 export async function adjustInventoryDelta(
   orgId: string,
   productId: string,
@@ -297,35 +249,26 @@ export async function adjustInventoryDelta(
   },
 ): Promise<InventoryAdjustmentResult> {
   const supabase = createClient();
-
   const amount = Number(args.amount);
 
   if (!Number.isFinite(amount) || amount < 0) {
-    throw new Error(
-      "Inventory quantity must be a valid number that is not below zero.",
-    );
+    throw new Error("Inventory quantity must be a valid number that is not below zero.");
   }
-
   if (args.mode !== "set" && amount <= 0) {
     throw new Error("Inventory quantity must be greater than zero.");
   }
 
-  const { data, error } = await supabase.rpc(
-    "adjust_inventory_delta",
-    {
-      p_org_id: orgId,
-      p_product_id: productId,
-      p_mode: args.mode,
-      p_amount: amount,
-      p_reorder_level: args.reorder_level ?? null,
-      p_note: args.note?.trim() || null,
-      p_record_as: args.recordAs ?? null,
-    },
-  );
+  const { data, error } = await supabase.rpc("adjust_inventory_delta", {
+    p_org_id: orgId,
+    p_product_id: productId,
+    p_mode: args.mode,
+    p_amount: amount,
+    p_reorder_level: args.reorder_level ?? null,
+    p_note: args.note?.trim() || null,
+    p_record_as: args.recordAs ?? null,
+  });
 
-  if (error) {
-    throw new Error(error.message);
-  }
+  if (error) throw new Error(error.message);
 
   const result = data as {
     qty_before?: unknown;
@@ -340,14 +283,6 @@ export async function adjustInventoryDelta(
   };
 }
 
-/**
- * Restocks a selected product unit.
- *
- * Example:
- * quantity = 10 boxes
- * unit_base_quantity = 50 sachets per box
- * baseQty = 500 sachets added to inventory
- */
 export async function restockProductUnit(
   orgId: string,
   productId: string,
@@ -356,28 +291,17 @@ export async function restockProductUnit(
   const enteredQuantity = Number(args.quantity);
   const conversion = Number(args.unit_base_quantity);
 
-  if (
-    !Number.isFinite(enteredQuantity) ||
-    enteredQuantity <= 0
-  ) {
+  if (!Number.isFinite(enteredQuantity) || enteredQuantity <= 0) {
     throw new Error("Restock quantity must be greater than zero.");
   }
-
   if (!Number.isFinite(conversion) || conversion <= 0) {
-    throw new Error(
-      "The selected stock unit has an invalid conversion quantity.",
-    );
+    throw new Error("The selected stock unit has an invalid conversion quantity.");
   }
 
   const baseQty = enteredQuantity * conversion;
-
-  const formattedEnteredQty = enteredQuantity.toLocaleString(
-    "en-KE",
-    {
-      maximumFractionDigits: 3,
-    },
-  );
-
+  const formattedEnteredQty = enteredQuantity.toLocaleString("en-KE", {
+    maximumFractionDigits: 3,
+  });
   const formattedBaseQty = baseQty.toLocaleString("en-KE", {
     maximumFractionDigits: 3,
   });
@@ -399,11 +323,6 @@ export async function restockProductUnit(
   });
 }
 
-/**
- * Inserts the first inventory row and initial movement atomically.
- *
- * The supplied qty_on_hand must be in base units.
- */
 export async function createInventoryInitial(
   orgId: string,
   payload: {
@@ -414,57 +333,39 @@ export async function createInventoryInitial(
   },
 ) {
   const supabase = createClient();
-
   const qtyOnHand = Number(payload.qty_on_hand);
   const reorderLevel = Number(payload.reorder_level);
 
   if (!Number.isFinite(qtyOnHand) || qtyOnHand < 0) {
     throw new Error("Opening stock cannot be below zero.");
   }
-
   if (!Number.isFinite(reorderLevel) || reorderLevel < 0) {
     throw new Error("Reorder level cannot be below zero.");
   }
 
-  const { error } = await supabase.rpc(
-    "create_inventory_initial",
-    {
-      p_org_id: orgId,
-      p_product_id: payload.product_id,
-      p_qty_on_hand: qtyOnHand,
-      p_reorder_level: reorderLevel,
-      p_note: payload.note?.trim() || null,
-    },
-  );
+  const { error } = await supabase.rpc("create_inventory_initial", {
+    p_org_id: orgId,
+    p_product_id: payload.product_id,
+    p_qty_on_hand: qtyOnHand,
+    p_reorder_level: reorderLevel,
+    p_note: payload.note?.trim() || null,
+  });
 
-  if (error) {
-    throw new Error(error.message);
-  }
+  if (error) throw new Error(error.message);
 }
 
-/**
- * Direct inventory update.
- *
- * Prefer adjustInventoryDelta() for normal adjustments because it
- * creates an inventory movement record.
- */
 export async function updateInventory(
   orgId: string,
   productId: string,
-  payload: {
-    qty_on_hand: number;
-    reorder_level: number;
-  },
+  payload: { qty_on_hand: number; reorder_level: number },
 ) {
   const supabase = createClient();
-
   const qtyOnHand = Number(payload.qty_on_hand);
   const reorderLevel = Number(payload.reorder_level);
 
   if (!Number.isFinite(qtyOnHand) || qtyOnHand < 0) {
     throw new Error("Stock quantity cannot be below zero.");
   }
-
   if (!Number.isFinite(reorderLevel) || reorderLevel < 0) {
     throw new Error("Reorder level cannot be below zero.");
   }
@@ -479,9 +380,7 @@ export async function updateInventory(
     .eq("org_id", orgId)
     .eq("product_id", productId);
 
-  if (error) {
-    throw new Error(error.message);
-  }
+  if (error) throw new Error(error.message);
 }
 
 export async function listInventoryMovements(
@@ -518,15 +417,10 @@ export async function listInventoryMovements(
     .eq("org_id", orgId)
     .order("created_at", { ascending: false });
 
-  if (productId) {
-    query = query.eq("product_id", productId);
-  }
+  if (productId) query = query.eq("product_id", productId);
 
   const { data, error } = await query;
-
-  if (error) {
-    throw new Error(error.message);
-  }
+  if (error) throw new Error(error.message);
 
   return (data ?? []).map((row: any): InventoryMovementRow => {
     const product = normalizeSingle(row.products);
@@ -538,9 +432,7 @@ export async function listInventoryMovements(
       ref_sale_id: row.ref_sale_id ?? null,
       product_unit_id: row.product_unit_id ?? null,
       unit_label: row.unit_label ?? null,
-      unit_base_quantity: Number(
-        row.unit_base_quantity ?? 1,
-      ),
+      unit_base_quantity: Number(row.unit_base_quantity ?? 1),
       base_qty: toNumberOrNull(row.base_qty),
       type: row.type as InventoryMovementType,
       qty_delta: Number(row.qty_delta ?? 0),
@@ -553,9 +445,7 @@ export async function listInventoryMovements(
             id: String(product.id),
             name: String(product.name ?? "Unnamed product"),
             sku: product.sku ?? null,
-            quantity_value: toNumberOrNull(
-              product.quantity_value,
-            ),
+            quantity_value: toNumberOrNull(product.quantity_value),
             quantity_unit: product.quantity_unit ?? null,
           }
         : null,

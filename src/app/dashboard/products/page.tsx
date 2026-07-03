@@ -855,6 +855,176 @@ function SaleTypeBadge({ type }: { type: ProductUnitSaleType }) {
   );
 }
 
+function normalizeProductUnitSaleType(value: unknown): ProductUnitSaleType {
+  return normalizeSaleType(value);
+}
+
+function getProductBaseUnit(product: Product) {
+  const units = product.product_units ?? [];
+  return units.find((unit: any) => unit.is_default) ?? units[0] ?? null;
+}
+
+function getProductRetailUnits(product: Product) {
+  return (product.product_units ?? []).filter((unit: any) => {
+    const saleType = normalizeProductUnitSaleType(unit.sale_type);
+    return unit.active !== false && unit.can_sell !== false && saleType === "retail";
+  });
+}
+
+function getProductWholesaleUnits(product: Product) {
+  return (product.product_units ?? []).filter((unit: any) => {
+    const saleType = normalizeProductUnitSaleType(unit.sale_type);
+    return unit.active !== false && unit.can_sell !== false && saleType === "wholesale";
+  });
+}
+
+function getProductStockOnlyUnits(product: Product) {
+  return (product.product_units ?? []).filter((unit: any) => {
+    const saleType = normalizeProductUnitSaleType(unit.sale_type);
+    return unit.active !== false && saleType === "stock_only";
+  });
+}
+
+
+function formatUnitPriceLine(unit: any | null) {
+  if (!unit) return "—";
+  const cost = Number(unit.cost_price ?? 0);
+  const sell = Number(unit.selling_price ?? 0);
+  return `${fmt(cost)} cost · ${fmt(sell)} sell`;
+}
+
+function getPrimaryRetailUnit(product: Product) {
+  const baseUnit = getProductBaseUnit(product);
+  const retailUnits = getProductRetailUnits(product);
+  return retailUnits[0] ?? baseUnit ?? null;
+}
+
+function getPrimaryWholesaleUnit(product: Product) {
+  return getProductWholesaleUnits(product)[0] ?? null;
+}
+
+function UnitPriceText({ unit }: { unit: any | null }) {
+  if (!unit) return <span className="text-slate-300">—</span>;
+
+  return (
+    <span className="font-bold text-slate-900">
+      {fmt(unit.selling_price)}
+    </span>
+  );
+}
+
+function CompactUnitsSummary({ product }: { product: Product }) {
+  const baseUnit = getProductBaseUnit(product);
+  const retailUnit = getPrimaryRetailUnit(product);
+  const wholesaleUnit = getPrimaryWholesaleUnit(product);
+  const baseLabel = baseUnit?.label ?? "base unit";
+
+  return (
+    <div className="min-w-0 space-y-2">
+      <div className="flex flex-wrap items-center gap-2">
+        {retailUnit && (
+          <span className="inline-flex items-center rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700">
+            Retail: {retailUnit.label}
+          </span>
+        )}
+
+        {wholesaleUnit && (
+          <span className="inline-flex items-center rounded-full border border-purple-200 bg-purple-50 px-2.5 py-1 text-xs font-semibold text-purple-700">
+            Package: {wholesaleUnit.label}
+          </span>
+        )}
+      </div>
+
+      <div className="truncate text-xs text-slate-500">
+        {wholesaleUnit
+          ? `${wholesaleUnit.label} = ${Number(wholesaleUnit.base_quantity ?? 1)} ${baseLabel}`
+          : `Sold as separate ${baseLabel}`}
+      </div>
+    </div>
+  );
+}
+
+function ProductUnitDetails({ product }: { product: Product }) {
+  const baseUnit = getProductBaseUnit(product);
+  const retailUnits = getProductRetailUnits(product);
+  const wholesaleUnits = getProductWholesaleUnits(product);
+  const stockOnlyUnits = getProductStockOnlyUnits(product);
+  const baseLabel = baseUnit?.label ?? product.unit_measure?.name ?? "base units";
+  const visibleRetailUnits = retailUnits.length ? retailUnits : baseUnit ? [baseUnit] : [];
+
+  const rows = [
+    ...visibleRetailUnits.map((unit: any) => ({
+      key: unit.id ?? unit.label,
+      type: "Retail",
+      unit: unit.label,
+      details: "Sold separately",
+      cost: unit.cost_price,
+      sell: unit.selling_price,
+      tone: "text-slate-700",
+    })),
+    ...wholesaleUnits.map((unit: any) => ({
+      key: unit.id ?? unit.label,
+      type: "Wholesale",
+      unit: unit.label,
+      details: `Contains ${Number(unit.base_quantity ?? 1)} ${baseLabel}`,
+      cost: unit.cost_price,
+      sell: unit.selling_price,
+      tone: "text-purple-700",
+    })),
+    ...stockOnlyUnits.map((unit: any) => ({
+      key: unit.id ?? unit.label,
+      type: "Stock only",
+      unit: unit.label,
+      details: `Contains ${Number(unit.base_quantity ?? 1)} ${baseLabel}`,
+      cost: unit.cost_price,
+      sell: unit.selling_price,
+      tone: "text-slate-500",
+    })),
+  ];
+
+  return (
+    <div className="border-t border-[#F1E6C9] bg-[#FFFDF8] px-5 py-4 lg:px-6">
+      <div className="rounded-2xl border border-[#EADFC2] bg-white overflow-hidden">
+        <div className="grid grid-cols-4 gap-3 border-b border-slate-100 bg-slate-50 px-4 py-2 text-[11px] font-bold uppercase tracking-[0.14em] text-slate-400">
+          <div>Unit</div>
+          <div>Meaning</div>
+          <div className="text-right">Cost</div>
+          <div className="text-right">Sell</div>
+        </div>
+
+        {rows.length ? (
+          rows.map((row) => (
+            <div
+              key={row.key}
+              className="grid grid-cols-1 gap-2 border-b border-slate-100 px-4 py-3 text-sm last:border-b-0 sm:grid-cols-4 sm:items-center sm:gap-3"
+            >
+              <div>
+                <div className="font-bold text-slate-900">{row.unit}</div>
+                <div className={`text-xs font-semibold ${row.tone}`}>{row.type}</div>
+              </div>
+
+              <div className="text-sm text-slate-500">{row.details}</div>
+
+              <div className="font-semibold text-slate-700 sm:text-right">
+                {fmt(row.cost)}
+              </div>
+
+              <div className="font-bold text-slate-900 sm:text-right">
+                {fmt(row.sell)}
+              </div>
+            </div>
+          ))
+        ) : (
+          <div className="px-4 py-5 text-sm text-slate-500">
+            No product units have been set up yet.
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+
 function ConfirmSaveModal({
   open,
   mode,
@@ -1082,7 +1252,7 @@ function ProductForm({
     }));
   }
 
-  function addUnit(saleType: ProductUnitSaleType = "wholesale") {
+  function addWholesaleUnit() {
     setForm((prev) => ({
       ...prev,
       productUnits: [
@@ -1095,8 +1265,8 @@ function ProductForm({
           contains: "",
           costPrice: "",
           sellingPrice: "",
-          saleType,
-          canSell: saleType !== "stock_only",
+          saleType: "wholesale",
+          canSell: true,
           canRestock: true,
         },
       ],
@@ -1121,6 +1291,9 @@ function ProductForm({
     onSubmit(e);
   }
 
+  const baseUnit = form.productUnits[0];
+  const selectedBaseMeasure = measures.find((m) => m.id === baseUnit?.unitMeasureId);
+
   return (
     <form onSubmit={handleSubmit} className="space-y-6" noValidate>
       {submitAttempted && hasErrors && (
@@ -1130,12 +1303,16 @@ function ProductForm({
       )}
 
       <FormSection title="Product information">
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+          Start with the basic product details. You only need package/wholesale details if this item is also bought or sold in boxes, cartons, crates, or trays.
+        </div>
+
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <Label required>Product name</Label>
             <input
               className={`${S.inputCls} ${showErr("name") ? "border-red-400 focus:border-red-400 focus:ring-red-100" : ""}`}
-              placeholder="e.g. Honey sachet, Soda, Eggs"
+              placeholder="e.g. Honey sachet, Propolis"
               value={form.name}
               onChange={setField("name")}
               onBlur={() => touch("name")}
@@ -1190,181 +1367,245 @@ function ProductForm({
         </div>
       </FormSection>
 
-      <FormSection title="Stock & selling units">
-        <div className="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          <strong>Start with the smallest inventory unit.</strong> This is the smallest item you can track or sell individually. Add boxes, cartons, trays, or wholesale packs below.
+      <FormSection title="Smallest inventory unit">
+        <div className="rounded-2xl border border-green-100 bg-green-50 px-4 py-3 text-sm text-green-900">
+          This is the smallest item you track or sell individually. Examples: 1 sachet, 1 bottle, 1 piece, 1 packet. Inventory will be counted using this unit.
         </div>
 
         <FieldError message={showErr("productUnits")} />
 
-        <div className="space-y-4">
-          {form.productUnits.map((unit, index) => {
-            const contains = index === 0 ? 1 : Number(unit.contains || 0);
-            const cost = Number(unit.costPrice || 0);
-            const sell = Number(unit.sellingPrice || 0);
-            const displayUnit = makeProductUnitLabel({ ...unit, isDefault: index === 0 }, measures, unitSizes);
-            const costPerBase = contains > 0 ? cost / contains : 0;
-            const sellPerBase = contains > 0 ? sell / contains : 0;
-            const profit = sell - cost;
-            const marginPct = sell > 0 ? ((sell - cost) / sell) * 100 : null;
-            const currentMeasureName = getUnitMeasureName(unit.unitMeasureId, measures);
-            const selectedMeasure = measures.find((m) => m.id === unit.unitMeasureId);
+        <div className="rounded-[22px] border border-[#EADFC2] bg-white p-4 shadow-[0_10px_28px_rgba(15,23,42,0.04)]">
+          <div className="mb-4 flex items-start justify-between gap-3">
+            <div>
+              <div className="text-sm font-bold text-slate-900">Base item</div>
+              <div className="mt-0.5 text-xs text-slate-500">Simple product setup only needs this section.</div>
+            </div>
+            <span className="rounded-full bg-green-50 px-3 py-1 text-xs font-bold text-green-700 border border-green-200">Required</span>
+          </div>
 
-            return (
-              <div key={`${unit.id ?? "new"}-${index}`} className="rounded-[22px] border border-[#EADFC2] bg-white p-4 shadow-[0_10px_28px_rgba(15,23,42,0.04)]">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between mb-4">
-                  <div>
-                    <div className="text-sm font-bold text-slate-900">
-                      {index === 0 ? "Smallest inventory unit" : `Retail / wholesale unit ${index}`}
-                    </div>
-                    <div className="text-xs text-slate-500 mt-0.5">
-                      {index === 0
-                        ? "Inventory is counted using this unit. It always contains 1 of itself."
-                        : `This unit contains ${unit.contains || "—"} ${baseUnitText}.`}
-                    </div>
-                  </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div>
+              <Label required>Item form</Label>
+              <select
+                className={S.selectCls}
+                style={S.selectChevronStyle}
+                value={baseUnit?.unitMeasureId ?? ""}
+                onChange={(e) => updateUnit(0, { unitMeasureId: e.target.value, label: "" })}
+              >
+                <option value="">— Select —</option>
+                {measures.map((m) => (
+                  <option key={m.id} value={m.id}>{m.name}</option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-slate-400">Example: sachet, packet, bottle, piece.</p>
+            </div>
 
-                  <div className="flex items-center gap-2">
-                    {index === 0 && <span className="rounded-full bg-green-50 px-3 py-1 text-xs font-bold text-green-700 border border-green-200">Default</span>}
-                    {index > 0 && <SaleTypeBadge type={unit.saleType} />}
-                    {form.productUnits.length > 1 && (
+            <div>
+              <Label required>Size</Label>
+              <select
+                className={S.selectCls}
+                style={S.selectChevronStyle}
+                value={baseUnit?.unitSizeId ?? ""}
+                onChange={(e) => updateUnit(0, { unitSizeId: e.target.value, label: "" })}
+              >
+                <option value="">— Select —</option>
+                {unitSizes.map((s) => (
+                  <option key={s.id} value={s.id}>{s.label}</option>
+                ))}
+              </select>
+              <InlineUnitSizeCreator orgId={orgId} measure={selectedBaseMeasure} onCreated={(size) => onUnitSizeCreated(size, 0)} />
+            </div>
+
+            <div>
+              <Label required>Buying cost (Ksh)</Label>
+              <input
+                className={S.inputCls}
+                type="text"
+                inputMode="decimal"
+                placeholder="e.g. 10"
+                value={baseUnit?.costPrice ?? ""}
+                onChange={(e) => updateUnit(0, { costPrice: sanitizeQuantityInput(e.target.value) })}
+              />
+            </div>
+
+            <div>
+              <Label required>Selling price (Ksh)</Label>
+              <input
+                className={S.inputCls}
+                type="text"
+                inputMode="decimal"
+                placeholder="e.g. 30"
+                value={baseUnit?.sellingPrice ?? ""}
+                onChange={(e) => updateUnit(0, { sellingPrice: sanitizeQuantityInput(e.target.value) })}
+              />
+            </div>
+          </div>
+
+          <div className="mt-4 rounded-2xl border border-slate-100 bg-slate-50 p-3 grid grid-cols-1 sm:grid-cols-4 gap-3 text-sm">
+            <div>
+              <div className="text-[10px] uppercase tracking-wide text-slate-400 font-bold">Inventory unit</div>
+              <div className="font-semibold text-slate-900 mt-0.5">{makeProductUnitLabel({ ...baseUnit, isDefault: true } as ProductUnitForm, measures, unitSizes)}</div>
+            </div>
+            <div>
+              <div className="text-[10px] uppercase tracking-wide text-slate-400 font-bold">Contains</div>
+              <div className="font-semibold text-slate-900 mt-0.5">1 {baseUnitText}</div>
+            </div>
+            <div>
+              <div className="text-[10px] uppercase tracking-wide text-slate-400 font-bold">Profit</div>
+              <div className="font-semibold text-slate-900 mt-0.5">{fmt(Number(baseUnit?.sellingPrice || 0) - Number(baseUnit?.costPrice || 0))}</div>
+            </div>
+            <div>
+              <div className="text-[10px] uppercase tracking-wide text-slate-400 font-bold">Margin</div>
+              <div className="font-semibold text-slate-900 mt-0.5">{margin(baseUnit?.costPrice, baseUnit?.sellingPrice)?.toFixed(0) ?? "—"}%</div>
+            </div>
+          </div>
+        </div>
+      </FormSection>
+
+      <FormSection title="Wholesale / package units">
+        <div className="rounded-2xl border border-purple-100 bg-purple-50 px-4 py-3 text-sm text-purple-900">
+          Optional. Add this only if you also buy or sell this product as a box, carton, crate, tray, bundle, or other package.
+        </div>
+
+        {form.productUnits.length <= 1 ? (
+          <div className="rounded-[22px] border border-dashed border-purple-200 bg-white p-5 text-center">
+            <div className="text-sm font-semibold text-slate-800">No package unit added</div>
+            <div className="mt-1 text-xs text-slate-500">For a simple retail product, you can leave it like this.</div>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {form.productUnits.slice(1).map((unit, unitOffset) => {
+              const index = unitOffset + 1;
+              const contains = Number(unit.contains || 0);
+              const cost = Number(unit.costPrice || 0);
+              const sell = Number(unit.sellingPrice || 0);
+              const displayUnit = makeProductUnitLabel(unit, measures, unitSizes);
+              const costPerBase = contains > 0 ? cost / contains : 0;
+              const sellPerBase = contains > 0 ? sell / contains : 0;
+              const profit = sell - cost;
+              const marginPct = sell > 0 ? ((sell - cost) / sell) * 100 : null;
+
+              return (
+                <div key={`${unit.id ?? "new"}-${index}`} className="rounded-[22px] border border-[#EADFC2] bg-white p-4 shadow-[0_10px_28px_rgba(15,23,42,0.04)]">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between mb-4">
+                    <div>
+                      <div className="text-sm font-bold text-slate-900">Package unit {index}</div>
+                      <div className="text-xs text-slate-500 mt-0.5">This package contains {unit.contains || "—"} {baseUnitText}.</div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <SaleTypeBadge type="wholesale" />
                       <button type="button" onClick={() => removeUnit(index)} className="rounded-xl border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-100 transition">
                         Remove
                       </button>
-                    )}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <div>
-                    <Label required>{index === 0 ? "Smallest item form" : "Selling / stock unit"}</Label>
-                    <select
-                      className={S.selectCls}
-                      style={S.selectChevronStyle}
-                      value={unit.unitMeasureId}
-                      onChange={(e) => updateUnit(index, { unitMeasureId: e.target.value, unitSizeId: index === 0 ? unit.unitSizeId : "", label: "" })}
-                    >
-                      <option value="">— Select —</option>
-                      {measures.map((m) => (
-                        <option key={m.id} value={m.id}>{m.name}</option>
-                      ))}
-                    </select>
-                    {index === 0 && <p className="mt-1 text-xs text-slate-400">Examples: sachet, packet, bottle, piece.</p>}
-                  </div>
-
-                  {index === 0 ? (
-                    <div>
-                      <Label required>Base size</Label>
-                      <select className={S.selectCls} style={S.selectChevronStyle} value={unit.unitSizeId} onChange={(e) => updateUnit(index, { unitSizeId: e.target.value, label: "" })}>
-                        <option value="">— Select —</option>
-                        {unitSizes.map((s) => (
-                          <option key={s.id} value={s.id}>{s.label}</option>
-                        ))}
-                      </select>
-                      <InlineUnitSizeCreator orgId={orgId} measure={selectedMeasure} onCreated={(size) => onUnitSizeCreated(size, index)} />
                     </div>
-                  ) : (
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                     <div>
-                      <Label>Unit type</Label>
+                      <Label required>Package type</Label>
                       <select
                         className={S.selectCls}
                         style={S.selectChevronStyle}
-                        value={unit.saleType}
-                        onChange={(e) => {
-                          const saleType = e.target.value as ProductUnitSaleType;
-                          updateUnit(index, { saleType, canSell: saleType !== "stock_only" });
-                        }}
+                        value={unit.unitMeasureId}
+                        onChange={(e) => updateUnit(index, { unitMeasureId: e.target.value, unitSizeId: "", label: "", saleType: "wholesale" })}
                       >
-                        <option value="retail">Retail / small pack</option>
-                        <option value="wholesale">Wholesale / package</option>
-                        <option value="stock_only">Stock only</option>
+                        <option value="">— Select —</option>
+                        {measures.map((m) => (
+                          <option key={m.id} value={m.id}>{m.name}</option>
+                        ))}
                       </select>
+                      <p className="mt-1 text-xs text-slate-400">Example: box, carton, crate, tray.</p>
                     </div>
-                  )}
 
-                  <div>
-                    <Label required>{index === 0 ? "Contains" : `Contains (${baseUnitText})`}</Label>
-                    <input
-                      className={`${S.inputCls} ${index === 0 ? "bg-slate-50 text-slate-500" : ""}`}
-                      type="text"
-                      inputMode="decimal"
-                      value={index === 0 ? "1" : unit.contains}
-                      disabled={index === 0}
-                      onChange={(e) => updateUnit(index, { contains: sanitizeQuantityInput(e.target.value) })}
-                    />
-                    <p className="mt-1 text-xs text-slate-400">
-                      {index === 0 ? "Always 1 for the smallest unit." : `Example: 1 box = 6 ${baseUnitText}.`}
-                    </p>
+                    <div>
+                      <Label required>Contains ({baseUnitText})</Label>
+                      <input
+                        className={S.inputCls}
+                        type="text"
+                        inputMode="decimal"
+                        placeholder="e.g. 50"
+                        value={unit.contains}
+                        onChange={(e) => updateUnit(index, { contains: sanitizeQuantityInput(e.target.value) })}
+                      />
+                      <p className="mt-1 text-xs text-slate-400">Example: 1 box = 50 {baseUnitText}.</p>
+                    </div>
+
+                    <div>
+                      <Label required>Package buying cost</Label>
+                      <input
+                        className={S.inputCls}
+                        type="text"
+                        inputMode="decimal"
+                        placeholder="e.g. 500"
+                        value={unit.costPrice}
+                        onChange={(e) => updateUnit(index, { costPrice: sanitizeQuantityInput(e.target.value) })}
+                      />
+                    </div>
+
+                    <div>
+                      <Label required>Package selling price</Label>
+                      <input
+                        className={S.inputCls}
+                        type="text"
+                        inputMode="decimal"
+                        placeholder="e.g. 1200"
+                        value={unit.sellingPrice}
+                        onChange={(e) => updateUnit(index, { sellingPrice: sanitizeQuantityInput(e.target.value) })}
+                      />
+                    </div>
                   </div>
 
-                  <div>
-                    <Label>Unit barcode</Label>
-                    <input className={`${S.inputCls} font-mono`} placeholder="Optional" value={unit.barcode} onChange={(e) => updateUnit(index, { barcode: e.target.value })} />
+                  <details className="mt-4 rounded-2xl border border-slate-100 bg-slate-50 p-3">
+                    <summary className="cursor-pointer text-sm font-bold text-slate-700">More package options</summary>
+                    <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      <div>
+                        <Label>Package barcode</Label>
+                        <input className={`${S.inputCls} font-mono`} placeholder="Optional" value={unit.barcode} onChange={(e) => updateUnit(index, { barcode: e.target.value })} />
+                      </div>
+                      <div>
+                        <Label>Can sell package?</Label>
+                        <select className={S.selectCls} style={S.selectChevronStyle} value={unit.canSell ? "yes" : "no"} onChange={(e) => updateUnit(index, { canSell: e.target.value === "yes" })}>
+                          <option value="yes">Yes</option>
+                          <option value="no">No</option>
+                        </select>
+                      </div>
+                      <div>
+                        <Label>Can restock package?</Label>
+                        <select className={S.selectCls} style={S.selectChevronStyle} value={unit.canRestock ? "yes" : "no"} onChange={(e) => updateUnit(index, { canRestock: e.target.value === "yes" })}>
+                          <option value="yes">Yes</option>
+                          <option value="no">No</option>
+                        </select>
+                      </div>
+                    </div>
+                  </details>
+
+                  <div className="mt-4 rounded-2xl border border-slate-100 bg-slate-50 p-3 grid grid-cols-1 sm:grid-cols-4 gap-3 text-sm">
+                    <div>
+                      <div className="text-[10px] uppercase tracking-wide text-slate-400 font-bold">Package</div>
+                      <div className="font-semibold text-slate-900 mt-0.5">{displayUnit}</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] uppercase tracking-wide text-slate-400 font-bold">Cost per base unit</div>
+                      <div className="font-semibold text-slate-900 mt-0.5">{fmt(costPerBase)}</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] uppercase tracking-wide text-slate-400 font-bold">Sell per base unit</div>
+                      <div className="font-semibold text-slate-900 mt-0.5">{fmt(sellPerBase)}</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] uppercase tracking-wide text-slate-400 font-bold">Profit / Margin</div>
+                      <div className="font-semibold text-slate-900 mt-0.5">{fmt(profit)} {marginPct !== null ? `• ${marginPct.toFixed(0)}%` : ""}</div>
+                    </div>
                   </div>
                 </div>
+              );
+            })}
+          </div>
+        )}
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
-                  <div>
-                    <Label required>Buying cost (Ksh)</Label>
-                    <input className={S.inputCls} type="text" inputMode="decimal" value={unit.costPrice} onChange={(e) => updateUnit(index, { costPrice: sanitizeQuantityInput(e.target.value) })} />
-                  </div>
-
-                  <div>
-                    <Label required={unit.canSell && unit.saleType !== "stock_only"}>Selling price (Ksh)</Label>
-                    <input className={S.inputCls} type="text" inputMode="decimal" value={unit.sellingPrice} onChange={(e) => updateUnit(index, { sellingPrice: sanitizeQuantityInput(e.target.value) })} disabled={unit.saleType === "stock_only"} />
-                  </div>
-
-                  <div>
-                    <Label>Can sell?</Label>
-                    <select className={S.selectCls} style={S.selectChevronStyle} value={unit.canSell ? "yes" : "no"} disabled={unit.saleType === "stock_only"} onChange={(e) => updateUnit(index, { canSell: e.target.value === "yes" })}>
-                      <option value="yes">Yes</option>
-                      <option value="no">No</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <Label>Can restock?</Label>
-                    <select className={S.selectCls} style={S.selectChevronStyle} value={unit.canRestock ? "yes" : "no"} onChange={(e) => updateUnit(index, { canRestock: e.target.value === "yes" })}>
-                      <option value="yes">Yes</option>
-                      <option value="no">No</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="mt-4 rounded-2xl border border-slate-100 bg-slate-50 p-3 grid grid-cols-1 sm:grid-cols-4 gap-3 text-sm">
-                  <div>
-                    <div className="text-[10px] uppercase tracking-wide text-slate-400 font-bold">Unit</div>
-                    <div className="font-semibold text-slate-900 mt-0.5">{displayUnit}</div>
-                  </div>
-                  <div>
-                    <div className="text-[10px] uppercase tracking-wide text-slate-400 font-bold">Cost per base unit</div>
-                    <div className="font-semibold text-slate-900 mt-0.5">{fmt(costPerBase)}</div>
-                  </div>
-                  <div>
-                    <div className="text-[10px] uppercase tracking-wide text-slate-400 font-bold">Sell per base unit</div>
-                    <div className="font-semibold text-slate-900 mt-0.5">{fmt(sellPerBase)}</div>
-                  </div>
-                  <div>
-                    <div className="text-[10px] uppercase tracking-wide text-slate-400 font-bold">Profit / Margin</div>
-                    <div className="font-semibold text-slate-900 mt-0.5">{fmt(profit)} {marginPct !== null ? `• ${marginPct.toFixed(0)}%` : ""}</div>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={() => addUnit("retail")} className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-bold text-blue-700 hover:bg-blue-100 transition">
-            Add retail unit
-          </button>
-          <button type="button" onClick={() => addUnit("wholesale")} className="rounded-2xl border border-purple-200 bg-purple-50 px-4 py-2.5 text-sm font-bold text-purple-700 hover:bg-purple-100 transition">
-            Add wholesale unit
-          </button>
-          <button type="button" onClick={() => addUnit("stock_only")} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-100 transition">
-            Add stock-only unit
-          </button>
-        </div>
+        <button type="button" onClick={addWholesaleUnit} className="rounded-2xl border border-purple-200 bg-purple-50 px-4 py-2.5 text-sm font-bold text-purple-700 hover:bg-purple-100 transition">
+          Add wholesale / package unit
+        </button>
       </FormSection>
 
       <FormSection title="Status">
@@ -1439,6 +1680,7 @@ export default function ProductsPage() {
   const [filterStatus, setFilterStatus] = useState<"" | "sellable" | "not_sellable">("");
   const [showArchived, setShowArchived] = useState(false);
   const [page, setPage] = useState(1);
+  const [expandedProductIds, setExpandedProductIds] = useState<Record<string, boolean>>({});
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -1748,9 +1990,16 @@ export default function ProductsPage() {
     setFilterStatus("");
   }
 
+  function toggleUnitDetails(productId: string) {
+    setExpandedProductIds((prev) => ({
+      ...prev,
+      [productId]: !prev[productId],
+    }));
+  }
+
   const hasFilters = !!(search || filterCat || filterStatus);
-  const TABLE_COLS = S.tableGridCols;
-  const HEADERS = ["Product", "Category", "Supplier", "Units", "Cost", "Sell", "Margin", "Status", ""];
+  const TABLE_COLS = "2.1fr 2.4fr 1fr 1fr 1.2fr";
+  const HEADERS = ["Product", "Units", "Price", "Status", "Actions"];
 
   if (!orgId && !err) {
     return <div className="flex h-64 items-center justify-center"><div className="text-slate-400 text-sm font-semibold">Loading catalog…</div></div>;
@@ -1813,7 +2062,7 @@ export default function ProductsPage() {
         <div className="px-3 py-3 sm:px-4 sm:py-4">
           <div className="hidden lg:block">
             <div className="grid items-center gap-4 px-6 py-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500" style={{ gridTemplateColumns: TABLE_COLS }}>
-              {HEADERS.map((h, i) => <div key={i} className={i >= 4 && i <= 6 ? "text-right" : ""}>{h}</div>)}
+              {HEADERS.map((h) => <div key={h}>{h}</div>)}
             </div>
           </div>
 
@@ -1828,41 +2077,86 @@ export default function ProductsPage() {
                 const mgn = margin(p.cost_price, p.unit_price);
                 const categoryName = getCategoryName(p);
                 const displayName = formatProductDisplayName(p);
-                const unitSummary = (p.product_units ?? []).slice(0, 3).map((u) => u.label).join(", ");
+                const baseUnit = getProductBaseUnit(p);
+                const retailUnits = getProductRetailUnits(p);
+                const wholesaleUnits = getProductWholesaleUnits(p);
+                const isExpanded = Boolean(expandedProductIds[p.id]);
+                const unitSummary = [
+                  baseUnit ? `Retail: ${baseUnit.label}` : null,
+                  wholesaleUnits.length
+                    ? `Wholesale: ${wholesaleUnits
+                        .map((u: any) => `${u.label} of ${Number(u.base_quantity ?? 1)}`)
+                        .join(", ")}`
+                    : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ");
 
                 return (
                   <div key={p.id} className="group rounded-[24px] border border-[#EFE4C6] bg-[linear-gradient(180deg,#FFFFFF_0%,#FFFCF4_100%)] shadow-[0_8px_30px_rgba(15,23,42,0.04)] transition-all duration-200 hover:-translate-y-px hover:shadow-[0_16px_34px_rgba(245,197,24,0.10)] hover:border-[#E5D28D]">
                     <div className="hidden lg:grid items-center gap-4 px-6 py-5 text-sm" style={{ gridTemplateColumns: TABLE_COLS }}>
                       <div className="min-w-0 space-y-1">
                         <div className="font-semibold text-slate-900 truncate text-[15px]">{displayName}</div>
-                        {p.sku && <div className="text-[11px] font-mono text-slate-400 truncate">SKU {p.sku}</div>}
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
+                          {categoryName && <span>{categoryName}</span>}
+                          {p.supplier?.name && <span>• {p.supplier.name}</span>}
+                          {p.sku && <span className="font-mono">• SKU {p.sku}</span>}
+                        </div>
                       </div>
-                      <div className="truncate text-sm text-slate-700">{categoryName || <span className="text-slate-300">—</span>}</div>
-                      <div className="truncate text-sm text-slate-700">{p.supplier?.name || <span className="text-slate-300">—</span>}</div>
-                      <div className="truncate text-xs text-slate-500">{unitSummary || <span className="text-slate-300">—</span>}</div>
-                      <div className="text-right text-slate-700 font-medium">{fmt(p.cost_price)}</div>
-                      <div className="text-right font-bold text-slate-900">{fmt(p.unit_price)}</div>
-                      <div className="text-right"><MarginBadge pct={mgn} /></div>
+
+                      <button
+                        type="button"
+                        onClick={() => toggleUnitDetails(p.id)}
+                        className="min-w-0 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-left transition hover:border-amber-200 hover:bg-amber-50/40"
+                      >
+                        <CompactUnitsSummary product={p} />
+                        <div className="mt-1 text-xs font-bold text-amber-700">
+                          {isExpanded ? "Hide details" : "View details"}
+                        </div>
+                      </button>
+
+                      <div>
+                        <div className="text-xs text-slate-400">Retail price</div>
+                        <div className="font-bold text-slate-900">{fmt(p.unit_price)}</div>
+                        <div className="mt-0.5 text-xs text-slate-500">Cost {fmt(p.cost_price)}</div>
+                      </div>
+
                       <div className="flex items-center gap-2 flex-wrap"><SellBadge isSellable={p.is_sellable} /><ArchiveBadge active={p.active} /></div>
+
                       <div className="flex items-center justify-end gap-2">
-                        <button onClick={() => openEdit(p)} className="rounded-xl border border-slate-200 bg-white px-3.5 h-9 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition opacity-0 group-hover:opacity-100">Edit</button>
+                        <button onClick={() => openEdit(p)} className="rounded-xl border border-slate-200 bg-white px-3.5 h-9 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition">Edit</button>
                         {p.active === false ? (
-                          <button onClick={() => handleRestore(p.id, p)} className="rounded-xl border border-green-200 bg-green-50 px-3.5 h-9 text-xs font-semibold text-green-700 hover:bg-green-100 transition opacity-0 group-hover:opacity-100">Restore</button>
+                          <button onClick={() => handleRestore(p.id, p)} className="rounded-xl border border-green-200 bg-green-50 px-3.5 h-9 text-xs font-semibold text-green-700 hover:bg-green-100 transition">Restore</button>
                         ) : (
-                          <button onClick={() => setDeletingProduct(p)} className="rounded-xl border border-red-200 bg-red-50 px-3.5 h-9 text-xs font-semibold text-red-600 hover:bg-red-100 transition opacity-0 group-hover:opacity-100">Archive</button>
+                          <button onClick={() => setDeletingProduct(p)} className="rounded-xl border border-red-200 bg-red-50 px-3.5 h-9 text-xs font-semibold text-red-600 hover:bg-red-100 transition">Archive</button>
                         )}
                       </div>
                     </div>
+
+                    {isExpanded && <div className="hidden lg:block"><ProductUnitDetails product={p} /></div>}
 
                     <div className="lg:hidden px-5 py-4 space-y-3">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
                           <div className="font-semibold text-slate-900 truncate">{displayName}</div>
                           {categoryName && <div className="mt-0.5 text-xs text-slate-500">{categoryName}</div>}
-                          {unitSummary && <div className="text-xs text-slate-400 mt-1">Units: {unitSummary}</div>}
+                          {unitSummary && <div className="text-xs text-slate-400 mt-1 line-clamp-2">{unitSummary}</div>}
                         </div>
                         <div className="flex items-center gap-2 flex-wrap justify-end"><SellBadge isSellable={p.is_sellable} /><ArchiveBadge active={p.active} /></div>
                       </div>
+
+                      <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
+                        <CompactUnitsSummary product={p} />
+                        <button
+                          type="button"
+                          onClick={() => toggleUnitDetails(p.id)}
+                          className="shrink-0 rounded-xl border border-amber-200 bg-white px-3 py-1.5 text-xs font-bold text-amber-700"
+                        >
+                          {isExpanded ? "Hide" : "Units"}
+                        </button>
+                      </div>
+
+                      {isExpanded && <ProductUnitDetails product={p} />}
 
                       <div className="grid grid-cols-3 gap-3 rounded-2xl bg-[#FFF9EC] border border-[#F1E6C9] p-3 text-sm">
                         <div><div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">Cost</div><div className="font-medium text-slate-800 mt-0.5">{fmt(p.cost_price)}</div></div>
