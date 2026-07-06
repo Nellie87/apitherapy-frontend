@@ -12,7 +12,7 @@ export async function POST(request: Request) {
 
     const { data: members, error: membersError } = await supabase
       .from("org_members")
-      .select("user_id, role, created_at")
+      .select("user_id, role, created_at, active")
       .eq("org_id", org_id)
       .order("created_at", { ascending: false });
 
@@ -39,6 +39,7 @@ export async function POST(request: Request) {
       user_id: member.user_id,
       role: member.role,
       created_at: member.created_at,
+      active: member.active,
       full_name: profileMap.get(member.user_id) ?? null,
     }));
 
