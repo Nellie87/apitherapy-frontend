@@ -15,7 +15,34 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: |
-          curl -sS -f \
-            "${SUPABASE_URL}/rest/v1/categories?select=id&limit=1" \
+          set -euo pipefail
+
+          if [ -z "${SUPABASE_URL:-}" ] || [ -z "${SUPABASE_ANON_KEY:-}" ]; then
+            echo "Missing SUPABASE_URL or SUPABASE_ANON_KEY secret"
+            exit 1
+          fi
+
+          # Strip trailing slash if present
+          BASE_URL="${SUPABASE_URL%/}"
+          URL="${BASE_URL}/rest/v1/categories?select=id&limit=1"
+
+          echo "Requesting: ${BASE_URL}/rest/v1/categories?select=id&limit=1"
+
+          HTTP_CODE=$(curl -sS -o /tmp/supabase-keepalive-body.txt -w "%{http_code}" \
+            "$URL" \
             -H "apikey: ${SUPABASE_ANON_KEY}" \
-            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}"
+            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
+            -H "Accept: application/json")
+
+          echo "HTTP status: ${HTTP_CODE}"
+          echo "Response body:"
+          cat /tmp/supabase-keepalive-body.txt || true
+          echo
+
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "::error::Keep-alive ping failed with HTTP ${HTTP_CODE}"
+            echo "If 401: check SUPABASE_URL and SUPABASE_ANON_KEY secrets"
+            exit 1
+          fi
+
+          echo "Keep-alive ping succeeded"
