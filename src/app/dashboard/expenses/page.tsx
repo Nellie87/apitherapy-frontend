@@ -43,8 +43,8 @@ const IconEdit = () => (
     <path d="M13.5 3.5L16.5 6.5L8 15H5v-3L13.5 3.5z" />
   </svg>
 );
-const IconTrash = () => (
-  <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2">
+const IconTrash = ({ size = 13 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2">
     <path d="M4 6h12M8 6V4a1 1 0 011-1h2a1 1 0 011 1v2m-6 0v10a1 1 0 001 1h6a1 1 0 001-1V6" />
   </svg>
 );
@@ -58,6 +58,31 @@ const IconX = () => (
     <line x1="5" y1="5" x2="15" y2="15" /><line x1="15" y1="5" x2="5" y2="15" />
   </svg>
 );
+const IconWarning = () => (
+  <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" className="shrink-0">
+    <path d="M10 3L18 16H2L10 3z" /><line x1="10" y1="8" x2="10" y2="12" /><circle cx="10" cy="14.5" r="0.8" fill="currentColor" stroke="none" />
+  </svg>
+);
+const IconMoney = ({ size = 18 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8">
+    <rect x="2" y="5" width="16" height="10" rx="1.5" /><circle cx="10" cy="10" r="2.5" /><path d="M5 10h.01M15 10h.01" />
+  </svg>
+);
+const IconClipboard = () => (
+  <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8">
+    <rect x="4" y="4" width="12" height="14" rx="1.5" /><path d="M7 4V3a2 2 0 012-2h2a2 2 0 012 2v1" /><line x1="7" y1="9" x2="13" y2="9" /><line x1="7" y1="12" x2="13" y2="12" />
+  </svg>
+);
+const IconChart = () => (
+  <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8">
+    <line x1="3" y1="17" x2="17" y2="17" /><rect x="5" y="10" width="2.5" height="7" rx="0.5" /><rect x="9" y="6" width="2.5" height="11" rx="0.5" /><rect x="13" y="3" width="2.5" height="14" rx="0.5" />
+  </svg>
+);
+const IconTag = () => (
+  <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8">
+    <path d="M3 10.5V3h7.5L17 9.5 10.5 16 3 10.5z" /><circle cx="7" cy="7" r="1.2" fill="currentColor" stroke="none" />
+  </svg>
+);
 
 /* ─── Delete Confirm Modal ───────────────────────────────────── */
 function DeleteModal({ expense, onConfirm, onCancel, loading }: {
@@ -67,7 +92,7 @@ function DeleteModal({ expense, onConfirm, onCancel, loading }: {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={onCancel}>
       <div className="w-full max-w-sm rounded-2xl bg-white shadow-2xl p-6" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center gap-4 mb-4">
-          <div className="grid h-12 w-12 place-items-center rounded-xl bg-red-100 text-2xl">🗑️</div>
+          <div className="grid h-12 w-12 place-items-center rounded-xl bg-red-100 text-red-600"><IconTrash size={22} /></div>
           <div>
             <div className="font-bold text-slate-900">Delete Expense?</div>
             <div className="text-sm text-slate-500 mt-0.5">This cannot be undone.</div>
@@ -261,12 +286,12 @@ export default function ExpensesPage() {
   const GRID = "1fr 1.2fr 0.9fr 1.8fr auto";
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-5 px-3 pb-8 sm:gap-6 sm:px-5 lg:px-6 xl:px-8">
 
       {/* ── Error ── */}
       {err && (
         <div className={S.alert}>
-          <span className="shrink-0 mt-0.5">⚠️</span>
+          <span className="shrink-0 mt-0.5 text-red-500"><IconWarning /></span>
           <span className="flex-1">{err}</span>
           <button onClick={() => setErr("")} className="ml-auto shrink-0 text-red-400 hover:text-red-600"><IconX /></button>
         </div>
@@ -278,18 +303,18 @@ export default function ExpensesPage() {
           <h1 className="text-2xl font-bold text-slate-900">Expenses</h1>
           <p className="mt-1 text-sm text-slate-500">Record and track operating costs by category</p>
         </div>
-        <button className={S.btnPrimary} onClick={() => setShowForm((v) => !v)}>
+        <button className={S.btnPrimary + " w-full sm:w-auto"} onClick={() => setShowForm((v) => !v)}>
           {showForm ? "Cancel" : "+ Add Expense"}
         </button>
       </div>
 
       {/* ── KPI Cards ── */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-4">
         {[
-          { label: "Total Expenses",  value: fmtMoney(kpis.total), icon: "💸", variant: "warning" as const },
-          { label: "Transactions",    value: String(kpis.count),   icon: "📋", variant: "neutral" as const },
-          { label: "Average",         value: fmtMoney(kpis.avg),   icon: "📊", variant: "neutral" as const },
-          { label: "Top Category",    value: kpis.byCategory[0]?.category ?? "—", icon: "🏷️", variant: "info" as const,
+          { label: "Total Expenses",  value: fmtMoney(kpis.total), icon: <IconMoney />, variant: "warning" as const },
+          { label: "Transactions",    value: String(kpis.count),   icon: <IconClipboard />, variant: "neutral" as const },
+          { label: "Average",         value: fmtMoney(kpis.avg),   icon: <IconChart />, variant: "neutral" as const },
+          { label: "Top Category",    value: kpis.byCategory[0]?.category ?? "—", icon: <IconTag />, variant: "info" as const,
             sub: kpis.byCategory[0] ? fmtMoney(kpis.byCategory[0].amount) : undefined },
         ].map(({ label, value, icon, variant, sub }) => {
           const cfg = {
@@ -301,7 +326,7 @@ export default function ExpensesPage() {
             <div key={label} className="rounded-2xl p-5 transition-all hover:shadow-md"
               style={{ background: cfg.bg, border: `1.5px solid ${cfg.border}` }}>
               <div className="flex items-start gap-3">
-                <div className="grid h-10 w-10 place-items-center rounded-xl text-lg shrink-0"
+                <div className="grid h-10 w-10 place-items-center rounded-xl shrink-0"
                   style={{ background: cfg.iconBg, color: cfg.iconColor }}>{icon}</div>
                 <div className="min-w-0">
                   <div className="text-xs font-semibold uppercase tracking-wider truncate" style={{ color: cfg.subColor }}>{label}</div>
@@ -316,15 +341,15 @@ export default function ExpensesPage() {
 
       {/* ── Add Form ── */}
       {showForm && (
-        <div className={`${S.card} p-5`}>
+        <div className={`${S.card} p-4 sm:p-5 lg:p-6`}>
           <div className="flex items-center gap-3 mb-4">
-            <div className="grid h-9 w-9 place-items-center rounded-xl bg-amber-50 text-amber-600 text-lg">💸</div>
+            <div className="grid h-9 w-9 place-items-center rounded-xl bg-amber-50 text-amber-600"><IconMoney size={16} /></div>
             <div>
               <div className="font-bold text-slate-900">New Expense</div>
               <div className="text-xs text-slate-500">Record a cost like transport, supplies, rent, etc.</div>
             </div>
           </div>
-          <form onSubmit={onCreate} className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <form onSubmit={onCreate} className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <div>
               <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-500">Date *</label>
               <input className={S.input} type="date" value={expenseDate} onChange={(e) => setExpenseDate(e.target.value)} required />
@@ -347,11 +372,11 @@ export default function ExpensesPage() {
               <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-500">Amount (Ksh) *</label>
               <input className={S.input} type="number" min={0} step="1" placeholder="0" value={amount} onChange={(e) => setAmount(e.target.value)} required />
             </div>
-            <div className={category === "__custom__" ? "" : "sm:col-span-2 lg:col-span-1"}>
+            <div className={category === "__custom__" ? "" : "sm:col-span-2 xl:col-span-1"}>
               <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-500">Note</label>
               <input className={S.input} placeholder="Optional details…" value={note} onChange={(e) => setNote(e.target.value)} />
             </div>
-            <div className="sm:col-span-2 lg:col-span-4 flex justify-end gap-3 pt-1">
+            <div className="flex flex-col-reverse gap-3 pt-1 sm:col-span-2 sm:flex-row sm:justify-end xl:col-span-4">
               <button type="button" onClick={() => setShowForm(false)} className={S.btnGhost}>Cancel</button>
               <button type="submit" disabled={saving} className={S.btnPrimary}>
                 {saving ? "Saving…" : "Add Expense"}
@@ -362,7 +387,7 @@ export default function ExpensesPage() {
       )}
 
       {/* ── Two-column: filters+table | category breakdown ── */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_300px]">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
 
         {/* ── Left: Search/filter + Table ── */}
         <div className="flex flex-col gap-4">
@@ -378,24 +403,24 @@ export default function ExpensesPage() {
             </label>
 
             {/* Date range */}
-            <div className="flex items-center gap-2">
+            <div className="grid w-full grid-cols-1 gap-2 sm:w-auto sm:grid-cols-[auto_minmax(0,1fr)_auto_minmax(0,1fr)] sm:items-center">
               <span className="text-xs font-semibold text-slate-500 whitespace-nowrap">From</span>
-              <input className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-100"
+              <input className="w-full min-w-0 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-100"
                 type="date" value={range.from} onChange={(e) => setRange((r) => ({ ...r, from: e.target.value }))} />
               <span className="text-xs font-semibold text-slate-500">To</span>
-              <input className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-100"
+              <input className="w-full min-w-0 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-100"
                 type="date" value={range.to} onChange={(e) => setRange((r) => ({ ...r, to: e.target.value }))} />
             </div>
 
             {/* Category filter */}
             <select
-              className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-100"
+              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-100 sm:w-auto"
               value={filterCat} onChange={(e) => setFilterCat(e.target.value)}>
               <option value="">All categories</option>
               {allCats.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
 
-            <span className="ml-auto text-xs text-slate-400 whitespace-nowrap">
+            <span className="w-full text-xs text-slate-400 sm:ml-auto sm:w-auto whitespace-nowrap">
               {filtered.length} / {rows.length} expense{rows.length !== 1 ? "s" : ""}
             </span>
           </div>
@@ -403,7 +428,7 @@ export default function ExpensesPage() {
           {/* Table */}
           <div className={`${S.card} overflow-hidden`}>
             {/* Header */}
-            <div className="hidden lg:grid items-center gap-4 px-5 py-3"
+            <div className="hidden xl:grid items-center gap-4 px-5 py-3"
               style={{ gridTemplateColumns: GRID, background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
               {["Date", "Category", "Amount", "Note", ""].map((h) => (
                 <div key={h} className={`text-xs font-semibold uppercase tracking-wider text-slate-500 ${h === "Amount" ? "text-right" : ""}`}>{h}</div>
@@ -420,7 +445,9 @@ export default function ExpensesPage() {
                 </div>
               ) : filtered.length === 0 ? (
                 <div className="py-16 text-center">
-                  <div className="text-4xl mb-3">💸</div>
+                  <div className="mx-auto mb-3 grid h-14 w-14 place-items-center rounded-2xl bg-amber-50 text-amber-500">
+                    <IconMoney size={28} />
+                  </div>
                   <p className="text-sm font-semibold text-slate-600">{rows.length === 0 ? "No expenses yet" : "No matching expenses"}</p>
                   <p className="text-xs text-slate-400 mt-1">{rows.length === 0 ? "Click \"+ Add Expense\" to get started" : "Try adjusting your filters"}</p>
                 </div>
@@ -429,7 +456,7 @@ export default function ExpensesPage() {
                 return (
                   <div key={r.id} className={`transition-colors hover:bg-slate-50 ${isEditing ? "bg-amber-50" : ""}`}>
                     {/* Desktop row */}
-                    <div className="hidden lg:grid items-center gap-4 px-5 py-3"
+                    <div className="hidden xl:grid items-center gap-4 px-5 py-3"
                       style={{ gridTemplateColumns: GRID }}>
                       {/* Date */}
                       <div>
@@ -484,28 +511,137 @@ export default function ExpensesPage() {
                       </div>
                     </div>
 
-                    {/* Mobile card */}
-                    <div className="lg:hidden px-5 py-4">
-                      <div className="flex items-start justify-between gap-3 mb-2">
-                        <div>
-                          <div className="flex items-center gap-1.5">
-                            <span className={`h-2 w-2 rounded-full ${catColor(r.category)}`} />
-                            <span className="text-sm font-bold text-slate-900">{r.category}</span>
+                    {/* Mobile / tablet card */}
+                    <div className="px-4 py-4 sm:px-5 xl:hidden">
+                      {isEditing ? (
+                        <div className="grid gap-4">
+                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                            <div>
+                              <label className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-slate-500">
+                                Date
+                              </label>
+                              <input
+                                className={S.inputSm}
+                                type="date"
+                                value={editDraft!.expense_date}
+                                onChange={(e) =>
+                                  setEditDraft((d) =>
+                                    d ? { ...d, expense_date: e.target.value } : d,
+                                  )
+                                }
+                              />
+                            </div>
+                            <div>
+                              <label className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-slate-500">
+                                Category
+                              </label>
+                              <input
+                                className={S.inputSm}
+                                value={editDraft!.category}
+                                onChange={(e) =>
+                                  setEditDraft((d) =>
+                                    d ? { ...d, category: e.target.value } : d,
+                                  )
+                                }
+                              />
+                            </div>
+                            <div>
+                              <label className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-slate-500">
+                                Amount
+                              </label>
+                              <input
+                                className={S.inputSm}
+                                type="number"
+                                min={0}
+                                step="1"
+                                value={editDraft!.amount}
+                                onChange={(e) =>
+                                  setEditDraft((d) =>
+                                    d ? { ...d, amount: e.target.value } : d,
+                                  )
+                                }
+                              />
+                            </div>
+                            <div>
+                              <label className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-slate-500">
+                                Note
+                              </label>
+                              <input
+                                className={S.inputSm}
+                                placeholder="Optional note"
+                                value={editDraft!.note}
+                                onChange={(e) =>
+                                  setEditDraft((d) =>
+                                    d ? { ...d, note: e.target.value } : d,
+                                  )
+                                }
+                              />
+                            </div>
                           </div>
-                          <div className="text-xs text-slate-500 mt-0.5">{r.expense_date}</div>
+
+                          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                            <button
+                              type="button"
+                              onClick={cancelEdit}
+                              className={S.btnGhost + " w-full sm:w-auto"}
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => saveEdit(r.id)}
+                              disabled={savingEdit}
+                              className={S.btnPrimary + " w-full sm:w-auto"}
+                            >
+                              {savingEdit ? "Saving…" : "Save changes"}
+                            </button>
+                          </div>
                         </div>
-                        <div className="font-bold text-slate-900">{fmtMoney(Number(r.amount ?? 0))}</div>
-                      </div>
-                      {r.note && <div className="text-xs text-slate-400 mb-3 truncate">{r.note}</div>}
-                      <div className="flex gap-2">
-                        <button onClick={() => startEdit(r)} className={S.btnGhost + " text-xs py-1.5 px-3"}>
-                          <IconEdit /> Edit
-                        </button>
-                        <button onClick={() => setDeletingExpense(r)}
-                          className="inline-flex items-center gap-1.5 rounded-xl border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 transition">
-                          <IconTrash /> Delete
-                        </button>
-                      </div>
+                      ) : (
+                        <>
+                          <div className="mb-3 flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span
+                                  className={`h-2.5 w-2.5 shrink-0 rounded-full ${catColor(r.category)}`}
+                                />
+                                <span className="truncate text-base font-bold text-slate-900">
+                                  {r.category}
+                                </span>
+                              </div>
+                              <div className="mt-1 text-sm text-slate-500">
+                                {r.expense_date}
+                              </div>
+                            </div>
+                            <div className="shrink-0 text-right text-base font-black text-slate-900">
+                              {fmtMoney(Number(r.amount ?? 0))}
+                            </div>
+                          </div>
+
+                          {r.note && (
+                            <div className="mb-4 rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-500">
+                              {r.note}
+                            </div>
+                          )}
+
+                          <div className="grid grid-cols-2 gap-2">
+                            <button
+                              type="button"
+                              onClick={() => startEdit(r)}
+                              className={S.btnGhost + " w-full px-3 py-2"}
+                            >
+                              <IconEdit /> Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setDeletingExpense(r)}
+                              className="inline-flex w-full items-center justify-center gap-1.5 rounded-2xl border border-red-200 bg-white px-3 py-2 text-sm font-semibold text-red-600 transition hover:bg-red-50"
+                            >
+                              <IconTrash /> Delete
+                            </button>
+                          </div>
+                        </>
+                      )}
                     </div>
                   </div>
                 );
@@ -513,7 +649,7 @@ export default function ExpensesPage() {
             </div>
 
             {filtered.length > 0 && (
-              <div className="flex items-center justify-between border-t border-slate-100 px-5 py-3">
+              <div className="flex flex-col gap-2 border-t border-slate-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
                 <span className="text-xs text-slate-400">{filtered.length} of {rows.length} expense{rows.length !== 1 ? "s" : ""}</span>
                 <span className="text-xs font-bold text-slate-900">
                   {fmtMoney(filtered.reduce((s, r) => s + Number(r.amount ?? 0), 0))}
