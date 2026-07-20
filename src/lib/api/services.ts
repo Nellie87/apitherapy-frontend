@@ -169,7 +169,8 @@ export async function listUpcomingScheduled(orgId: string, days = 14) {
     .from("services")
     .select(SERVICE_SELECT)
     .eq("org_id", orgId)
-    .eq("status", "scheduled")
+    .in("status", ["scheduled", "in_progress"])
+    .not("scheduled_date", "is", null)
     .gte("scheduled_date", today)
     .lte("scheduled_date", endStr)
     .order("scheduled_date", { ascending: true });
@@ -227,10 +228,13 @@ export async function createService(
   if (error) throw new Error(error.message);
 
   const row = data as ServiceRow;
+  // Explicit recordPayment:true always wins (e.g. deposit on a scheduled job).
+  // Otherwise keep the previous heuristics for completed / non-full plans.
   const shouldPay =
-    payload.recordPayment !== false &&
-    ((plan === "full" && status === "completed" && payload.amount > 0) ||
-      (plan !== "full" && payload.amount > 0));
+    payload.amount > 0 &&
+    (payload.recordPayment === true ||
+      (payload.recordPayment !== false &&
+        ((plan === "full" && status === "completed") || plan !== "full")));
 
   if (shouldPay) {
     await createServicePayment(orgId, row.id, {
