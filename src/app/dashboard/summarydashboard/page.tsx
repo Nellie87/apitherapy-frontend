@@ -7,9 +7,10 @@ import React, {
   useRef,
   useState,
 } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { DayPicker, type DateRange } from "react-day-picker";
-import "react-day-picker/dist/style.css";
+import "react-day-picker/style.css";
 
 import { bootstrapOrg } from "@/lib/org/bootstrapOrg";
 import { createClient } from "@/lib/supabase/client";
@@ -543,7 +544,7 @@ function Card({
 }
 
 /* ─────────────────────────────────────────────
-   Clean date range picker
+   Clean date range picker (instant apply)
 ───────────────────────────────────────────── */
 function SummaryDateRangePicker({
   valuePreset,
@@ -551,22 +552,27 @@ function SummaryDateRangePicker({
   valueTo,
   onApply,
   onClose,
+  style,
 }: {
   valuePreset: RangePreset;
   valueFrom: string;
   valueTo: string;
   onApply: (preset: RangePreset, from: string, to: string) => void;
   onClose: () => void;
+  style?: React.CSSProperties;
 }) {
   const ref = useRef<HTMLDivElement>(null);
-
   const [tempPreset, setTempPreset] = useState<RangePreset>(valuePreset);
-  const [tempRange, setTempRange] = useState<DateRange | undefined>({
-    from: localIsoToDate(valueFrom),
-    to: localIsoToDate(valueTo),
-  });
+  const [tempRange, setTempRange] = useState<DateRange | undefined>(
+    valuePreset === "all"
+      ? undefined
+      : {
+          from: localIsoToDate(valueFrom),
+          to: localIsoToDate(valueTo),
+        },
+  );
 
-  const presetItems: { id: RangePreset; label: string }[] = [
+  const presetItems: { id: Exclude<RangePreset, "custom">; label: string }[] = [
     { id: "all", label: "All time" },
     { id: "today", label: "Today" },
     { id: "yesterday", label: "Yesterday" },
@@ -574,20 +580,7 @@ function SummaryDateRangePicker({
     { id: "30d", label: "Last 30 days" },
     { id: "month", label: "This month" },
     { id: "lastMonth", label: "Last month" },
-    { id: "custom", label: "Custom" },
   ];
-
-  useEffect(() => {
-    setTempPreset(valuePreset);
-    setTempRange(
-      valuePreset === "all"
-        ? undefined
-        : {
-            from: localIsoToDate(valueFrom),
-            to: localIsoToDate(valueTo),
-          },
-    );
-  }, [valuePreset, valueFrom, valueTo]);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -598,83 +591,80 @@ function SummaryDateRangePicker({
     return () => document.removeEventListener("mousedown", handler);
   }, [onClose]);
 
-  const handlePresetClick = (preset: RangePreset) => {
-    setTempPreset(preset);
-
-    if (preset === "all") {
-      setTempRange(undefined);
-      return;
-    }
-
-    if (preset !== "custom") {
-      const next = getPresetRange(preset);
-      setTempRange({
-        from: localIsoToDate(next.from),
-        to: localIsoToDate(next.to),
-      });
-    }
-  };
-
-  const handleApply = () => {
-    if (tempPreset === "all") {
-      const next = getPresetRange("all");
-      onApply("all", next.from, next.to);
-      onClose();
-      return;
-    }
-
-    if (!tempRange?.from) return;
-
-    const nextFrom = dateToLocalIso(tempRange.from);
-    const nextTo = dateToLocalIso(tempRange.to ?? tempRange.from);
-
-    onApply(tempPreset, nextFrom, nextTo);
+  const commit = (preset: RangePreset, from: string, to: string) => {
+    onApply(preset, from, to);
     onClose();
   };
 
-  const handleCancel = () => {
-    setTempPreset(valuePreset);
+  const handlePresetClick = (preset: Exclude<RangePreset, "custom">) => {
+    const next = getPresetRange(preset);
+    setTempPreset(preset);
     setTempRange(
-      valuePreset === "all"
+      preset === "all"
         ? undefined
         : {
-            from: localIsoToDate(valueFrom),
-            to: localIsoToDate(valueTo),
+            from: localIsoToDate(next.from),
+            to: localIsoToDate(next.to),
           },
     );
-    onClose();
+    commit(preset, next.from, next.to);
   };
 
-  const footerLabel =
-    tempPreset === "all"
-      ? "All available records"
-      : tempRange?.from
-      ? `${dateToLocalIso(tempRange.from)} → ${dateToLocalIso(tempRange.to ?? tempRange.from)}`
-      : "Select a date range";
+  const handleRangeSelect = (
+    _nextRange: DateRange | undefined,
+    triggerDate: Date,
+  ) => {
+    setTempPreset("custom");
+
+    // First click (or click after a finished range): set start only and stay open.
+    if (!tempRange?.from || tempRange.to) {
+      setTempRange({ from: triggerDate, to: undefined });
+      return;
+    }
+
+    // Second click: set end, then apply.
+    const start =
+      triggerDate.getTime() < tempRange.from.getTime()
+        ? triggerDate
+        : tempRange.from;
+    const end =
+      triggerDate.getTime() < tempRange.from.getTime()
+        ? tempRange.from
+        : triggerDate;
+
+    setTempRange({ from: start, to: end });
+    commit("custom", dateToLocalIso(start), dateToLocalIso(end));
+  };
+
+  const hint =
+    tempRange?.from && !tempRange?.to
+      ? `Start ${dateToLocalIso(tempRange.from)} · pick an end date`
+      : tempPreset === "custom" && tempRange?.from && tempRange?.to
+        ? `${dateToLocalIso(tempRange.from)} → ${dateToLocalIso(tempRange.to)}`
+        : tempPreset === "all"
+          ? "All available records"
+          : "Click a start date, then an end date";
 
   return (
     <div
       ref={ref}
-      className="absolute right-0 top-full z-50 mt-3 overflow-hidden rounded-3xl border border-amber-100 bg-white shadow-2xl"
-      style={{
-        width: 700,
-        maxWidth: "calc(100vw - 32px)",
-        boxShadow: "0 24px 70px rgba(15, 23, 42, 0.14)",
-      }}
+      style={style}
+      className="fixed z-[9999] max-h-[min(640px,calc(100vh-24px))] overflow-y-auto overflow-x-hidden rounded-3xl border border-amber-100 bg-white shadow-2xl"
     >
-      <div className="grid grid-cols-1 md:grid-cols-[170px_1fr]">
-        <div className="border-b border-slate-100 bg-amber-50/40 p-2 md:border-b-0 md:border-r">
+      <div className="border-b border-slate-100 bg-amber-50/50 p-3">
+        <div className="flex flex-wrap gap-1.5">
           {presetItems.map((item) => {
             const active = tempPreset === item.id;
 
             return (
               <button
                 key={item.id}
+                type="button"
                 onClick={() => handlePresetClick(item.id)}
-                className={`mb-1 flex w-full rounded-xl px-3 py-2.5 text-left text-sm font-bold transition ${
+                className={`rounded-full px-3 py-1.5 text-xs font-bold transition ${
                   active
                     ? "bg-slate-950 text-white shadow-sm"
-                    : "text-slate-600 hover:bg-white hover:text-slate-950"
+                    : "bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-amber-50 hover:text-slate-950"
                 }`}
               >
                 {item.label}
@@ -682,70 +672,50 @@ function SummaryDateRangePicker({
             );
           })}
         </div>
-
-        <div className="bg-white p-5">
-          <DayPicker
-            mode="range"
-            selected={tempRange}
-            onSelect={(nextRange) => {
-              setTempPreset("custom");
-              setTempRange(nextRange);
-            }}
-            numberOfMonths={2}
-            defaultMonth={tempPreset === "all" ? new Date() : tempRange?.from ?? new Date()}
-            showOutsideDays
-            disabled={{ after: new Date() }}
-            className="rdp-summary"
-            classNames={{
-              months: "flex flex-col gap-8 sm:flex-row",
-              month: "space-y-4",
-              caption: "relative flex items-center justify-center",
-              caption_label: "text-sm font-black text-slate-900",
-              nav: "flex items-center gap-2",
-              nav_button:
-                "h-8 w-8 rounded-full text-slate-500 transition hover:bg-amber-50 hover:text-slate-900",
-              table: "w-full border-collapse",
-              head_row: "flex",
-              head_cell:
-                "w-10 text-center text-[11px] font-black uppercase text-slate-400",
-              row: "mt-1 flex w-full",
-              cell: "relative h-10 w-10 p-0 text-center text-sm",
-              day: "h-10 w-10 rounded-xl text-sm font-bold text-slate-700 transition hover:bg-amber-50 hover:text-slate-950",
-              day_selected:
-                "bg-slate-950 text-white hover:bg-slate-950 hover:text-white",
-              day_today: "border border-amber-300 bg-amber-50 text-amber-800",
-              day_outside: "text-slate-300",
-              day_disabled: "text-slate-300 opacity-40",
-              day_range_middle:
-                "rounded-none bg-amber-100 text-slate-900 hover:bg-amber-100",
-              day_range_start:
-                "rounded-l-xl rounded-r-none bg-slate-950 text-white hover:bg-slate-950",
-              day_range_end:
-                "rounded-l-none rounded-r-xl bg-slate-950 text-white hover:bg-slate-950",
-            }}
-          />
-        </div>
       </div>
 
-      <div className="flex flex-col gap-3 border-t border-slate-100 bg-slate-50/80 px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="text-sm font-bold text-slate-600">{footerLabel}</div>
+      <div className="flex justify-center bg-white p-3 sm:p-4">
+        <DayPicker
+          mode="range"
+          selected={tempRange}
+          onSelect={handleRangeSelect}
+          numberOfMonths={1}
+          defaultMonth={
+            tempPreset === "all" ? new Date() : tempRange?.from ?? new Date()
+          }
+          showOutsideDays
+          disabled={{ after: new Date() }}
+          className="rdp-summary"
+          style={
+            {
+              "--rdp-accent-color": "#0f172a",
+              "--rdp-accent-background-color": "#fef3c7",
+              "--rdp-day-height": "40px",
+              "--rdp-day-width": "40px",
+              "--rdp-day_button-height": "36px",
+              "--rdp-day_button-width": "36px",
+              "--rdp-day_button-border-radius": "12px",
+              "--rdp-selected-border": "2px solid #0f172a",
+              "--rdp-range_start-date-background-color": "#0f172a",
+              "--rdp-range_end-date-background-color": "#0f172a",
+              "--rdp-today-color": "#b45309",
+              "--rdp-outside-opacity": "0.35",
+            } as React.CSSProperties
+          }
+        />
+      </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleCancel}
-            className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-600 transition hover:bg-slate-50"
-          >
-            Cancel
-          </button>
-
-          <button
-            onClick={handleApply}
-            disabled={tempPreset !== "all" && !tempRange?.from}
-            className="rounded-xl bg-slate-950 px-4 py-2 text-sm font-bold text-white transition hover:bg-slate-800 disabled:opacity-50"
-          >
-            Apply
-          </button>
+      <div className="flex items-center justify-between gap-3 border-t border-slate-100 bg-slate-50/80 px-4 py-3">
+        <div className="min-w-0 truncate text-xs font-bold text-slate-500 sm:text-sm">
+          {hint}
         </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="shrink-0 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 transition hover:bg-slate-50 sm:text-sm"
+        >
+          Close
+        </button>
       </div>
     </div>
   );
@@ -1199,6 +1169,58 @@ export default function DashboardPage() {
   const [customFrom, setCustomFrom] = useState(initialToday.from);
   const [customTo, setCustomTo] = useState(initialToday.to);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const datePickerAnchorRef = useRef<HTMLDivElement>(null);
+  const [datePickerStyle, setDatePickerStyle] = useState<React.CSSProperties>({
+    top: 0,
+    left: 0,
+    width: 360,
+  });
+
+  const updateDatePickerPosition = useCallback(() => {
+    const anchor = datePickerAnchorRef.current;
+    if (!anchor || typeof window === "undefined") return;
+
+    const rect = anchor.getBoundingClientRect();
+    const margin = 12;
+    const calendarWidth = Math.min(360, window.innerWidth - margin * 2);
+    const estimatedHeight = 520;
+
+    let left = rect.right - calendarWidth;
+    left = Math.max(
+      margin,
+      Math.min(left, window.innerWidth - calendarWidth - margin),
+    );
+
+    let top = rect.bottom + 8;
+    const wouldOverflowBottom =
+      top + estimatedHeight > window.innerHeight - margin;
+
+    if (wouldOverflowBottom && rect.top > estimatedHeight + margin) {
+      top = rect.top - estimatedHeight - 8;
+    }
+
+    top = Math.max(margin, Math.min(top, window.innerHeight - margin));
+
+    setDatePickerStyle({
+      top,
+      left,
+      width: calendarWidth,
+      boxShadow: "0 24px 70px rgba(15, 23, 42, 0.14)",
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!showDatePicker) return;
+
+    updateDatePickerPosition();
+    window.addEventListener("resize", updateDatePickerPosition);
+    window.addEventListener("scroll", updateDatePickerPosition, true);
+
+    return () => {
+      window.removeEventListener("resize", updateDatePickerPosition);
+      window.removeEventListener("scroll", updateDatePickerPosition, true);
+    };
+  }, [showDatePicker, updateDatePickerPosition]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [err, setErr] = useState("");
@@ -1630,40 +1652,37 @@ export default function DashboardPage() {
           margin: 0;
         }
 
-        .rdp-summary .rdp-button_previous,
-        .rdp-summary .rdp-button_next {
-          color: inherit;
-        }
-
-        .rdp-summary .rdp-chevron {
-          fill: currentColor;
-        }
-
-        .rdp-summary .rdp-day_button {
-          width: 40px;
-          height: 40px;
-          border-radius: 0;
-          font-weight: 500;
-        }
-
-        .rdp-summary .rdp-range_start .rdp-day_button,
-        .rdp-summary .rdp-range_end .rdp-day_button,
-        .rdp-summary .rdp-selected .rdp-day_button {
-          background: #1d8ed8;
-          color: white;
-        }
-
-        .rdp-summary .rdp-range_middle .rdp-day_button {
-          background: #dbeafe;
+        .rdp-summary .rdp-caption_label {
+          font-size: 0.875rem;
+          font-weight: 800;
           color: #0f172a;
         }
 
-        .rdp-summary .rdp-today .rdp-day_button {
-          border: 1px solid #cbd5e1;
+        .rdp-summary .rdp-weekday {
+          font-size: 10px;
+          font-weight: 800;
+          text-transform: uppercase;
+          color: #94a3b8;
+          opacity: 1;
         }
 
-        .rdp-summary .rdp-disabled .rdp-day_button {
-          opacity: 0.35;
+        .rdp-summary .rdp-day_button {
+          font-weight: 700;
+          font-size: 0.8125rem;
+        }
+
+        .rdp-summary .rdp-day_button:hover:not(:disabled) {
+          background: #fffbeb;
+        }
+
+        .rdp-summary .rdp-chevron {
+          fill: #64748b;
+        }
+
+        .rdp-summary .rdp-button_previous:hover,
+        .rdp-summary .rdp-button_next:hover {
+          background: #fffbeb;
+          border-radius: 9999px;
         }
       `}</style>
 
@@ -1699,27 +1718,34 @@ export default function DashboardPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <div className="relative">
+            <div ref={datePickerAnchorRef} className="relative z-50">
               <button
+                type="button"
                 onClick={() => setShowDatePicker((v) => !v)}
-                className="inline-flex items-center rounded-2xl border border-amber-100 bg-white px-4 py-3 text-sm font-bold text-slate-700 shadow-sm transition hover:border-amber-200 hover:bg-amber-50/40"
+                className="inline-flex max-w-full items-center rounded-2xl border border-amber-100 bg-white px-4 py-3 text-sm font-bold text-slate-700 shadow-sm transition hover:border-amber-200 hover:bg-amber-50/40"
               >
-                <span>{fmtRangeLabel(range.from, range.to, range.label)}</span>
+                <span className="truncate">
+                  {fmtRangeLabel(range.from, range.to, range.label)}
+                </span>
               </button>
 
-              {showDatePicker && (
-                <SummaryDateRangePicker
-                  valuePreset={preset}
-                  valueFrom={range.from}
-                  valueTo={range.to}
-                  onApply={(nextPreset, from, to) => {
-                    setCustomFrom(from);
-                    setCustomTo(to);
-                    setPreset(nextPreset);
-                  }}
-                  onClose={() => setShowDatePicker(false)}
-                />
-              )}
+              {showDatePicker &&
+                typeof document !== "undefined" &&
+                createPortal(
+                  <SummaryDateRangePicker
+                    valuePreset={preset}
+                    valueFrom={range.from}
+                    valueTo={range.to}
+                    style={datePickerStyle}
+                    onApply={(nextPreset, from, to) => {
+                      setCustomFrom(from);
+                      setCustomTo(to);
+                      setPreset(nextPreset);
+                    }}
+                    onClose={() => setShowDatePicker(false)}
+                  />,
+                  document.body,
+                )}
             </div>
 
             <button

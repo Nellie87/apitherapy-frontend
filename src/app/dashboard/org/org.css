@@ -85,6 +85,13 @@
   min-width: 0;
 }
 
+.org-brand-logo {
+  width: min(100%, 11.5rem);
+  height: auto;
+  object-fit: contain;
+  display: block;
+}
+
 .org-mark {
   display: grid;
   place-items: center;

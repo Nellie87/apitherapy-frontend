@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type FormEvent, type KeyboardEvent } from "react";
+import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
 import { clearOrgId, setOrgId } from "@/lib/org/org";
 import { fetchMyOrgRole } from "@/lib/auth/orgRole";
@@ -96,9 +97,9 @@ export default function OrgPage() {
       const role = await fetchMyOrgRole(String(orgId));
 
       window.location.href =
-        role === "sales_clerk" ? "/dashboard/sales" : "/dashboard/products";
+        role === "sales_clerk" ? "/dashboard/sales" : "/dashboard/summarydashboard";
     } catch {
-      window.location.href = "/dashboard/products";
+      window.location.href = "/dashboard/summarydashboard";
     }
   }
 
@@ -160,13 +161,7 @@ export default function OrgPage() {
       <div className="org-shell">
         <header className="org-topbar">
           <div className="org-brand">
-            <div className="org-mark" aria-hidden>
-              PB
-            </div>
-            <div className="org-brand-copy">
-              <div className="org-brand-title">Pollinator Beekeeping</div>
-              <div className="org-brand-sub">Apitherapy workspace</div>
-            </div>
+          
           </div>
 
           <button type="button" className="org-logout" onClick={logout}>

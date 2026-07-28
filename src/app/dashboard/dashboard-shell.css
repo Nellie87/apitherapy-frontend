@@ -113,6 +113,50 @@ body {
     inset 0 1px 0 rgba(255, 255, 255, 0.76);
 }
 
+.brand-mark-img {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  border-radius: 14px;
+  object-fit: contain;
+  background: transparent;
+}
+
+.brand-logo-img {
+  width: min(100%, 188px);
+  height: auto;
+  object-fit: contain;
+  display: block;
+  background: transparent;
+  /* Knock out baked-in white plate / fringe on the cream sidebar */
+  mix-blend-mode: multiply;
+}
+
+.topbar-brand-mark {
+  width: 36px;
+  height: 36px;
+  border-radius: 11px;
+  object-fit: contain;
+  background: transparent;
+  flex: 0 0 36px;
+}
+
+.mobile-brand {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.mobile-brand-logo {
+  width: min(100%, 168px);
+  height: auto;
+  object-fit: contain;
+  display: block;
+  background: transparent;
+  mix-blend-mode: multiply;
+}
+
 .brand-copy {
   min-width: 0;
   overflow: hidden;

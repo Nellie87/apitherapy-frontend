@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -290,13 +291,25 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
         <aside className="sidebar hidden lg:flex">
           <div className="sidebar-inner">
             <div className="brand-row">
-              <div className="brand-mark">PB</div>
-
-              {!collapsed && (
-                <div className="brand-copy">
-                  <div className="brand-title">Pollinator Beekeeping</div>
-                  <div className="brand-subtitle">Apitherapy</div>
-                </div>
+              {collapsed ? (
+                <Image
+                  src="/icons/icon-mark.png"
+                  alt="Pollinator"
+                  width={44}
+                  height={44}
+                  className="brand-mark-img"
+                  priority
+                />
+              ) : (
+                <Image
+                  src="/brand-wordmark.png"
+                  alt="Pollinator Beekeeping & Apitherapy"
+                  width={200}
+                  height={98}
+                  className="brand-logo-img"
+                  priority
+                  unoptimized
+                />
               )}
             </div>
 
@@ -414,6 +427,15 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
                 {Icons.menu}
               </button>
 
+              <Image
+                src="/icons/icon-mark.png"
+                alt="Pollinator"
+                width={36}
+                height={36}
+                className="topbar-brand-mark lg:hidden"
+                priority
+              />
+
               <div className="date-card hidden sm:flex">
                 <div className="date-day">{today.day}</div>
                 <div className="date-copy">
@@ -471,8 +493,15 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
 
             <div className="mobile-menu-panel">
               <div className="mobile-menu-header">
-                <div>
-                  <div className="brand-title">Pollinator Beekeeping</div>
+                <div className="mobile-brand">
+                  <Image
+                    src="/brand-wordmark.png"
+                    alt="Pollinator Beekeeping & Apitherapy"
+                    width={168}
+                    height={83}
+                    className="mobile-brand-logo"
+                    unoptimized
+                  />
                   <div className="brand-subtitle">{workspaceLabel}</div>
                 </div>
 

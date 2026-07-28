@@ -1,5 +1,6 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { PwaProvider } from "@/components/PwaProvider";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -12,9 +13,35 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const APP_NAME = "Pollinator Beekeeping";
+const APP_DESCRIPTION = "For all your apitherapy needs";
+
 export const metadata: Metadata = {
-  title: "Pollinator Beekeeping",
-  description: "For all your apitherapy needs",
+  applicationName: APP_NAME,
+  title: {
+    default: APP_NAME,
+    template: `%s · ${APP_NAME}`,
+  },
+  description: APP_DESCRIPTION,
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: APP_NAME,
+  },
+  formatDetection: {
+    telephone: false,
+  },
+  icons: {
+    icon: [
+      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [{ url: "/icons/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#f5c200",
 };
 
 export default function RootLayout({
@@ -27,7 +54,7 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        {children}
+        <PwaProvider>{children}</PwaProvider>
       </body>
     </html>
   );
