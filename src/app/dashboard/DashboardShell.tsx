@@ -4,8 +4,11 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { bootstrapOrg } from "@/lib/org/bootstrapOrg";
-import { getOrgId } from "@/lib/org/org";
+import {
+  bootstrapOrg,
+  isMissingOrgError,
+} from "@/lib/org/bootstrapOrg";
+import { clearOrgId, getOrgId } from "@/lib/org/org";
 import { fetchMyOrgRole, type OrgRole } from "@/lib/auth/orgRole";
 import { OrgRoleProvider } from "@/contexts/OrgRoleContext";
 import "./dashboard-shell.css";
@@ -149,6 +152,8 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
     }
   }, [pathname]);
 
+  const onOrgPage = pathname.startsWith("/dashboard/org");
+
   useEffect(() => {
     let cancelled = false;
 
@@ -165,7 +170,9 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
 
         setOrgRole(role);
       } catch (err) {
-        console.error("DashboardShell role bootstrap error:", err);
+        if (!isMissingOrgError(err)) {
+          console.error("DashboardShell role bootstrap error:", err);
+        }
 
         if (!cancelled) {
           setOrgRole("none");
@@ -191,11 +198,23 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
 
   const allNav = useMemo(() => flatNav(navItems), [navItems]);
 
+  const needsOrgPick = !roleLoading && orgRole === "none";
+  // Keep dashboard pages unmounted until a workspace is ready so they never flash errors.
+  const showWorkspaceGate = roleLoading || (needsOrgPick && !onOrgPage);
+
   useEffect(() => {
     if (roleLoading) return;
 
-    const allowed =
-  allNav.some((item) => pathname === item.href || pathname.startsWith(item.href + "/"));
+    if (onOrgPage) return;
+
+    if (orgRole === "none") {
+      router.replace("/dashboard/org");
+      return;
+    }
+
+    const allowed = allNav.some(
+      (item) => pathname === item.href || pathname.startsWith(item.href + "/")
+    );
 
     if (!allowed) {
       if (["sales_clerk", "cashier", "pos"].includes(orgRole)) {
@@ -205,16 +224,12 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
 
       if (orgRole === "manager") {
         router.replace("/dashboard/summarydashboard");
-        return;
-      }
-
-      if (orgRole === "none") {
-        router.replace("/dashboard/org");
       }
     }
-  }, [roleLoading, orgRole, pathname, router, allNav]);
+  }, [roleLoading, orgRole, pathname, router, allNav, onOrgPage]);
 
   async function handleLogout() {
+    await clearOrgId();
     const supabase = createClient();
     await supabase.auth.signOut();
     window.location.href = "/login";
@@ -234,6 +249,15 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
     : { weekday: "", day: "", month: "", year: "" };
 
   const workspaceLabel = roleLabel(orgRole);
+
+  // Org picker is its own full-page flow — skip the dashboard chrome.
+  if (onOrgPage && (roleLoading || orgRole === "none")) {
+    return (
+      <OrgRoleProvider role={orgRole} loading={roleLoading}>
+        {children}
+      </OrgRoleProvider>
+    );
+  }
 
   function NavLink({
     href,
@@ -415,7 +439,25 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
             </button>
           </header>
 
-          <div className="content-wrap">{children}</div>
+          <div className="content-wrap">
+            {showWorkspaceGate ? (
+              <div className="flex min-h-[60vh] flex-col items-center justify-center px-6 text-center">
+                <div className="mb-4 h-10 w-10 animate-spin rounded-full border-2 border-amber-300 border-t-amber-600" />
+                <p className="text-lg font-semibold text-slate-800">
+                  {needsOrgPick
+                    ? "Taking you to your workspaces…"
+                    : "Preparing your workspace…"}
+                </p>
+                <p className="mt-1 max-w-sm text-sm text-slate-500">
+                  {needsOrgPick
+                    ? "You have more than one organization. Pick one to continue."
+                    : "Just a moment while we load your dashboard."}
+                </p>
+              </div>
+            ) : (
+              children
+            )}
+          </div>
         </main>
 
         {mobileOpen && (

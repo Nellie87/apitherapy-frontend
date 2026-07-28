@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
+import { resolvePostLoginPath } from "@/lib/org/bootstrapOrg";
 import "./login.css";
 
 /* ─── Hex watermark ─────────────────────────────────────────────── */
@@ -133,36 +134,8 @@ export default function LoginPage() {
 
         if (error) throw error;
 
-        async function handleForgotPassword() {
-  setMsg("");
-
-  if (!email.trim()) {
-    setMsg("Please enter your email address first.");
-    return;
-  }
-
-  setLoading(true);
-
-  try {
-    const supabase = createClient();
-
-   const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-  redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(
-    "/reset-password"
-  )}`,
-});
-
-    if (error) throw error;
-
-    setMsg("Check your email for the password reset link.");
-  } catch (e: any) {
-    setMsg(e?.message || "Could not send reset email. Please try again.");
-  } finally {
-    setLoading(false);
-  }
-}
-
-window.location.href = "/dashboard/summarydashboard";      }
+        window.location.href = await resolvePostLoginPath();
+      }
     } catch (e: any) {
       setMsg(e?.message || "An error occurred. Please try again.");
     } finally {
