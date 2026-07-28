@@ -20,8 +20,10 @@ import {
   type InventoryValuationRow,
 } from "@/lib/api/reports";
 import {
+  isScheduledJob,
   listDueReminders,
-  listUpcomingScheduled,
+  listServices,
+  paymentProgress,
   type ServiceRow,
 } from "@/lib/api/services";
 
@@ -1217,6 +1219,8 @@ export default function DashboardPage() {
   const [upcomingServices, setUpcomingServices] = useState<ServiceRow[]>([]);
   const [dueReminders, setDueReminders] = useState<ServiceRow[]>([]);
   const [serviceOutstanding, setServiceOutstanding] = useState(0);
+  const [scheduledCount, setScheduledCount] = useState(0);
+  const [outstandingJobCount, setOutstandingJobCount] = useState(0);
 
   const range = useMemo(() => {
     if (preset === "custom") {
@@ -1303,33 +1307,23 @@ export default function DashboardPage() {
           .order("payment_date", { ascending: false })
           .limit(6);
 
-        const openServicesQuery = supabase
-          .from("services")
-          .select("amount,total_amount,payment_plan,status")
-          .eq("org_id", orgId)
-          .in("status", ["scheduled", "in_progress"])
-          .neq("payment_plan", "full");
-
         const [
           { data: sData, error: sErr },
           { data: eData, error: eErr },
           { data: spData, error: spErr },
-          { data: openSvc, error: openErr },
-          upcoming,
+          allServices,
           reminders,
         ] = await Promise.all([
           salesQuery,
           expensesQuery,
           servicePaymentsQuery,
-          openServicesQuery,
-          listUpcomingScheduled(orgId, 14),
+          listServices(orgId, { mode: "all" }),
           listDueReminders(orgId),
         ]);
 
         if (sErr) throw new Error(sErr.message);
         if (eErr) throw new Error(eErr.message);
         if (spErr) throw new Error(spErr.message);
-        if (openErr) throw new Error(openErr.message);
 
         const mappedPayments: RecentServicePayment[] = (spData ?? []).map((row: any) => {
           const svc = Array.isArray(row.services) ? row.services[0] : row.services;
@@ -1344,12 +1338,30 @@ export default function DashboardPage() {
           };
         });
 
-        let outstanding = 0;
-        for (const row of openSvc ?? []) {
-          const total = Number((row as any).total_amount ?? 0);
-          const collected = Number((row as any).amount ?? 0);
-          outstanding += Math.max(0, total - collected);
-        }
+        const outstandingRows = allServices.filter(
+          (r) =>
+            !["cancelled", "voided"].includes(String(r.status)) &&
+            paymentProgress(r).remaining > 0,
+        );
+        const outstanding = outstandingRows.reduce(
+          (sum, r) => sum + paymentProgress(r).remaining,
+          0,
+        );
+
+        const scheduled = allServices.filter(isScheduledJob);
+        const today = new Date().toISOString().slice(0, 10);
+        const reminderIds = new Set(reminders.map((r) => r.id));
+        const upcomingPreview = [...scheduled]
+          .filter((r) => !reminderIds.has(r.id))
+          .sort((a, b) => {
+            const da = String(a.scheduled_date ?? a.service_date ?? "");
+            const db = String(b.scheduled_date ?? b.service_date ?? "");
+            // Prefer soonest upcoming dates; undated/past fall later
+            const aUpcoming = da >= today ? 0 : 1;
+            const bUpcoming = db >= today ? 0 : 1;
+            if (aUpcoming !== bUpcoming) return aUpcoming - bUpcoming;
+            return da.localeCompare(db);
+          });
 
         setPnl(pl);
         setInventory(inv);
@@ -1357,9 +1369,11 @@ export default function DashboardPage() {
         setRecentSales((sData ?? []) as any);
         setRecentExpenses((eData ?? []) as any);
         setRecentServicePayments(mappedPayments);
-        setUpcomingServices(upcoming);
+        setUpcomingServices(upcomingPreview);
         setDueReminders(reminders);
         setServiceOutstanding(outstanding);
+        setScheduledCount(scheduled.length);
+        setOutstandingJobCount(outstandingRows.length);
         setLastRefreshed(new Date());
       } catch (e: any) {
         setErr(e.message ?? String(e));
@@ -1764,20 +1778,20 @@ export default function DashboardPage() {
             variant={serviceOutstanding > 0 ? "warning" : "neutral"}
             loading={loading}
             sub={
-              upcomingServices.length > 0
-                ? `${upcomingServices.length} upcoming · awaiting collection`
+              outstandingJobCount > 0
+                ? `${outstandingJobCount} job${outstandingJobCount !== 1 ? "s" : ""} awaiting collection`
                 : "Awaiting collection on open jobs"
             }
           />
           <KpiCard
             label="Scheduled"
-            rawValue={upcomingServices.length + dueReminders.length}
+            rawValue={scheduledCount}
             loading={loading}
             isCurrency={false}
             sub={
               dueReminders.length > 0
                 ? `${dueReminders.length} reminder${dueReminders.length !== 1 ? "s" : ""} due`
-                : "Upcoming in next 14 days"
+                : "Open scheduled jobs"
             }
           />
           <KpiCard
@@ -2039,7 +2053,8 @@ export default function DashboardPage() {
                       {fmtMoney(serviceOutstanding)} outstanding
                     </div>
                     <div className="mt-0.5 text-[11px] text-slate-400">
-                      On installment & periodic jobs
+                      {outstandingJobCount} job
+                      {outstandingJobCount !== 1 ? "s" : ""} with balance due
                     </div>
                   </div>
                 )}

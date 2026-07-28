@@ -366,6 +366,14 @@ export function paymentProgress(svc: ServiceRow) {
   return { total, collected, remaining: Math.max(0, total - collected), pct };
 }
 
+/** Upcoming / booked work — includes deposits that flipped status to in_progress. */
+export function isScheduledJob(svc: ServiceRow) {
+  const status = String(svc.status);
+  if (status === "scheduled") return true;
+  if (status === "in_progress" && svc.scheduled_date) return true;
+  return false;
+}
+
 export function planLabel(plan: string) {
   if (plan === "installment") return "Installments";
   if (plan === "periodic") return "Periodic";

@@ -12,6 +12,7 @@ import {
   createService,
   createServicePayment,
   deleteService,
+  isScheduledJob,
   dismissReminder,
   listDueReminders,
   listServices,
@@ -86,14 +87,6 @@ function statusBadge(status: string) {
   if (status === "cancelled" || status === "voided")
     return "border-red-200 bg-red-50 text-red-700";
   return "border-[#EADFC2] bg-[#FFFDF8] text-slate-600";
-}
-
-/** Upcoming / booked work — includes deposits that flipped status to in_progress. */
-function isScheduledJob(r: ServiceRow) {
-  const status = String(r.status);
-  if (status === "scheduled") return true;
-  if (status === "in_progress" && r.scheduled_date) return true;
-  return false;
 }
 
 const IconSearch = () => (
