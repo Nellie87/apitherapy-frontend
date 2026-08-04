@@ -888,12 +888,14 @@ export default function NewSalePage() {
                         </label>
                         <input
                           className={S.input}
-                          type="number"
-                          min={0}
-                          step="1"
+                          type="text"
+                          inputMode="numeric"
                           placeholder="0"
                           value={cashAmount}
-                          onChange={(e) => updateCashSplit(e.target.value)}
+                          onChange={(e) => {
+                            const v = e.target.value.replace(/[^\d]/g, "");
+                            updateCashSplit(v);
+                          }}
                         />
                       </div>
                       <div>
@@ -902,12 +904,14 @@ export default function NewSalePage() {
                         </label>
                         <input
                           className={S.input}
-                          type="number"
-                          min={0}
-                          step="1"
+                          type="text"
+                          inputMode="numeric"
                           placeholder="0"
                           value={mpesaAmount}
-                          onChange={(e) => updateMpesaSplit(e.target.value)}
+                          onChange={(e) => {
+                            const v = e.target.value.replace(/[^\d]/g, "");
+                            updateMpesaSplit(v);
+                          }}
                         />
                       </div>
                     </div>
@@ -1028,16 +1032,13 @@ export default function NewSalePage() {
                               ? "border-red-400 bg-red-50 focus:ring-2 focus:ring-red-100"
                               : "border-slate-300 bg-white focus:border-slate-400 focus:ring-2 focus:ring-slate-100"
                           }`}
-                          type="number"
-                          min={1}
-                          max={line.available}
+                          type="text"
+                          inputMode="numeric"
                           value={line.qty}
-                          onChange={(e) =>
-                            updateQty(
-                              line.product_id,
-                              Number(e.target.value || 0)
-                            )
-                          }
+                          onChange={(e) => {
+                            const v = e.target.value.replace(/[^\d]/g, "");
+                            updateQty(line.product_id, Number(v || 0));
+                          }}
                         />
 
                         <div className="mt-0.5 text-center text-[10px] text-slate-400">
@@ -1056,17 +1057,16 @@ export default function NewSalePage() {
                               ? "border-slate-400 bg-slate-50 focus:ring-2 focus:ring-slate-100"
                               : "border-slate-300 bg-white focus:border-slate-400 focus:ring-2 focus:ring-slate-100"
                           }`}
-                          type="number"
-                          min={0}
-                          step="1"
+                          type="text"
+                          inputMode="numeric"
                           value={
                             line.unit_price_override == null
                               ? ""
-                              : line.unit_price_override
+                              : String(line.unit_price_override)
                           }
                           placeholder={String(base)}
                           onChange={(e) => {
-                            const v = e.target.value;
+                            const v = e.target.value.replace(/[^\d]/g, "");
                             updateOverride(
                               line.product_id,
                               v === "" ? null : Number(v)
