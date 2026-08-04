@@ -11,6 +11,7 @@ import {
   voidSaleRestoreInventory,
   editSaleItemsRestoreInventory,
   updateSaleDateStrict,
+  formatPaymentMethodLabel,
   type SaleRow,
   type SaleItemRow,
   type SaleActivityLog,
@@ -84,6 +85,7 @@ function paymentPill(method?: string | null) {
   const key = (method ?? "").toLowerCase();
   if (key === "cash") return S.pillCash;
   if (key === "mpesa") return S.pillMpesa;
+  if (key === "cash+mpesa" || key === "split") return S.pillNeutral;
   if (key === "card") return S.pillCard;
   if (key === "credit") return S.pillCredit;
   return S.pillNeutral;
@@ -265,7 +267,12 @@ async function buildAndDownloadPdf(
         : "—",
     },
     { label: "Status", value: sale.status ?? "—" },
-    { label: "Payment", value: sale.payment_method ?? "—" },
+    {
+      label: "Payment",
+      value: formatPaymentMethodLabel(sale.payment_method, sale.sale_payments, {
+        detailed: true,
+      }),
+    },
   ].forEach((m, i) => {
     const mx = MARGIN + 4 + i * metaCol;
     text(m.label.toUpperCase(), mx, y + 2, {
@@ -951,9 +958,37 @@ export default function SaleDetailsPage() {
                     sale?.payment_method
                   )}`}
                 >
-                  {sale?.payment_method || "—"}
+                  {formatPaymentMethodLabel(
+                    sale?.payment_method,
+                    sale?.sale_payments
+                  )}
                 </span>
               </div>
+
+              {(sale?.sale_payments?.length ?? 0) > 1 && (
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+                  <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                    Split tender
+                  </div>
+                  <div className="space-y-1">
+                    {sale!.sale_payments!.map((p) => (
+                      <div
+                        key={p.id}
+                        className="flex items-center justify-between gap-3 text-sm"
+                      >
+                        <span className="font-semibold capitalize text-slate-600">
+                          {String(p.payment_method).toLowerCase() === "mpesa"
+                            ? "M-Pesa"
+                            : p.payment_method}
+                        </span>
+                        <span className="font-bold text-slate-900">
+                          {fmtMoney(Number(p.amount))}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {sale?.recorded_by_name?.trim() && (
                 <div className="flex items-center gap-2">

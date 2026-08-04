@@ -1,14 +1,32 @@
 import { createClient } from "@/lib/supabase/client";
 
 export type PaymentMethod = "cash" | "mpesa" | "card" | "credit";
+export type SalePaymentMethod = PaymentMethod | "cash+mpesa";
 export type SaleStatus = "completed" | "voided" | "cancelled" | string;
+
+export type SalePaymentInput = {
+  payment_method: PaymentMethod;
+  amount: number;
+  note?: string | null;
+};
+
+export type SalePaymentRow = {
+  id: string;
+  org_id: string;
+  sale_id: string;
+  payment_date: string;
+  amount: number;
+  payment_method: PaymentMethod | string;
+  note: string | null;
+  created_at: string;
+};
 
 export type SaleRow = {
   id: string;
   org_id: string;
   sale_no: string;
   customer_name: string | null;
-  payment_method: PaymentMethod | string | null;
+  payment_method: SalePaymentMethod | string | null;
   status: SaleStatus;
   subtotal: number;
   discount_total: number;
@@ -24,7 +42,48 @@ export type SaleRow = {
   cancelled_at?: string | null;
   cancelled_by?: string | null;
   cancel_note?: string | null;
+  sale_payments?: SalePaymentRow[];
 };
+
+export function formatPaymentMethodLabel(
+  method?: string | null,
+  payments?: SalePaymentRow[] | null,
+  opts?: { detailed?: boolean }
+) {
+  if (payments && payments.length > 1) {
+    if (opts?.detailed) {
+      return payments
+        .map((p) => {
+          const label =
+            String(p.payment_method).toLowerCase() === "mpesa"
+              ? "M-Pesa"
+              : String(p.payment_method).charAt(0).toUpperCase() +
+                String(p.payment_method).slice(1);
+          return `${label} ${Number(p.amount || 0).toLocaleString("en-KE")}`;
+        })
+        .join(" + ");
+    }
+
+    const methods = new Set(
+      payments.map((p) => String(p.payment_method).toLowerCase())
+    );
+    if (methods.has("cash") && methods.has("mpesa") && methods.size === 2) {
+      return "Cash + M-Pesa";
+    }
+
+    return Array.from(methods)
+      .map((m) => (m === "mpesa" ? "M-Pesa" : m.charAt(0).toUpperCase() + m.slice(1)))
+      .join(" + ");
+  }
+
+  const key = String(method ?? "").toLowerCase();
+  if (key === "cash+mpesa" || key === "split") return "Cash + M-Pesa";
+  if (key === "mpesa") return "M-Pesa";
+  if (key === "cash") return "Cash";
+  if (key === "card") return "Card";
+  if (key === "credit") return "Credit";
+  return method || "—";
+}
 
 export type SaleItemProduct = {
   id: string;
@@ -132,6 +191,16 @@ function mapSaleRow(r: any, opts?: { ownOnly?: boolean }): SaleRowWithItems {
     cancelled_at: r.cancelled_at ?? null,
     cancelled_by: r.cancelled_by ?? null,
     cancel_note: r.cancel_note ?? null,
+    sale_payments: (r.sale_payments ?? []).map((p: any) => ({
+      id: String(p.id),
+      org_id: String(p.org_id),
+      sale_id: String(p.sale_id),
+      payment_date: String(p.payment_date ?? ""),
+      amount: Number(p.amount ?? 0),
+      payment_method: String(p.payment_method ?? "cash"),
+      note: p.note ?? null,
+      created_at: p.created_at,
+    })),
     sale_items: (r.sale_items ?? []).map((it: any) => {
       const p = Array.isArray(it.products)
         ? it.products[0] ?? null
@@ -148,6 +217,19 @@ function mapSaleRow(r: any, opts?: { ownOnly?: boolean }): SaleRowWithItems {
     }),
   };
 }
+
+const SALE_PAYMENTS_SELECT = `
+  sale_payments:sale_payments (
+    id,
+    org_id,
+    sale_id,
+    payment_date,
+    amount,
+    payment_method,
+    note,
+    created_at
+  )
+`;
 
 const SALE_SELECT_WITH_ITEMS = `
   id,
@@ -172,6 +254,7 @@ const SALE_SELECT_WITH_ITEMS = `
   recorded_by_profile:profiles!sales_created_by_fkey (
     full_name
   ),
+  ${SALE_PAYMENTS_SELECT},
   sale_items:sale_items (
     id,
     qty,
@@ -209,7 +292,8 @@ const SALE_SELECT = `
   cancel_note,
   recorded_by_profile:profiles!sales_created_by_fkey (
     full_name
-  )
+  ),
+  ${SALE_PAYMENTS_SELECT}
 `;
 
 
@@ -366,21 +450,90 @@ export async function listSaleActivityLogs(orgId: string, saleId: string) {
   })) as SaleActivityLog[];
 }
 
+export async function createSalePayments(
+  orgId: string,
+  saleId: string,
+  payments: SalePaymentInput[],
+  paymentDate?: string | null
+) {
+  const supabase = createClient();
+  const date =
+    paymentDate && /^\d{4}-\d{2}-\d{2}$/.test(paymentDate)
+      ? paymentDate
+      : new Date().toISOString().slice(0, 10);
+
+  const rows = payments
+    .map((p) => ({
+      org_id: orgId,
+      sale_id: saleId,
+      payment_date: date,
+      amount: Number(p.amount),
+      payment_method: p.payment_method,
+      note: p.note ?? null,
+    }))
+    .filter((p) => Number.isFinite(p.amount) && p.amount > 0);
+
+  if (rows.length === 0) return [];
+
+  const { data, error } = await supabase
+    .from("sale_payments")
+    .insert(rows)
+    .select(
+      "id,org_id,sale_id,payment_date,amount,payment_method,note,created_at"
+    );
+
+  if (error) throw new Error(error.message);
+  return (data ?? []) as SalePaymentRow[];
+}
+
+async function setSalePaymentMethod(
+  orgId: string,
+  saleId: string,
+  paymentMethod: SalePaymentMethod
+) {
+  const supabase = createClient();
+  const { error } = await supabase
+    .from("sales")
+    .update({ payment_method: paymentMethod })
+    .eq("org_id", orgId)
+    .eq("id", saleId);
+
+  if (error) throw new Error(error.message);
+}
+
 export async function createSaleStrict(
   orgId: string,
   args: {
     customer_name?: string;
-    payment_method: PaymentMethod;
+    payment_method: SalePaymentMethod;
     items: CreateSaleItemInput[];
     sale_date?: string | null;
+    payments?: SalePaymentInput[];
   }
 ) {
   const supabase = createClient();
 
+  const payments = (args.payments ?? []).filter(
+    (p) => Number.isFinite(p.amount) && p.amount > 0
+  );
+  const isSplit =
+    args.payment_method === "cash+mpesa" || payments.length > 1;
+
+  // create_sale_strict may only accept single tender values; use the larger
+  // tender as the RPC value, then stamp the composite label + payment rows.
+  const rpcMethod: PaymentMethod = isSplit
+    ? (() => {
+        const cash = payments.find((p) => p.payment_method === "cash")?.amount ?? 0;
+        const mpesa =
+          payments.find((p) => p.payment_method === "mpesa")?.amount ?? 0;
+        return cash >= mpesa ? "cash" : "mpesa";
+      })()
+    : (args.payment_method as PaymentMethod);
+
   const { data, error } = await supabase.rpc("create_sale_strict", {
     p_org_id: orgId,
     p_customer_name: args.customer_name ?? null,
-    p_payment_method: args.payment_method,
+    p_payment_method: rpcMethod,
     p_items: args.items,
     p_sale_date: args.sale_date ?? null,
   });
@@ -388,9 +541,24 @@ export async function createSaleStrict(
   if (error) throw new Error(error.message);
 
   const r: any = data;
+  const saleId = String(r.sale_id);
+
+  if (isSplit && payments.length > 0) {
+    try {
+      await setSalePaymentMethod(orgId, saleId, "cash+mpesa");
+      await createSalePayments(orgId, saleId, payments, args.sale_date);
+    } catch (e: any) {
+      // Sale already committed; surface payment-recording failure clearly.
+      throw new Error(
+        e?.message
+          ? `Sale created, but split payments failed: ${e.message}`
+          : "Sale created, but split payments failed to save."
+      );
+    }
+  }
 
   return {
-    sale_id: String(r.sale_id),
+    sale_id: saleId,
     sale_no: String(r.sale_no),
     subtotal: Number(r.subtotal ?? 0),
     discount_total: Number(r.discount_total ?? 0),

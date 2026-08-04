@@ -7,8 +7,10 @@ import { bootstrapOrg } from "@/lib/org/bootstrapOrg";
 import { listSellable, type SellableRow } from "@/lib/api/sellable";
 import {
   createSaleStrict,
+  formatPaymentMethodLabel,
   listSales,
   type PaymentMethod,
+  type SalePaymentMethod,
   type SaleRowWithItems,
 } from "@/lib/api/sales";
 import { useOrgRole } from "@/contexts/OrgRoleContext";
@@ -27,7 +29,9 @@ type CartLine = {
 type DraftSaleCart = {
   orgId: string;
   customer: string;
-  payment: PaymentMethod;
+  payment: SalePaymentMethod;
+  cashAmount?: string;
+  mpesaAmount?: string;
   saleDate?: string;
   cart: CartLine[];
   updatedAt: string;
@@ -40,9 +44,10 @@ type ToastState = {
 
 const CART_STORAGE_KEY = "apitherapy_sale_draft_v1";
 
-const PAYMENT_METHODS: { key: PaymentMethod; label: string }[] = [
+const PAYMENT_METHODS: { key: SalePaymentMethod; label: string }[] = [
   { key: "cash", label: "Cash" },
   { key: "mpesa", label: "M-Pesa" },
+  { key: "cash+mpesa", label: "Cash + M-Pesa" },
   { key: "card", label: "Card" },
   { key: "credit", label: "Credit" },
 ];
@@ -119,6 +124,8 @@ function paymentPill(method?: string | null) {
 
   if (key === "cash") return "bg-green-50 text-green-700 border-green-100";
   if (key === "mpesa") return "bg-blue-50 text-blue-700 border-blue-100";
+  if (key === "cash+mpesa" || key === "split")
+    return "bg-teal-50 text-teal-700 border-teal-100";
   if (key === "card") return "bg-purple-50 text-purple-700 border-purple-100";
   if (key === "credit") return "bg-amber-50 text-amber-700 border-amber-100";
 
@@ -160,11 +167,11 @@ function PaymentSelector({
   value,
   onChange,
 }: {
-  value: PaymentMethod;
-  onChange: (v: PaymentMethod) => void;
+  value: SalePaymentMethod;
+  onChange: (v: SalePaymentMethod) => void;
 }) {
   return (
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-2 xl:grid-cols-4">
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3">
       {PAYMENT_METHODS.map(({ key, label }) => (
         <button
           key={key}
@@ -230,7 +237,9 @@ export default function NewSalePage() {
   const [cart, setCart] = useState<CartLine[]>([]);
   const [q, setQ] = useState("");
   const [customer, setCustomer] = useState("");
-  const [payment, setPayment] = useState<PaymentMethod>("cash");
+  const [payment, setPayment] = useState<SalePaymentMethod>("cash");
+  const [cashAmount, setCashAmount] = useState("");
+  const [mpesaAmount, setMpesaAmount] = useState("");
   const [saleDate, setSaleDate] = useState(maxSaleDate);
 
   const [saving, setSaving] = useState(false);
@@ -274,7 +283,9 @@ export default function NewSalePage() {
       if (parsed.orgId !== orgId) return;
 
       setCustomer(parsed.customer ?? "");
-      setPayment((parsed.payment as PaymentMethod) ?? "cash");
+      setPayment((parsed.payment as SalePaymentMethod) ?? "cash");
+      setCashAmount(parsed.cashAmount ?? "");
+      setMpesaAmount(parsed.mpesaAmount ?? "");
       setCart(Array.isArray(parsed.cart) ? parsed.cart : []);
 
       if (parsed.saleDate && parsed.saleDate <= maxSaleDate) {
@@ -295,13 +306,15 @@ export default function NewSalePage() {
       orgId,
       customer,
       payment,
+      cashAmount,
+      mpesaAmount,
       saleDate,
       cart,
       updatedAt: new Date().toISOString(),
     };
 
     localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(payload));
-  }, [orgId, customer, payment, saleDate, cart]);
+  }, [orgId, customer, payment, cashAmount, mpesaAmount, saleDate, cart]);
 
   useEffect(() => {
     if (!rows.length) return;
@@ -454,9 +467,41 @@ export default function NewSalePage() {
     setCart([]);
     setCustomer("");
     setPayment("cash");
+    setCashAmount("");
+    setMpesaAmount("");
     setSaleDate(maxSaleDate);
     localStorage.removeItem(CART_STORAGE_KEY);
     setToast({ message: "Cart cleared", type: "success" });
+  }
+
+  function selectPayment(next: SalePaymentMethod) {
+    setPayment(next);
+    if (next !== "cash+mpesa") {
+      setCashAmount("");
+      setMpesaAmount("");
+    }
+  }
+
+  function updateCashSplit(raw: string) {
+    setCashAmount(raw);
+    const cash = Number(raw);
+    if (!Number.isFinite(cash) || raw.trim() === "") {
+      setMpesaAmount("");
+      return;
+    }
+    const remainder = Math.max(0, Math.round(totals.total - cash));
+    setMpesaAmount(String(remainder));
+  }
+
+  function updateMpesaSplit(raw: string) {
+    setMpesaAmount(raw);
+    const mpesa = Number(raw);
+    if (!Number.isFinite(mpesa) || raw.trim() === "") {
+      setCashAmount("");
+      return;
+    }
+    const remainder = Math.max(0, Math.round(totals.total - mpesa));
+    setCashAmount(String(remainder));
   }
 
   const totals = useMemo(() => {
@@ -482,6 +527,17 @@ export default function NewSalePage() {
 
   const cartItemCount = cart.filter((x) => x.qty > 0).length;
   const hasErrors = cart.some((x) => x.qty > x.available);
+  const splitCash = Number(cashAmount);
+  const splitMpesa = Number(mpesaAmount);
+  const splitOk =
+    payment !== "cash+mpesa" ||
+    (Number.isFinite(splitCash) &&
+      Number.isFinite(splitMpesa) &&
+      splitCash > 0 &&
+      splitMpesa > 0 &&
+      Math.round(splitCash + splitMpesa) === Math.round(totals.total));
+  const canComplete =
+    !saving && cartItemCount > 0 && !hasErrors && splitOk;
 
   async function completeSale() {
     if (!orgId) return;
@@ -515,6 +571,38 @@ export default function NewSalePage() {
       }
     }
 
+    let payments:
+      | { payment_method: PaymentMethod; amount: number }[]
+      | undefined;
+
+    if (payment === "cash+mpesa") {
+      const cash = Number(cashAmount);
+      const mpesa = Number(mpesaAmount);
+
+      if (!Number.isFinite(cash) || cash < 0 || !Number.isFinite(mpesa) || mpesa < 0) {
+        setErr("Enter valid cash and M-Pesa amounts.");
+        return;
+      }
+      if (cash <= 0 || mpesa <= 0) {
+        setErr("Both cash and M-Pesa amounts must be greater than 0 for a split payment.");
+        return;
+      }
+
+      const paid = Math.round(cash + mpesa);
+      const due = Math.round(totals.total);
+      if (paid !== due) {
+        setErr(
+          `Cash + M-Pesa must equal the sale total (${fmtMoney(due)}). Currently ${fmtMoney(paid)}.`
+        );
+        return;
+      }
+
+      payments = [
+        { payment_method: "cash", amount: cash },
+        { payment_method: "mpesa", amount: mpesa },
+      ];
+    }
+
     setSaving(true);
 
     try {
@@ -523,12 +611,15 @@ export default function NewSalePage() {
         payment_method: payment,
         items,
         sale_date: isAdmin ? saleDate : null,
+        payments,
       });
 
       localStorage.removeItem(CART_STORAGE_KEY);
       setCart([]);
       setCustomer("");
       setPayment("cash");
+      setCashAmount("");
+      setMpesaAmount("");
       setSaleDate(maxSaleDate);
 
       window.location.href = `/dashboard/sales?created=${encodeURIComponent(
@@ -577,7 +668,7 @@ export default function NewSalePage() {
             <button
               className={S.btnPrimary}
               onClick={completeSale}
-              disabled={saving || cartItemCount === 0 || hasErrors}
+              disabled={!canComplete}
             >
               {saving
                 ? "Processing…"
@@ -781,7 +872,64 @@ export default function NewSalePage() {
                 <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-500">
                   Payment method
                 </label>
-                <PaymentSelector value={payment} onChange={setPayment} />
+                <PaymentSelector value={payment} onChange={selectPayment} />
+
+                {payment === "cash+mpesa" && (
+                  <div className="mt-3 space-y-3 rounded-2xl border border-[#EADFC2] bg-[#FFFDF8] p-3">
+                    <p className="text-xs text-slate-500">
+                      Enter how much was paid in cash and M-Pesa. Amounts must
+                      add up to {fmtMoney(totals.total)}.
+                    </p>
+
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div>
+                        <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-500">
+                          Cash
+                        </label>
+                        <input
+                          className={S.input}
+                          type="number"
+                          min={0}
+                          step="1"
+                          placeholder="0"
+                          value={cashAmount}
+                          onChange={(e) => updateCashSplit(e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-500">
+                          M-Pesa
+                        </label>
+                        <input
+                          className={S.input}
+                          type="number"
+                          min={0}
+                          step="1"
+                          placeholder="0"
+                          value={mpesaAmount}
+                          onChange={(e) => updateMpesaSplit(e.target.value)}
+                        />
+                      </div>
+                    </div>
+
+                    {cashAmount !== "" && mpesaAmount !== "" && (
+                      <div
+                        className={`text-xs font-semibold ${
+                          Math.round(Number(cashAmount) + Number(mpesaAmount)) ===
+                          Math.round(totals.total)
+                            ? "text-green-600"
+                            : "text-red-500"
+                        }`}
+                      >
+                        Split total:{" "}
+                        {fmtMoney(Number(cashAmount) + Number(mpesaAmount))}
+                        {Math.round(Number(cashAmount) + Number(mpesaAmount)) !==
+                          Math.round(totals.total) &&
+                          ` (need ${fmtMoney(totals.total)})`}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -963,7 +1111,7 @@ export default function NewSalePage() {
                       payment
                     )}`}
                   >
-                    {PAYMENT_METHODS.find((m) => m.key === payment)?.label}
+                    {formatPaymentMethodLabel(payment)}
                   </span>
                 </div>
               )}
@@ -1007,7 +1155,7 @@ export default function NewSalePage() {
               <button
                 className={`${S.btnPrimary} w-full py-3 text-base`}
                 onClick={completeSale}
-                disabled={saving || cartItemCount === 0 || hasErrors}
+                disabled={!canComplete}
               >
                 {saving ? "Processing…" : "Complete sale"}
               </button>
@@ -1015,6 +1163,13 @@ export default function NewSalePage() {
               {hasErrors && (
                 <p className="mt-2 text-center text-xs font-semibold text-red-500">
                   Fix stock quantities above before completing.
+                </p>
+              )}
+
+              {!hasErrors && payment === "cash+mpesa" && !splitOk && (
+                <p className="mt-2 text-center text-xs font-semibold text-red-500">
+                  Cash and M-Pesa amounts must both be greater than 0 and add up
+                  to the total.
                 </p>
               )}
 

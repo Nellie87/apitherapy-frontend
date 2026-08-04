@@ -143,6 +143,26 @@ export function getPaymentStats(sales: SaleRowWithItems[]): PaymentStat[] {
   const map: Record<string, PaymentStat> = {};
 
   sales.forEach((sale) => {
+    const payments = sale.sale_payments ?? [];
+
+    if (payments.length > 0) {
+      payments.forEach((p) => {
+        const method = String(p.payment_method || "unknown").toLowerCase();
+
+        if (!map[method]) {
+          map[method] = {
+            method,
+            count: 0,
+            revenue: 0,
+          };
+        }
+
+        map[method].count += 1;
+        map[method].revenue += Number(p.amount ?? 0);
+      });
+      return;
+    }
+
     const method = String(sale.payment_method || "unknown").toLowerCase();
 
     if (!map[method]) {

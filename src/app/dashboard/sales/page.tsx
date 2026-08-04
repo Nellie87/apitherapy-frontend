@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { bootstrapOrg } from "@/lib/org/bootstrapOrg";
-import { listSales, type SaleRowWithItems } from "@/lib/api/sales";
+import { listSales, formatPaymentMethodLabel, type SaleRowWithItems } from "@/lib/api/sales";
 import { useOrgRole } from "@/contexts/OrgRoleContext";
 import * as S from "./page.styles";
 
@@ -96,6 +96,8 @@ function paymentPill(method?: string | null) {
 
   if (key === "cash") return "border-green-200 bg-green-50 text-green-700";
   if (key === "mpesa") return "border-blue-200 bg-blue-50 text-blue-700";
+  if (key === "cash+mpesa" || key === "split")
+    return "border-teal-200 bg-teal-50 text-teal-700";
   // if (key === "card") return "border-purple-200 bg-purple-50 text-purple-700";
   // if (key === "credit") return "border-amber-200 bg-amber-50 text-amber-700";
 
@@ -743,7 +745,10 @@ const kpis = useMemo(() => {
                           s.payment_method
                         )}`}
                       >
-                        {s.payment_method || "—"}
+                        {formatPaymentMethodLabel(
+                          s.payment_method,
+                          s.sale_payments
+                        )}
                       </span>
                     </div>
 
@@ -856,7 +861,10 @@ const kpis = useMemo(() => {
                           s.payment_method
                         )}`}
                       >
-                        {s.payment_method || "—"}
+                        {formatPaymentMethodLabel(
+                          s.payment_method,
+                          s.sale_payments
+                        )}
                       </span>
 
                       <span className="text-xs font-semibold text-slate-500">
