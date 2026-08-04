@@ -881,7 +881,7 @@ export default function NewSalePage() {
           <p className="mt-1 text-xs text-slate-400">Tap a product to add it.</p>
         </div>
       ) : (
-        <div className="flex-1 overflow-y-auto">
+        <div className="min-h-0 flex-1 overflow-y-auto">
           {cart.map((line) => (
             <CartLineEditor
               key={line.product_id}
@@ -1051,9 +1051,9 @@ export default function NewSalePage() {
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_min(100%,380px)] lg:items-start xl:grid-cols-[minmax(0,1fr)_400px] xl:gap-5">
         <section
-          className={`${S.card} flex min-h-[420px] flex-col overflow-hidden lg:min-h-[560px] lg:max-h-[calc(100vh-180px)]`}
+          className={`${S.card} flex max-h-[calc(100dvh-12rem)] min-h-[min(420px,calc(100dvh-12rem))] flex-col overflow-hidden lg:min-h-[560px] lg:max-h-[calc(100vh-180px)]`}
         >
-          <div className="sticky top-0 z-10 shrink-0 border-b border-slate-100 bg-white/95 p-3 backdrop-blur sm:p-4">
+          <div className="shrink-0 border-b border-slate-100 bg-white p-3 sm:p-4">
             <label className="block">
               <input
                 className={S.input}
@@ -1094,7 +1094,7 @@ export default function NewSalePage() {
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto overscroll-contain">
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
             {productList.length === 0 ? (
               <div className="flex min-h-[240px] flex-col items-center justify-center px-6 py-16 text-center">
                 <p className="text-sm font-bold text-slate-700">

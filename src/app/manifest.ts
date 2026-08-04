@@ -7,7 +7,7 @@ export default function manifest(): MetadataRoute.Manifest {
     description: "For all your apitherapy needs",
     start_url: "/login",
     display: "standalone",
-    background_color: "#fdf8ef",
+    background_color: "#fffaf0",
     theme_color: "#f5c200",
     categories: ["business", "productivity"],
     orientation: "any",
