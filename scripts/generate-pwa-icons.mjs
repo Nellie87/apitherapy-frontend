@@ -5,22 +5,39 @@ import path from "path";
 const out = path.join("public", "icons");
 fs.mkdirSync(out, { recursive: true });
 
-async function makeIcon(size, { maskable = false, filename }) {
-  const pad = maskable ? Math.round(size * 0.12) : Math.round(size * 0.08);
+/** Cream brand surface — matches manifest background_color */
+const BG = "#fdf8ef";
+/** Amber fill for maskable safe-zone icons */
+const BG_MASKABLE = "#f5c200";
+
+const markPath = path.join(out, "icon-mark-transparent.png");
+
+async function makeIcon(size, { maskable = false, filename, bg }) {
+  const background = bg ?? (maskable ? BG_MASKABLE : BG);
+  const pad = maskable ? Math.round(size * 0.18) : Math.round(size * 0.16);
   const inner = size - pad * 2;
-  const r = Math.round(inner * 0.5);
-  const svg = `
-<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
-  <rect width="${size}" height="${size}" fill="${maskable ? "#f5c200" : "#fdf8ef"}"/>
-  <circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="#f5c200"/>
-  <circle cx="${size / 2}" cy="${size / 2}" r="${Math.round(r * 0.82)}" fill="#e8a800"/>
-  <text x="50%" y="54%" text-anchor="middle" dominant-baseline="middle" font-family="Georgia, serif" font-size="${Math.round(size * 0.34)}" font-weight="700" fill="#2d2417">P</text>
-</svg>`;
-  await sharp(Buffer.from(svg)).png().toFile(path.join(out, filename));
+
+  const bee = await sharp(markPath)
+    .resize(inner, inner, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } })
+    .png()
+    .toBuffer();
+
+  await sharp({
+    create: {
+      width: size,
+      height: size,
+      channels: 3,
+      background,
+    },
+  })
+    .composite([{ input: bee, gravity: "centre" }])
+    .png()
+    .toFile(path.join(out, filename));
 }
 
 await makeIcon(192, { filename: "icon-192.png" });
 await makeIcon(512, { filename: "icon-512.png" });
 await makeIcon(512, { maskable: true, filename: "icon-512-maskable.png" });
 await makeIcon(180, { filename: "apple-touch-icon.png" });
+
 console.log("icons written", fs.readdirSync(out));
