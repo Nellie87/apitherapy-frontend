@@ -143,6 +143,22 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
     setMounted(true);
   }, []);
 
+  // Prevent mouse-wheel from changing focused amount/price/qty number inputs.
+  useEffect(() => {
+    const onWheel = (e: WheelEvent) => {
+      const t = e.target;
+      if (
+        t instanceof HTMLInputElement &&
+        t.type === "number" &&
+        document.activeElement === t
+      ) {
+        t.blur();
+      }
+    };
+    document.addEventListener("wheel", onWheel, { passive: true });
+    return () => document.removeEventListener("wheel", onWheel);
+  }, []);
+
   useEffect(() => {
     setMobileOpen(false);
   }, [pathname]);

@@ -56,11 +56,6 @@ const HISTORY_PAGE_SIZE = 10;
 /* ─────────────────────────────────────────────
    Helpers
 ───────────────────────────────────────────── */
-/** Stop mouse-wheel from changing focused number inputs while scrolling the page. */
-function blurNumberOnWheel(e: React.WheelEvent<HTMLInputElement>) {
-  e.currentTarget.blur();
-}
-
 function fmtMoney(v: number | string | null | undefined) {
   const n = Number(v || 0);
   return `Ksh ${n.toLocaleString("en-KE", {
@@ -1262,7 +1257,6 @@ export default function InventoryPage() {
                             type="number"
                             min={0}
                             defaultValue={reorder}
-                            onWheel={blurNumberOnWheel}
                             onBlur={(e) => {
                               const v = Number(e.target.value);
                               if (Number.isFinite(v) && v !== reorder) {
@@ -1298,7 +1292,6 @@ export default function InventoryPage() {
                             min={1}
                             placeholder="Qty"
                             value={restockQty[r.product_id] ?? ""}
-                            onWheel={blurNumberOnWheel}
                             onChange={(e) =>
                               setRestockQty((prev) => ({
                                 ...prev,
@@ -1373,7 +1366,6 @@ export default function InventoryPage() {
                               type="number"
                               min={0}
                               defaultValue={reorder}
-                              onWheel={blurNumberOnWheel}
                               onBlur={(e) => {
                                 const v = Number(e.target.value);
                                 if (Number.isFinite(v) && v !== reorder) {
@@ -1406,7 +1398,6 @@ export default function InventoryPage() {
                             min={1}
                             placeholder="Qty"
                             value={restockQty[r.product_id] ?? ""}
-                            onWheel={blurNumberOnWheel}
                             onChange={(e) =>
                               setRestockQty((prev) => ({
                                 ...prev,
@@ -1680,7 +1671,6 @@ export default function InventoryPage() {
                   type="number"
                   min={0}
                   value={addQty}
-                  onWheel={blurNumberOnWheel}
                   onChange={(e) => setAddQty(e.target.value)}
                 />
                 <p className="mt-2 text-xs text-slate-500">
@@ -1697,7 +1687,6 @@ export default function InventoryPage() {
                   type="number"
                   min={0}
                   value={addReorder}
-                  onWheel={blurNumberOnWheel}
                   onChange={(e) => setAddReorder(e.target.value)}
                 />
                 <p className="mt-2 text-xs text-slate-500">
@@ -1807,7 +1796,6 @@ export default function InventoryPage() {
                   type="number"
                   min={0}
                   value={adjustValue}
-                  onWheel={blurNumberOnWheel}
                   onChange={(e) => setAdjustValue(e.target.value)}
                 />
               </div>
