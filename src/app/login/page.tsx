@@ -160,10 +160,7 @@ export default function LoginPage() {
           <div className="showcase-glow" />
 
           <div className="hero-copy">
-            <div className="eyebrow">
-              <span className="eyebrow-dot" />
-              Pure Honey · Beekeeping · Apitherapy
-            </div>
+            
 
             <h2 className="hero-title">
               {isSignup ? (
@@ -177,43 +174,21 @@ export default function LoginPage() {
               )}
             </h2>
 
-            <p className="hero-desc">
-              {isSignup
-                ? "Create your account and start exploring pure honey, bee products, and apitherapy resources from our farm in Ruiru, Kenya."
-                : "Sign in to manage your orders, track deliveries, and access exclusive honey-care guides from Pollinator Beekeeping & Apitherapy."}
-            </p>
+           
 
-            <div className="stats">
-              <div className="stat">
-                <strong>100%</strong>
-                <span>Raw honey</span>
-              </div>
-              <div className="stat">
-                <strong>3 yrs</strong>
-                <span>Beekeeping</span>
-              </div>
-              <div className="stat">
-                <strong>Kenya</strong>
-                <span>Ruiru farm</span>
-              </div>
-            </div>
+           
           </div>
         </section>
 
         <section className="auth-card">
           <div className="card-top-bar" />
 
-          <p className="card-kicker">Kenya · Ruiru</p>
 
           <h4 className="card-title">
             Pollinator Beekeeping &amp; Apitherapy
           </h4>
 
-          <p className="card-subtitle">
-            {isSignup
-              ? "Create your account — it only takes a moment."
-              : "Welcome back. Sign in to continue."}
-          </p>
+          
 
           <div
             className="mode-pill"
