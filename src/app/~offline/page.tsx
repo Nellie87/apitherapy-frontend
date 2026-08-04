@@ -37,7 +37,7 @@ export default function OfflinePage() {
           Pollinator Beekeeping needs a connection for live data. Reconnect and try again.
         </p>
         <Link
-          href="/"
+          href="/login"
           style={{
             display: "inline-block",
             background: "#f5c200",

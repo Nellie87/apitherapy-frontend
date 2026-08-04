@@ -5,7 +5,7 @@ export default function manifest(): MetadataRoute.Manifest {
     name: "Pollinator Beekeeping",
     short_name: "Pollinator",
     description: "For all your apitherapy needs",
-    start_url: "/",
+    start_url: "/login",
     display: "standalone",
     background_color: "#fdf8ef",
     theme_color: "#f5c200",

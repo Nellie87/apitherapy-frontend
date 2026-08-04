@@ -13,7 +13,8 @@ import * as S from "../page.styles";
 ════════════════════════════════════════════════════════════════ */
 const fmtMoney   = (v: number) => `Ksh ${Number(v || 0).toLocaleString("en-KE", { maximumFractionDigits: 0 })}`;
 const fmtK       = (v: number) => v >= 1_000_000 ? `${(v/1_000_000).toFixed(1)}M` : v >= 1_000 ? `${(v/1_000).toFixed(0)}k` : String(Math.round(v));
-const iso        = (d: Date)   => d.toISOString().slice(0, 10);
+const iso        = (d: Date)   =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const fmtDate    = (ymd: string) => { try { const [y,m,d] = ymd.split("-").map(Number); return new Date(y,m-1,d).toLocaleDateString("en-KE",{day:"numeric",month:"short"}); } catch { return ymd; } };
 
 function defaultRange(): DateRange {

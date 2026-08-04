@@ -9,6 +9,8 @@ import type {
 } from "./sales-analytics.types";
 import { fmtPct, fmtShortDate, fmtValue } from "./sales-analytics.helpers";
 import { fmtMoney } from "../components/report-ui";
+import { PdfReportHeader } from "../components/PdfReportHeader";
+import { PDF_COMPANY_NAME, PDF_HEX } from "@/lib/pdfBrand";
 
 type Props = {
   mode: NavTab;
@@ -23,18 +25,18 @@ type Props = {
 };
 
 const colors = {
-  text: "#1f1b14",
-  muted: "#766b59",
-  lightMuted: "#9a9386",
-  line: "#eadfc2",
-  softLine: "#f1e6c9",
-  cream: "#fffdf8",
-  cream2: "#fff8e6",
-  honey: "#d6a324",
-  honeyDark: "#8a6a00",
-  dark: "#2f2718",
-  green: "#15803d",
-  red: "#b91c1c",
+  text: PDF_HEX.dark,
+  muted: PDF_HEX.muted,
+  lightMuted: PDF_HEX.lightMuted,
+  line: PDF_HEX.line,
+  softLine: PDF_HEX.softLine,
+  cream: PDF_HEX.creamSoft,
+  cream2: PDF_HEX.cream2,
+  honey: PDF_HEX.honey,
+  honeyDark: PDF_HEX.honeyDark,
+  dark: PDF_HEX.dark,
+  green: PDF_HEX.green,
+  red: PDF_HEX.red,
 };
 
 const page: CSSProperties = {
@@ -45,38 +47,6 @@ const page: CSSProperties = {
   padding: 38,
   fontFamily: "Arial, Helvetica, sans-serif",
   boxSizing: "border-box",
-};
-
-const header: CSSProperties = {
-  borderBottom: `4px solid ${colors.honey}`,
-  paddingBottom: 18,
-};
-
-const kicker: CSSProperties = {
-  color: colors.honeyDark,
-  fontSize: 10,
-  fontWeight: 800,
-  letterSpacing: 2.4,
-  textTransform: "uppercase",
-};
-
-const h1: CSSProperties = {
-  margin: "8px 0 0",
-  color: colors.text,
-  fontSize: 30,
-  lineHeight: 1.05,
-  fontWeight: 900,
-  letterSpacing: -1,
-};
-
-const metaRow: CSSProperties = {
-  marginTop: 10,
-  display: "flex",
-  justifyContent: "space-between",
-  gap: 16,
-  color: colors.muted,
-  fontSize: 11,
-  fontWeight: 700,
 };
 
 const grid4: CSSProperties = {
@@ -221,18 +191,15 @@ export function SalesAnalyticsPdfTemplate({
 
   return (
     <div id="sales-analytics-pdf-template" style={page}>
-      <header style={header}>
-        <div style={kicker}>Pollinator Beekeeping &amp; Apitherapy</div>
-        <h1 style={h1}>{isCompare ? "Sales Comparison Report" : "Sales Analytics Report"}</h1>
-        <div style={metaRow}>
-          <span>
-            {isCompare
-              ? `${compareA.from} to ${compareA.to} compared with ${compareB.from} to ${compareB.to}`
-              : `${fromDate} to ${toDate}`}
-          </span>
-          <span>Generated {generatedAt}</span>
-        </div>
-      </header>
+      <PdfReportHeader
+        title={isCompare ? "Sales Comparison Report" : "Sales Analytics Report"}
+        metaLeft={
+          isCompare
+            ? `${compareA.from} to ${compareA.to} compared with ${compareB.from} to ${compareB.to}`
+            : `${fromDate} to ${toDate}`
+        }
+        metaRight={`Generated ${generatedAt}`}
+      />
 
       {isCompare ? (
         <>
@@ -401,7 +368,7 @@ export function SalesAnalyticsPdfTemplate({
       )}
 
       <footer style={footer}>
-        Generated from the Pollinator dashboard. Values are based on sales records available at export time.
+        Generated from the {PDF_COMPANY_NAME} dashboard. Values are based on sales records available at export time.
       </footer>
     </div>
   );

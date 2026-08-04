@@ -1,41 +1,105 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import type { EmailOtpType } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
 
 export default function AuthConfirmPage() {
   const [status, setStatus] = useState<"loading" | "error">("loading");
   const [msg, setMsg] = useState("Preparing your workspace...");
+  const [isRecovery, setIsRecovery] = useState(false);
 
   useEffect(() => {
-    async function confirmInvite() {
+    let cancelled = false;
+
+    async function confirmAuthLink() {
       const supabase = createClient();
-      const hash = new URLSearchParams(window.location.hash.replace("#", ""));
+      const url = new URL(window.location.href);
+      const code = url.searchParams.get("code");
+      const token_hash = url.searchParams.get("token_hash");
+      const typeParam = url.searchParams.get("type");
+      const next = url.searchParams.get("next");
+      const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
 
-      const access_token = hash.get("access_token");
-      const refresh_token = hash.get("refresh_token");
+      let recovery =
+        typeParam === "recovery" ||
+        hash.get("type") === "recovery" ||
+        next === "/reset-password";
 
-      if (!access_token || !refresh_token) {
-        setStatus("error");
-        setMsg("This invite link is missing details. Please request a new invite.");
-        return;
-      }
+      setIsRecovery(recovery);
 
-      const { error } = await supabase.auth.setSession({
-        access_token,
-        refresh_token,
+      const {
+        data: { subscription },
+      } = supabase.auth.onAuthStateChange((event) => {
+        if (event === "PASSWORD_RECOVERY") {
+          recovery = true;
+        }
       });
 
-      if (error) {
+      try {
+        // Supabase email links (PKCE): ?token_hash=...&type=recovery|invite
+        if (token_hash && typeParam) {
+          const { error } = await supabase.auth.verifyOtp({
+            type: typeParam as EmailOtpType,
+            token_hash,
+          });
+          if (error) throw error;
+          if (typeParam === "recovery") recovery = true;
+        } else if (code) {
+          const { error } = await supabase.auth.exchangeCodeForSession(code);
+          if (error) throw error;
+        } else {
+          const access_token = hash.get("access_token");
+          const refresh_token = hash.get("refresh_token");
+
+          if (!access_token || !refresh_token) {
+            throw new Error(
+              recovery
+                ? "This password reset link is invalid or has expired. Please request a new one from the login page."
+                : "This invite link is missing details. Please request a new invite."
+            );
+          }
+
+          const { error } = await supabase.auth.setSession({
+            access_token,
+            refresh_token,
+          });
+          if (error) throw error;
+
+          if (hash.get("type") === "recovery") {
+            recovery = true;
+          }
+        }
+
+        if (cancelled) return;
+
+        setIsRecovery(recovery);
+
+        const destination = recovery
+          ? next || "/reset-password"
+          : next || "/set-password";
+
+        window.history.replaceState(null, "", "/auth/confirm");
+        window.location.href = destination;
+      } catch (e: unknown) {
+        if (cancelled) return;
+        setIsRecovery(recovery);
         setStatus("error");
-        setMsg(error.message);
-        return;
+        setMsg(
+          e instanceof Error
+            ? e.message
+            : "Something went wrong with this link."
+        );
+      } finally {
+        subscription.unsubscribe();
       }
+    }
 
-      window.history.replaceState(null, "", "/auth/confirm");
-window.location.href = "/set-password";    }
+    confirmAuthLink();
 
-    confirmInvite();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   return (
@@ -49,7 +113,13 @@ window.location.href = "/set-password";    }
         </div>
 
         <h1 className="mt-6 text-2xl font-black tracking-tight text-slate-950">
-          {status === "loading" ? "Confirming invite" : "Invite issue"}
+          {status === "loading"
+            ? isRecovery
+              ? "Confirming reset"
+              : "Confirming invite"
+            : isRecovery
+              ? "Reset issue"
+              : "Invite issue"}
         </h1>
 
         <p className="mt-3 text-sm leading-6 text-slate-500">{msg}</p>

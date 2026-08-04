@@ -7,6 +7,7 @@ import type {
   DailyStat,
   ProductStat,
   SortBy,
+  WeekdayStat,
 } from "./sales-analytics.types";
 import { fmtPct, fmtShortDate, fmtValue } from "./sales-analytics.helpers";
 
@@ -131,6 +132,82 @@ export function SimpleLineChart({ daily }: { daily: DailyStat[] }) {
           </text>
         ))}
       </svg>
+    </div>
+  );
+}
+
+export function WeekdayBars({ weekdays }: { weekdays: WeekdayStat[] }) {
+  const max = Math.max(...weekdays.map((d) => d.revenue), 1);
+  const withSales = weekdays.filter((d) => d.sales_count > 0);
+  const bestId = withSales.length
+    ? [...withSales].sort((a, b) => b.revenue - a.revenue)[0].weekday
+    : null;
+  const worstId =
+    withSales.length > 1
+      ? [...withSales].sort((a, b) => a.revenue - b.revenue)[0].weekday
+      : null;
+
+  if (!withSales.length) {
+    return (
+      <div className="rounded-[24px] border border-[#F1E6C9] bg-[#FFFDF8] py-12 text-center text-sm font-semibold text-slate-400">
+        No weekday pattern in this range.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {weekdays.map((d) => {
+        const pct = (d.revenue / max) * 100;
+        const isBest = d.weekday === bestId;
+        const isWorst = d.weekday === worstId;
+
+        return (
+          <div key={d.weekday} className="flex items-center gap-3">
+            <div className="w-10 shrink-0 text-xs font-black text-slate-600">
+              {d.shortLabel}
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="mb-1 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-slate-700">{d.label}</span>
+                  {isBest && (
+                    <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
+                      Best
+                    </span>
+                  )}
+                  {isWorst && (
+                    <span className="rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-bold text-red-700">
+                      Slowest
+                    </span>
+                  )}
+                </div>
+                <span className="text-xs font-black text-slate-950 tabular-nums">
+                  {fmtMoney(d.revenue)}
+                </span>
+              </div>
+              <div className="h-2 overflow-hidden rounded-full bg-[#F8F3E7]">
+                <div
+                  className={`h-full rounded-full ${
+                    isBest
+                      ? "bg-emerald-500"
+                      : isWorst
+                        ? "bg-red-400"
+                        : "bg-[#D6A324]"
+                  }`}
+                  style={{ width: `${Math.max(d.sales_count ? 3 : 0, pct)}%` }}
+                />
+              </div>
+              <div className="mt-1 text-[11px] font-semibold text-slate-400">
+                {d.sales_count} sale{d.sales_count !== 1 ? "s" : ""}
+                {d.sales_count
+                  ? ` · avg basket ${fmtMoney(d.avgBasket)}`
+                  : ""}
+              </div>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }

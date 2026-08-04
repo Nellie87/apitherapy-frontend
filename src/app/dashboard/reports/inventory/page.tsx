@@ -68,7 +68,10 @@ const fmtDate = (date: Date | null) => {
   });
 };
 
-const toISODate = (date: Date) => date.toISOString().slice(0, 10);
+const toISODate = (date: Date) =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
+    date.getDate()
+  ).padStart(2, "0")}`;
 
 function urgencyScore(r: InventoryValuationRow): number {
   if (r.status === "out") return 100;
@@ -165,6 +168,11 @@ async function exportInventoryPdf(params: {
 }) {
   const { rows, categoryData, totals, range } = params;
   const { jsPDF } = await import("jspdf");
+  const {
+    PDF_COMPANY_NAME,
+    PDF_RGB,
+    loadPdfLogoMarkDataUrl,
+  } = await import("@/lib/pdfBrand");
 
   const doc = new jsPDF("p", "mm", "a4");
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -180,6 +188,7 @@ async function exportInventoryPdf(params: {
 
     doc.setFont("helvetica", bold ? "bold" : "normal");
     doc.setFontSize(size);
+    doc.setTextColor(...PDF_RGB.dark);
     doc.text(text, 14, y);
     y += size > 12 ? 8 : 6;
   };
@@ -187,6 +196,7 @@ async function exportInventoryPdf(params: {
   const right = (text: string, x: number, yy: number, size = 9, bold = false) => {
     doc.setFont("helvetica", bold ? "bold" : "normal");
     doc.setFontSize(size);
+    doc.setTextColor(...PDF_RGB.dark);
     doc.text(text, x, yy, { align: "right" });
   };
 
@@ -195,8 +205,18 @@ async function exportInventoryPdf(params: {
       ? `${fmtDate(range.from) || "Start"} to ${fmtDate(range.to) || "Today"}`
       : "All available records";
 
-  doc.setFillColor(245, 158, 11);
+  doc.setFillColor(...PDF_RGB.honey);
   doc.rect(0, 0, pageWidth, 5, "F");
+
+  const logoData = await loadPdfLogoMarkDataUrl();
+  if (logoData) {
+    doc.addImage(logoData, "PNG", pageWidth - 28, 10, 14, 14);
+  }
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.setTextColor(...PDF_RGB.honeyDark);
+  doc.text(PDF_COMPANY_NAME.toUpperCase(), 14, 12);
 
   line("Inventory Analytics Report", 18, true);
   line(`Generated: ${fmtDate(new Date())}`, 9);
@@ -229,7 +249,7 @@ async function exportInventoryPdf(params: {
   right("Value", 195, y, 8, true);
   y += 4;
 
-  doc.setDrawColor(226, 232, 240);
+  doc.setDrawColor(...PDF_RGB.line);
   doc.line(14, y, 196, y);
   y += 5;
 

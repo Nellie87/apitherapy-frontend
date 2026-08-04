@@ -9,7 +9,11 @@ import * as S from "../page.styles";
 function fmtMoney(v: number) {
   return `Ksh ${Number(v || 0).toLocaleString("en-KE", { maximumFractionDigits: 0 })}`;
 }
-function iso(d: Date) { return d.toISOString().slice(0, 10); }
+function iso(d: Date) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+    d.getDate()
+  ).padStart(2, "0")}`;
+}
 function fmtK(v: number) { return v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(Math.round(v)); }
 
 /* ─── Spinner ────────────────────────────────────────────────── */

@@ -76,7 +76,9 @@ export default function LoginPage() {
     const supabase = createClient();
 
     const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-      redirectTo: `${window.location.origin}/auth/callback?next=/reset-password`,
+      // Use a stable path (no query string) so it matches Supabase redirect allowlists.
+      // /auth/callback?next=... is often rejected and falls back to Site URL (/auth/confirm).
+      redirectTo: `${window.location.origin}/reset-password`,
     });
 
     if (error) throw error;
@@ -323,9 +325,6 @@ export default function LoginPage() {
             </p>
           </div>
 
-          <a href="/" className="back-link">
-            Back to homepage
-          </a>
         </section>
       </div>
     </div>
