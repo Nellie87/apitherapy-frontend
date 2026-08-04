@@ -570,7 +570,15 @@ input::placeholder {
   opacity: 0.6;
   cursor: not-allowed;
 }
-.reset-card {
-  width: min(440px, calc(100% - 32px));
-  margin: auto;
+/* Single-column shell for reset/set-password flows (no showcase panel) */
+.reset-shell {
+  grid-template-columns: minmax(0, 460px);
+  justify-content: center;
+  max-width: 460px;
+}
+
+.reset-shell .auth-card {
+  width: 100%;
+  max-width: 460px;
+  margin: 0;
 }

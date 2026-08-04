@@ -122,16 +122,18 @@ export default function ResetPasswordPage() {
     return (
       <div className="login-page mode-login">
         <div className="top-accent" />
-        <section className="auth-card reset-card">
-          <div className="card-top-bar" />
-          <p className="card-kicker">Account Recovery</p>
-          <h4 className="card-title">Reset link issue</h4>
-          <p className="card-subtitle">{linkError}</p>
-          <div className="divider" />
-          <a href="/login" className="back-link">
-            Back to sign in
-          </a>
-        </section>
+        <div className="shell reset-shell">
+          <section className="auth-card">
+            <div className="card-top-bar" />
+            <p className="card-kicker">Account Recovery</p>
+            <h4 className="card-title">Reset link issue</h4>
+            <p className="card-subtitle">{linkError}</p>
+            <div className="divider" />
+            <a href="/login" className="back-link">
+              Back to sign in
+            </a>
+          </section>
+        </div>
       </div>
     );
   }
@@ -140,14 +142,16 @@ export default function ResetPasswordPage() {
     return (
       <div className="login-page mode-login">
         <div className="top-accent" />
-        <section className="auth-card reset-card">
-          <div className="card-top-bar" />
-          <p className="card-kicker">Account Recovery</p>
-          <h4 className="card-title">Verifying reset link...</h4>
-          <p className="card-subtitle">
-            Please wait while we confirm your password reset request.
-          </p>
-        </section>
+        <div className="shell reset-shell">
+          <section className="auth-card">
+            <div className="card-top-bar" />
+            <p className="card-kicker">Account Recovery</p>
+            <h4 className="card-title">Verifying reset link...</h4>
+            <p className="card-subtitle">
+              Please wait while we confirm your password reset request.
+            </p>
+          </section>
+        </div>
       </div>
     );
   }
@@ -156,68 +160,71 @@ export default function ResetPasswordPage() {
     <div className="login-page mode-login">
       <div className="top-accent" />
 
-      <section className="auth-card reset-card">
-        <div className="card-top-bar" />
+      <div className="shell reset-shell">
+        <section className="auth-card">
+          <div className="card-top-bar" />
 
-        <p className="card-kicker">Account Recovery</p>
+          <p className="card-kicker">Account Recovery</p>
 
-        <h4 className="card-title">Set New Password</h4>
+          <h4 className="card-title">Set New Password</h4>
 
-        <p className="card-subtitle">
-          Enter a new password for your Pollinator Beekeeping &amp; Apitherapy account.
-        </p>
+          <p className="card-subtitle">
+            Enter a new password for your Pollinator Beekeeping &amp; Apitherapy
+            account.
+          </p>
 
-        <div className="divider" />
+          <div className="divider" />
 
-        <div className="form-group">
-          <div className="field">
-            <label htmlFor="password">New password</label>
-            <div className="input-group">
-              <input
-                id="password"
-                type="password"
-                placeholder="Enter your new password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleResetPassword()}
-              />
+          <div className="form-group">
+            <div className="field">
+              <label htmlFor="password">New password</label>
+              <div className="input-group">
+                <input
+                  id="password"
+                  type="password"
+                  placeholder="Enter your new password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleResetPassword()}
+                />
+              </div>
             </div>
+
+            <div className="field">
+              <label htmlFor="confirmPassword">Confirm password</label>
+              <div className="input-group">
+                <input
+                  id="confirmPassword"
+                  type="password"
+                  placeholder="Confirm your new password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleResetPassword()}
+                />
+              </div>
+            </div>
+
+            {msg && (
+              <div className={`message ${isSuccess ? "success" : "error"}`}>
+                {msg}
+              </div>
+            )}
+
+            <button
+              type="button"
+              className="btn-submit"
+              onClick={handleResetPassword}
+              disabled={loading}
+            >
+              {loading ? "Updating..." : "Update Password"}
+            </button>
           </div>
 
-          <div className="field">
-            <label htmlFor="confirmPassword">Confirm password</label>
-            <div className="input-group">
-              <input
-                id="confirmPassword"
-                type="password"
-                placeholder="Confirm your new password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleResetPassword()}
-              />
-            </div>
-          </div>
-
-          {msg && (
-            <div className={`message ${isSuccess ? "success" : "error"}`}>
-              {msg}
-            </div>
-          )}
-
-          <button
-            type="button"
-            className="btn-submit"
-            onClick={handleResetPassword}
-            disabled={loading}
-          >
-            {loading ? "Updating..." : "Update Password"}
-          </button>
-        </div>
-
-        <a href="/login" className="back-link">
-          Back to sign in
-        </a>
-      </section>
+          <a href="/login" className="back-link">
+            Back to sign in
+          </a>
+        </section>
+      </div>
     </div>
   );
 }
