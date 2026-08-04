@@ -272,12 +272,19 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
     mobile?: boolean;
   }) {
     const isActive = pathname === href || pathname.startsWith(href + "/");
+    const isCurrentPage = pathname === href;
 
     return (
       <Link
         href={href}
         className={`${mobile ? "mobile-menu-link" : "nav-link"} ${isActive ? "active" : ""}`}
         title={collapsed && !mobile ? label : undefined}
+        onClick={(e) => {
+          // Close immediately so nav doesn't look hung while the route loads.
+          if (mobile) setMobileOpen(false);
+          // Already here — just dismiss the menu; same-route nav can feel stuck.
+          if (isCurrentPage) e.preventDefault();
+        }}
       >
         <span className="nav-icon">{Icons[icon]}</span>
         {(!collapsed || mobile) && <span className="nav-label">{label}</span>}
