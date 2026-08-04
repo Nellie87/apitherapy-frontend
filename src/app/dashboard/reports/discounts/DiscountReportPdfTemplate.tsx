@@ -1,4 +1,6 @@
 import type { DiscountReportRow } from "@/lib/api/reports";
+import { PdfReportHeader } from "../components/PdfReportHeader";
+import { PDF_COMPANY_NAME, PDF_HEX } from "@/lib/pdfBrand";
 
 type CategoryStat = {
   category: string;
@@ -29,24 +31,24 @@ type Totals = {
 const page = {
   width: "794px",
   minHeight: "1123px",
-  background: "#ffffff",
-  color: "#1f1b14",
+  background: PDF_HEX.white,
+  color: PDF_HEX.dark,
   fontFamily: "Arial, Helvetica, sans-serif",
   padding: "34px",
   boxSizing: "border-box" as const,
 };
 
 const card = {
-  border: "1px solid #eadfc2",
+  border: `1px solid ${PDF_HEX.line}`,
   borderRadius: "18px",
   padding: "14px",
-  background: "#fffdf8",
+  background: PDF_HEX.creamSoft,
 };
 
 const th = {
   padding: "9px 8px",
-  borderBottom: "1px solid #eadfc2",
-  color: "#6f5b2b",
+  borderBottom: `1px solid ${PDF_HEX.line}`,
+  color: PDF_HEX.honeyDark,
   fontSize: "10px",
   textTransform: "uppercase" as const,
   letterSpacing: "0.08em",
@@ -55,9 +57,9 @@ const th = {
 
 const td = {
   padding: "9px 8px",
-  borderBottom: "1px solid #f1e6c9",
+  borderBottom: `1px solid ${PDF_HEX.softLine}`,
   fontSize: "11px",
-  color: "#334155",
+  color: PDF_HEX.body,
   verticalAlign: "top" as const,
 };
 
@@ -106,33 +108,10 @@ export function DiscountReportPdfTemplate({
 
   return (
     <div id="discount-report-pdf" style={page}>
-      <header
-        style={{
-          borderBottom: "3px solid #d6a324",
-          paddingBottom: "18px",
-          marginBottom: "20px",
-        }}
-      >
-        <div
-          style={{
-            fontSize: "11px",
-            textTransform: "uppercase",
-            letterSpacing: "0.16em",
-            color: "#8a6a00",
-            fontWeight: 700,
-          }}
-        >
-          Pollinator Beekeeping & Apitherapy
-        </div>
-
-        <h1 style={{ margin: "8px 0 6px", fontSize: "28px", lineHeight: 1.1 }}>
-          Discount Report
-        </h1>
-
-        <div style={{ fontSize: "12px", color: "#64748b" }}>
-          {from} to {to} · {category === "all" ? "All categories" : category}
-        </div>
-      </header>
+      <PdfReportHeader
+        title="Discount Report"
+        subtitle={`${from} to ${to} · ${category === "all" ? "All categories" : category}`}
+      />
 
       <section
         style={{
@@ -143,7 +122,7 @@ export function DiscountReportPdfTemplate({
         }}
       >
         <div style={card}>
-          <div style={{ fontSize: "9px", color: "#8a6a00", fontWeight: 700 }}>
+          <div style={{ fontSize: "9px", color: PDF_HEX.honeyDark, fontWeight: 700 }}>
             TOTAL DISCOUNTS
           </div>
           <div style={{ marginTop: "7px", fontSize: "18px", fontWeight: 800 }}>
@@ -152,7 +131,7 @@ export function DiscountReportPdfTemplate({
         </div>
 
         <div style={card}>
-          <div style={{ fontSize: "9px", color: "#8a6a00", fontWeight: 700 }}>
+          <div style={{ fontSize: "9px", color: PDF_HEX.honeyDark, fontWeight: 700 }}>
             AFFECTED SALES
           </div>
           <div style={{ marginTop: "7px", fontSize: "18px", fontWeight: 800 }}>
@@ -161,7 +140,7 @@ export function DiscountReportPdfTemplate({
         </div>
 
         <div style={card}>
-          <div style={{ fontSize: "9px", color: "#8a6a00", fontWeight: 700 }}>
+          <div style={{ fontSize: "9px", color: PDF_HEX.honeyDark, fontWeight: 700 }}>
             DISCOUNTED QTY
           </div>
           <div style={{ marginTop: "7px", fontSize: "18px", fontWeight: 800 }}>
@@ -170,7 +149,7 @@ export function DiscountReportPdfTemplate({
         </div>
 
         <div style={card}>
-          <div style={{ fontSize: "9px", color: "#8a6a00", fontWeight: 700 }}>
+          <div style={{ fontSize: "9px", color: PDF_HEX.honeyDark, fontWeight: 700 }}>
             DISCOUNT RATE
           </div>
           <div style={{ marginTop: "7px", fontSize: "18px", fontWeight: 800 }}>
@@ -184,7 +163,7 @@ export function DiscountReportPdfTemplate({
           Discount vs Sales Influence
         </h2>
 
-        <p style={{ margin: "0 0 12px", color: "#64748b", fontSize: "11px" }}>
+        <p style={{ margin: "0 0 12px", color: PDF_HEX.muted, fontSize: "11px" }}>
           {discountInfluence.conclusion}
         </p>
 
@@ -288,12 +267,12 @@ export function DiscountReportPdfTemplate({
         style={{
           marginTop: "24px",
           paddingTop: "12px",
-          borderTop: "1px solid #eadfc2",
-          color: "#94a3b8",
+          borderTop: `1px solid ${PDF_HEX.line}`,
+          color: PDF_HEX.lightMuted,
           fontSize: "10px",
         }}
       >
-        Generated from Pollinator dashboard.
+        Generated from the {PDF_COMPANY_NAME} dashboard.
       </footer>
     </div>
   );

@@ -13,13 +13,13 @@ import { exportElementToPdf } from "@/lib/exportPdf";
 
 import { bootstrapOrg } from "@/lib/org/bootstrapOrg";
 import { listSales, type SaleRowWithItems } from "@/lib/api/sales";
+import { listInventory, type InventoryRow } from "@/lib/api/inventory";
 import * as S from "../page.styles";
 
 import {
   Card,
   ErrorBanner,
   ReportHeader,
-  ReportsBackButton,
   SegControl,
   Spinner,
   fmtMoney,
@@ -28,19 +28,20 @@ import {
 import type { NavTab, SortBy } from "./sales-analytics.types";
 
 import {
+  bestAndWorstWeekday,
   buildCompareMetrics,
   buildPeriodSummary,
-  endOfMonthYMD,
-  fmtPct,
   fmtShortDate,
-  fmtValue,
-  startOfMonthYMD,
+  getDeadStock,
+  previousEqualRange,
+  saleDateYMD,
 } from "./sales-analytics.helpers";
 
 import {
   CompareBars,
   ProductBar,
   SimpleLineChart,
+  WeekdayBars,
 } from "./sales-analytics.charts";
 import { SalesAnalyticsPdfTemplate } from "./SalesAnalyticsPdfTemplate";
 
@@ -73,14 +74,9 @@ function isCancelledSale(status?: string | null) {
   );
 }
 
-function isInDateRange(createdAt: string, from: string, to: string) {
-  const d = new Date(createdAt);
-  const fromDate = localIsoToDate(from);
-  const toDate = localIsoToDate(to);
-  if (!fromDate || !toDate) return true;
-  fromDate.setHours(0, 0, 0, 0);
-  toDate.setHours(23, 59, 59, 999);
-  return d >= fromDate && d <= toDate;
+function isInDateRange(sale: SaleRowWithItems, from: string, to: string) {
+  const day = saleDateYMD(sale);
+  return day >= from && day <= to;
 }
 
 const getPresetRange = (preset: Exclude<RangePreset, "custom">) => {
@@ -160,89 +156,144 @@ function pctChange(a: number, b: number) {
   return ((b - a) / Math.abs(a)) * 100;
 }
 
-function buildInsights(summary: ReturnType<typeof buildPeriodSummary>) {
-  if (!summary.daily.length) return [];
+function buildInsights(
+  summary: ReturnType<typeof buildPeriodSummary>,
+  deadStock: ReturnType<typeof getDeadStock>,
+) {
+  if (!summary.daily.length && !deadStock.length) return [];
 
-  const sortedDays = [...summary.daily].sort((a, b) => b.total - a.total);
-  const best = sortedDays[0];
-  const worst = sortedDays[sortedDays.length - 1];
+  const insights: {
+    type: string;
+    title: string;
+    detail: string;
+  }[] = [];
 
-  const sortedProducts = [...summary.products].sort(
-    (a, b) => b.revenue - a.revenue,
-  );
+  if (summary.daily.length) {
+    const sortedDays = [...summary.daily].sort((a, b) => b.total - a.total);
+    const best = sortedDays[0];
+    const worst = sortedDays[sortedDays.length - 1];
 
-  const top = sortedProducts[0];
-  const bottom = sortedProducts[sortedProducts.length - 1];
+    const sortedProducts = [...summary.products].sort(
+      (a, b) => b.revenue - a.revenue,
+    );
 
-  const discountRate = summary.gross
-    ? (summary.discounts / summary.gross) * 100
-    : 0;
+    const top = sortedProducts[0];
+    const bottom = sortedProducts[sortedProducts.length - 1];
 
-  const midpoint = Math.floor(summary.daily.length / 2);
+    const discountRate = summary.gross
+      ? (summary.discounts / summary.gross) * 100
+      : 0;
 
-  const firstHalf =
-    summary.daily.slice(0, midpoint).reduce((sum, d) => sum + d.total, 0) /
-    (midpoint || 1);
+    const midpoint = Math.floor(summary.daily.length / 2);
 
-  const secondHalf =
-    summary.daily.slice(midpoint).reduce((sum, d) => sum + d.total, 0) /
-    (summary.daily.length - midpoint || 1);
+    const firstHalf =
+      summary.daily.slice(0, midpoint).reduce((sum, d) => sum + d.total, 0) /
+      (midpoint || 1);
 
-  const trend = pctChange(firstHalf, secondHalf) ?? 0;
+    const secondHalf =
+      summary.daily.slice(midpoint).reduce((sum, d) => sum + d.total, 0) /
+      (summary.daily.length - midpoint || 1);
 
-  return [
-    {
-      type: trend >= 0 ? "positive" : "negative",
-      title: `Revenue ${trend >= 0 ? "improved" : "declined"} ${Math.abs(
-        trend,
-      ).toFixed(1)}%`,
-      detail:
-        trend >= 0
-          ? "Sales momentum improved across the selected period."
-          : "Sales momentum softened across the selected period.",
-    },
-    {
-      type: "positive",
-      title: `Best day · ${fmtShortDate(best.day)}`,
-      detail: `${fmtMoney(best.total)} from ${best.sales_count} transaction${
-        best.sales_count !== 1 ? "s" : ""
-      }.`,
-    },
-    {
-      type: "warning",
-      title: `Lowest day · ${fmtShortDate(worst.day)}`,
-      detail: `${fmtMoney(worst.total)} from ${worst.sales_count} transaction${
-        worst.sales_count !== 1 ? "s" : ""
-      }.`,
-    },
-    ...(top
-      ? [
-          {
-            type: "positive",
-            title: `Top product · ${top.name}`,
-            detail: `${fmtMoney(top.revenue)} revenue · ${top.qty} unit${
-              top.qty !== 1 ? "s" : ""
-            } sold.`,
-          },
-        ]
-      : []),
-    ...(bottom && sortedProducts.length > 1
-      ? [
-          {
-            type: "negative",
-            title: `Needs attention · ${bottom.name}`,
-            detail: `${fmtMoney(bottom.revenue)} revenue · ${bottom.qty} unit${
-              bottom.qty !== 1 ? "s" : ""
-            } sold.`,
-          },
-        ]
-      : []),
-    {
+    const trend = pctChange(firstHalf, secondHalf) ?? 0;
+    const { best: bestWd, worst: worstWd } = bestAndWorstWeekday(
+      summary.weekdays,
+    );
+
+    insights.push(
+      {
+        type: trend >= 0 ? "positive" : "negative",
+        title: `Revenue ${trend >= 0 ? "improved" : "declined"} ${Math.abs(
+          trend,
+        ).toFixed(1)}%`,
+        detail:
+          trend >= 0
+            ? "Sales momentum improved across the selected period."
+            : "Sales momentum softened across the selected period.",
+      },
+      {
+        type: "positive",
+        title: `Best day · ${fmtShortDate(best.day)}`,
+        detail: `${fmtMoney(best.total)} from ${best.sales_count} transaction${
+          best.sales_count !== 1 ? "s" : ""
+        }.`,
+      },
+      {
+        type: "warning",
+        title: `Lowest day · ${fmtShortDate(worst.day)}`,
+        detail: `${fmtMoney(worst.total)} from ${worst.sales_count} transaction${
+          worst.sales_count !== 1 ? "s" : ""
+        }.`,
+      },
+    );
+
+    if (bestWd) {
+      insights.push({
+        type: "positive",
+        title: `Best weekday · ${bestWd.label}`,
+        detail: `${fmtMoney(bestWd.revenue)} across ${bestWd.sales_count} sale${
+          bestWd.sales_count !== 1 ? "s" : ""
+        } · avg basket ${fmtMoney(bestWd.avgBasket)}.`,
+      });
+    }
+
+    if (worstWd && worstWd.weekday !== bestWd?.weekday) {
+      insights.push({
+        type: "warning",
+        title: `Slowest weekday · ${worstWd.label}`,
+        detail: `${fmtMoney(worstWd.revenue)} across ${worstWd.sales_count} sale${
+          worstWd.sales_count !== 1 ? "s" : ""
+        }. Consider promos or staffing changes.`,
+      });
+    }
+
+    if (top) {
+      insights.push({
+        type: "positive",
+        title: `Top product · ${top.name}`,
+        detail: `${fmtMoney(top.revenue)} revenue · ${top.qty} unit${
+          top.qty !== 1 ? "s" : ""
+        } sold.`,
+      });
+    }
+
+    if (bottom && sortedProducts.length > 1) {
+      insights.push({
+        type: "negative",
+        title: `Needs attention · ${bottom.name}`,
+        detail: `${fmtMoney(bottom.revenue)} revenue · ${bottom.qty} unit${
+          bottom.qty !== 1 ? "s" : ""
+        } sold.`,
+      });
+    }
+
+    insights.push({
       type: discountRate > 10 ? "warning" : "neutral",
       title: "Discount impact",
       detail: `${discountRate.toFixed(1)}% of gross revenue was discounted.`,
-    },
-  ];
+    });
+  }
+
+  const neverSold = deadStock.filter((d) => d.never_sold);
+  const dormant = deadStock.filter((d) => !d.never_sold);
+  const tiedCost = deadStock.reduce((sum, d) => sum + d.cost_value, 0);
+
+  if (deadStock.length) {
+    insights.push({
+      type: "warning",
+      title: `${deadStock.length} dead-stock product${
+        deadStock.length !== 1 ? "s" : ""
+      }`,
+      detail: `${fmtMoney(tiedCost)} at cost sitting with no sales in this range${
+        neverSold.length
+          ? ` · ${neverSold.length} never sold`
+          : dormant.length
+            ? ` · oldest last sold ${dormant[0]?.days_since_sale ?? "?"} days ago`
+            : ""
+      }.`,
+    });
+  }
+
+  return insights;
 }
 
 function CleanPanel({ children }: { children: React.ReactNode }) {
@@ -567,10 +618,12 @@ function SalesDateRangePicker({
 export default function SalesAnalyticsPage() {
   const [orgId, setOrgId] = useState<string | null>(null);
   const [allSales, setAllSales] = useState<SaleRowWithItems[]>([]);
+  const [inventory, setInventory] = useState<InventoryRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
 
   const initialRange = getPresetRange("30d");
+  const initialCompareA = previousEqualRange(initialRange.from, initialRange.to);
 
   const [rangePreset, setRangePreset] = useState<RangePreset>("30d");
   const [fromDate, setFromDate] = useState(initialRange.from);
@@ -581,20 +634,12 @@ export default function SalesAnalyticsPage() {
   const [tab, setTab] = useState<NavTab>("overview");
   const [sortBy, setSortBy] = useState<SortBy>("revenue");
   const [exportingPdf, setExportingPdf] = useState(false);
+  const [compareSynced, setCompareSynced] = useState(true);
 
-  const now = new Date();
-  const currentYear = now.getFullYear();
-
-  const [compareAFrom, setCompareAFrom] = useState(
-    startOfMonthYMD(currentYear - 1, 0),
-  );
-  const [compareATo, setCompareATo] = useState(
-    endOfMonthYMD(currentYear - 1, 0),
-  );
-  const [compareBFrom, setCompareBFrom] = useState(
-    startOfMonthYMD(currentYear, 0),
-  );
-  const [compareBTo, setCompareBTo] = useState(endOfMonthYMD(currentYear, 0));
+  const [compareAFrom, setCompareAFrom] = useState(initialCompareA.from);
+  const [compareATo, setCompareATo] = useState(initialCompareA.to);
+  const [compareBFrom, setCompareBFrom] = useState(initialRange.from);
+  const [compareBTo, setCompareBTo] = useState(initialRange.to);
 
   useEffect(() => {
     (async () => {
@@ -618,8 +663,14 @@ export default function SalesAnalyticsPage() {
       setErr("");
 
       try {
-        const data = await listSales(orgId);
-        if (live) setAllSales(data);
+        const [salesData, inventoryData] = await Promise.all([
+          listSales(orgId),
+          listInventory(orgId),
+        ]);
+        if (live) {
+          setAllSales(salesData);
+          setInventory(inventoryData);
+        }
       } catch (e: any) {
         if (live) setErr(e.message ?? String(e));
       } finally {
@@ -632,13 +683,32 @@ export default function SalesAnalyticsPage() {
     };
   }, [orgId]);
 
+  useEffect(() => {
+    if (!compareSynced) return;
+    const prev = previousEqualRange(fromDate, toDate);
+    setCompareBFrom(fromDate);
+    setCompareBTo(toDate);
+    setCompareAFrom(prev.from);
+    setCompareATo(prev.to);
+  }, [fromDate, toDate, compareSynced]);
+
+  const applyMainRange = useCallback(
+    (preset: RangePreset, from: string, to: string) => {
+      setRangePreset(preset);
+      setFromDate(from);
+      setToDate(to);
+      setCompareSynced(true);
+    },
+    [],
+  );
+
   const activeSalesForSummary = useMemo(
     () => allSales.filter((sale) => !isCancelledSale(sale.status)),
     [allSales],
   );
 
   const currentAuditRows = useMemo(
-    () => allSales.filter((sale) => isInDateRange(sale.created_at, fromDate, toDate)),
+    () => allSales.filter((sale) => isInDateRange(sale, fromDate, toDate)),
     [allSales, fromDate, toDate],
   );
 
@@ -697,9 +767,52 @@ export default function SalesAnalyticsPage() {
     [currentSummary.products, sortBy],
   );
 
+  const deadStock = useMemo(() => {
+    const stockInput = inventory.map((row) => {
+      const product = row.products;
+      const sizeLabel =
+        product?.quantity_value && product?.quantity_unit
+          ? `${product.quantity_value}${product.quantity_unit}`
+          : null;
+      const name = [product?.name ?? "Unknown product", sizeLabel]
+        .filter(Boolean)
+        .join(" · ");
+
+      return {
+        product_id: row.product_id,
+        name,
+        qty_on_hand: Number(row.qty_on_hand ?? 0),
+        cost_price: product?.cost_price ?? null,
+        unit_price: product?.unit_price ?? null,
+      };
+    });
+
+    return getDeadStock({
+      inventory: stockInput,
+      allSales: activeSalesForSummary,
+      from: fromDate,
+      to: toDate,
+    });
+  }, [inventory, activeSalesForSummary, fromDate, toDate]);
+
+  const neverSoldStock = useMemo(
+    () => deadStock.filter((d) => d.never_sold),
+    [deadStock],
+  );
+
   const insights = useMemo(
-    () => buildInsights(currentSummary),
-    [currentSummary],
+    () => buildInsights(currentSummary, deadStock),
+    [currentSummary, deadStock],
+  );
+
+  const weekdayHighlight = useMemo(
+    () => bestAndWorstWeekday(currentSummary.weekdays),
+    [currentSummary.weekdays],
+  );
+
+  const deadStockCost = useMemo(
+    () => deadStock.reduce((sum, d) => sum + d.cost_value, 0),
+    [deadStock],
   );
 
   const discountRate = currentSummary.gross
@@ -780,6 +893,7 @@ export default function SalesAnalyticsPage() {
               options={[
                 { value: "overview", label: "Overview" },
                 { value: "products", label: "Products" },
+                { value: "stock", label: "Dead stock" },
                 { value: "compare", label: "Compare" },
                 { value: "insights", label: "Insights" },
               ]}
@@ -816,9 +930,7 @@ export default function SalesAnalyticsPage() {
                     valueFrom={fromDate}
                     valueTo={toDate}
                     onApply={(preset, from, to) => {
-                      setRangePreset(preset);
-                      setFromDate(from);
-                      setToDate(to);
+                      applyMainRange(preset, from, to);
                     }}
                     onClose={() => setShowDatePicker(false)}
                   />
@@ -860,6 +972,7 @@ export default function SalesAnalyticsPage() {
                       valueFrom={compareAFrom}
                       valueTo={compareATo}
                       onApply={(_, from, to) => {
+                        setCompareSynced(false);
                         setCompareAFrom(from);
                         setCompareATo(to);
                       }}
@@ -900,6 +1013,7 @@ export default function SalesAnalyticsPage() {
                       valueFrom={compareBFrom}
                       valueTo={compareBTo}
                       onApply={(_, from, to) => {
+                        setCompareSynced(false);
                         setCompareBFrom(from);
                         setCompareBTo(to);
                       }}
@@ -916,7 +1030,7 @@ export default function SalesAnalyticsPage() {
       {err && <ErrorBanner message={err} onClose={() => setErr("")} />}
       {loading && <Spinner h={200} />}
 
-      {!loading && !err && tab !== "compare" && (
+      {!loading && !err && tab !== "compare" && tab !== "stock" && (
         <>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-6">
             <CleanKpi
@@ -975,11 +1089,126 @@ export default function SalesAnalyticsPage() {
         </>
       )}
 
+      {!loading && !err && tab === "stock" && (
+        <>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <CleanKpi
+              label="Dead stock SKUs"
+              value={String(deadStock.length)}
+              sub={`In stock with 0 sales · ${fromDate} → ${toDate}`}
+              tone={deadStock.length > 0 ? "warning" : "neutral"}
+            />
+            <CleanKpi
+              label="Never sold"
+              value={String(neverSoldStock.length)}
+              sub="Products with stock and no sales history"
+              tone={neverSoldStock.length > 0 ? "danger" : "neutral"}
+            />
+            <CleanKpi
+              label="Tied-up cost"
+              value={fmtMoney(deadStockCost)}
+              sub="Inventory cost with no sales in range"
+              tone={deadStockCost > 0 ? "warning" : "neutral"}
+            />
+            <CleanKpi
+              label="Retail at risk"
+              value={fmtMoney(
+                deadStock.reduce((sum, d) => sum + d.retail_value, 0),
+              )}
+              sub="Retail value of unsold stock"
+            />
+          </div>
+
+          {deadStock.length === 0 ? (
+            <CleanEmpty
+              title="No dead stock in this range"
+              detail="Every in-stock product recorded at least one sale in the selected dates."
+            />
+          ) : (
+            <Card
+              title="Products with no sales"
+              sub="In-stock items that did not sell in the selected date range"
+              noPad
+            >
+              <div
+                className={`${S.tableHead} hidden border-b border-[#F1E6C9] bg-[#FFFDF8] px-5 py-3 sm:grid`}
+                style={{
+                  gridTemplateColumns: "2fr 0.7fr 1fr 1fr 1.2fr",
+                }}
+              >
+                <div>Product</div>
+                <div className="text-right">Qty</div>
+                <div className="text-right">Cost value</div>
+                <div className="text-right">Retail value</div>
+                <div className="text-right">Last sold</div>
+              </div>
+
+              <div className="max-h-[32rem] divide-y divide-slate-100 overflow-y-auto">
+                {deadStock.map((row) => (
+                  <div
+                    key={row.product_id}
+                    className="grid gap-3 px-5 py-4 text-sm transition-colors hover:bg-[#FFFDF8] sm:grid-cols-[2fr_0.7fr_1fr_1fr_1.2fr] sm:items-center"
+                  >
+                    <div className="min-w-0">
+                      <div className="truncate font-bold text-slate-900">
+                        {row.name}
+                      </div>
+                      {row.never_sold ? (
+                        <span className="mt-1 inline-flex rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-bold text-red-700">
+                          Never sold
+                        </span>
+                      ) : (
+                        <span className="mt-1 inline-flex rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-800">
+                          No sales in range
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-slate-600 sm:text-right sm:tabular-nums">
+                      {row.qty_on_hand.toLocaleString("en-KE")}
+                    </div>
+                    <div className="font-bold text-slate-900 sm:text-right sm:tabular-nums">
+                      {fmtMoney(row.cost_value)}
+                    </div>
+                    <div className="text-slate-600 sm:text-right sm:tabular-nums">
+                      {fmtMoney(row.retail_value)}
+                    </div>
+                    <div className="text-slate-500 sm:text-right">
+                      {row.never_sold
+                        ? "—"
+                        : row.last_sold_at
+                          ? `${fmtShortDate(row.last_sold_at)}${
+                              row.days_since_sale != null
+                                ? ` · ${row.days_since_sale}d ago`
+                                : ""
+                            }`
+                          : "—"}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
+        </>
+      )}
+
       {!loading && !err && currentSummary.sales > 0 && tab === "overview" && (
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
           <div className="flex flex-col gap-6 xl:col-span-8">
             <Card title="Revenue Trend" sub={`${fromDate} → ${toDate}`}>
               <SimpleLineChart daily={currentSummary.daily} />
+            </Card>
+
+            <Card
+              title="Sales by weekday"
+              sub={
+                weekdayHighlight.best
+                  ? `Best: ${weekdayHighlight.best.label} · Slowest: ${
+                      weekdayHighlight.worst?.label ?? "—"
+                    }`
+                  : "Revenue pattern across days of the week"
+              }
+            >
+              <WeekdayBars weekdays={currentSummary.weekdays} />
             </Card>
 
             <Card title="Top Products" sub="Highest product contribution">
@@ -1054,6 +1283,33 @@ export default function SalesAnalyticsPage() {
                 </div>
               </div>
             </Card>
+
+            {deadStock.length > 0 && (
+              <Card
+                title="Dead stock alert"
+                sub={`${deadStock.length} SKU${deadStock.length !== 1 ? "s" : ""} with no sales`}
+              >
+                <div className="space-y-2">
+                  <div className="text-2xl font-black text-slate-950">
+                    {fmtMoney(deadStockCost)}
+                  </div>
+                  <p className="text-xs font-medium text-slate-500">
+                    Cost tied up in stock that did not sell in this range
+                    {neverSoldStock.length
+                      ? ` · ${neverSoldStock.length} never sold`
+                      : ""}
+                    .
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setTab("stock")}
+                    className="mt-2 rounded-xl bg-[#2F2718] px-3 py-2 text-xs font-bold text-white transition hover:bg-[#1F1A10]"
+                  >
+                    View dead stock
+                  </button>
+                </div>
+              </Card>
+            )}
 
             <MiniMetric
               label="Retail Sales"
@@ -1252,13 +1508,20 @@ export default function SalesAnalyticsPage() {
         </div>
       )}
 
-      {!loading && !err && currentSummary.sales > 0 && tab === "insights" && (
+      {!loading && !err && tab === "insights" && (
         <div className="flex flex-col gap-6">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {insights.map((ins, i) => (
-              <CleanInsight key={i} {...ins} />
-            ))}
-          </div>
+          {insights.length === 0 ? (
+            <CleanEmpty
+              title="Not enough data for insights"
+              detail="Try a wider date range once you have more sales."
+            />
+          ) : (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {insights.map((ins, i) => (
+                <CleanInsight key={i} {...ins} />
+              ))}
+            </div>
+          )}
 
           <Card title="Action Plan" sub="Practical next steps">
             <div className="divide-y divide-slate-100">
@@ -1272,6 +1535,33 @@ export default function SalesAnalyticsPage() {
                 },
                 {
                   step: "02",
+                  action: "Staff for peak weekdays",
+                  detail: weekdayHighlight.best
+                    ? `${weekdayHighlight.best.label} is your strongest weekday (${fmtMoney(
+                        weekdayHighlight.best.revenue,
+                      )}). ${
+                        weekdayHighlight.worst &&
+                        weekdayHighlight.worst.weekday !==
+                          weekdayHighlight.best.weekday
+                          ? `${weekdayHighlight.worst.label} is slowest — try promos or lighter staffing.`
+                          : "Plan inventory and staffing around that pattern."
+                      }`
+                    : "Watch weekday patterns as more sales come in.",
+                },
+                {
+                  step: "03",
+                  action: "Clear dead stock",
+                  detail:
+                    deadStock.length > 0
+                      ? `${deadStock.length} product${
+                          deadStock.length !== 1 ? "s" : ""
+                        } (${fmtMoney(
+                          deadStockCost,
+                        )} at cost) had no sales in this range. Discount, bundle, or pause reorders.`
+                      : "No dead stock in this range — keep monitoring slow movers.",
+                },
+                {
+                  step: "04",
                   action: "Review discounting",
                   detail:
                     discountRate > 10
@@ -1281,16 +1571,6 @@ export default function SalesAnalyticsPage() {
                       : `Discount rate is ${discountRate.toFixed(
                           1,
                         )}%, which looks controlled.`,
-                },
-                {
-                  step: "03",
-                  action: "Lift weak products",
-                  detail:
-                    sortedProducts.length > 1
-                      ? `Bundle or reposition "${
-                          sortedProducts[sortedProducts.length - 1].name
-                        }" because it is the weakest performer.`
-                      : "Watch for slow-moving products as more sales data comes in.",
                 },
               ].map((rec) => (
                 <div

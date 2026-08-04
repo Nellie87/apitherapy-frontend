@@ -188,6 +188,12 @@ async function buildAndDownloadPdf(
 ) {
   const { default: jsPDF } = await import("jspdf");
   const { default: autoTable } = await import("jspdf-autotable");
+  const {
+    PDF_COMPANY_NAME,
+    PDF_COMPANY_TAGLINE,
+    PDF_RGB,
+    loadPdfLogoMarkDataUrl,
+  } = await import("@/lib/pdfBrand");
 
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const PW = doc.internal.pageSize.getWidth();
@@ -195,16 +201,14 @@ async function buildAndDownloadPdf(
   const MARGIN = 14;
   const CONTENT_W = PW - MARGIN * 2;
 
-  const SLATE900 = [15, 23, 42] as [number, number, number];
-  const SLATE700 = [51, 65, 85] as [number, number, number];
-  const SLATE600 = [71, 85, 105] as [number, number, number];
-  const SLATE500 = [100, 116, 139] as [number, number, number];
-  const SLATE200 = [226, 232, 240] as [number, number, number];
-  const SLATE100 = [241, 245, 249] as [number, number, number];
-  const SLATE50 = [248, 250, 252] as [number, number, number];
-  const EMERALD600 = [5, 150, 105] as [number, number, number];
-  const EMERALD700 = [4, 120, 87] as [number, number, number];
-  const AMBER800 = [146, 64, 14] as [number, number, number];
+  const DARK = PDF_RGB.dark;
+  const BODY = PDF_RGB.body;
+  const MUTED = PDF_RGB.muted;
+  const LINE = PDF_RGB.line;
+  const CREAM = PDF_RGB.cream;
+  const HONEY = PDF_RGB.honey;
+  const HONEY_DARK = PDF_RGB.honeyDark;
+  const AMBER_DARK = PDF_RGB.amberDark;
 
   function text(
     str: string,
@@ -218,30 +222,46 @@ async function buildAndDownloadPdf(
     }
   ) {
     doc.setFontSize(opts?.size ?? 10);
-    doc.setTextColor(...(opts?.color ?? SLATE900));
+    doc.setTextColor(...(opts?.color ?? DARK));
     doc.setFont("helvetica", opts?.bold ? "bold" : "normal");
     doc.text(str, x, yy, { align: opts?.align ?? "left" });
   }
 
-  /* Brand stripe + light header (matches app cards, not a heavy inverse bar) */
-  doc.setFillColor(...EMERALD600);
+  /* Honey brand stripe */
+  doc.setFillColor(...HONEY);
   doc.rect(0, 0, PW, 3.2, "F");
 
   let y = 11;
-  text("INVOICE", MARGIN, y, { size: 7, color: SLATE500, bold: true });
-  text(sale.sale_no ?? "—", MARGIN, y + 11, { size: 20, color: SLATE900, bold: true });
+  text("INVOICE", MARGIN, y, { size: 7, color: MUTED, bold: true });
+  text(sale.sale_no ?? "—", MARGIN, y + 11, { size: 20, color: DARK, bold: true });
 
-  text("Pollinators Apitherapy", PW - MARGIN, y + 4, {
-    size: 11,
-    color: SLATE900,
-    bold: true,
-    align: "right",
-  });
-  text("Beekeepers Apitherapy", PW - MARGIN, y + 10, {
-    size: 8,
-    color: SLATE600,
-    align: "right",
-  });
+  const logoData = await loadPdfLogoMarkDataUrl();
+  if (logoData) {
+    doc.addImage(logoData, "PNG", PW - MARGIN - 14, y - 2, 14, 14);
+    text(PDF_COMPANY_NAME, PW - MARGIN - 16, y + 4, {
+      size: 9,
+      color: DARK,
+      bold: true,
+      align: "right",
+    });
+    text(PDF_COMPANY_TAGLINE, PW - MARGIN - 16, y + 9.5, {
+      size: 7,
+      color: HONEY_DARK,
+      align: "right",
+    });
+  } else {
+    text(PDF_COMPANY_NAME, PW - MARGIN, y + 4, {
+      size: 10,
+      color: DARK,
+      bold: true,
+      align: "right",
+    });
+    text(PDF_COMPANY_TAGLINE, PW - MARGIN, y + 10, {
+      size: 7.5,
+      color: HONEY_DARK,
+      align: "right",
+    });
+  }
 
   y += 28;
 
@@ -249,9 +269,9 @@ async function buildAndDownloadPdf(
   const showRecorder = Boolean(sale.recorded_by_name);
   const metaBoxH = showRecorder ? 30 : 20;
 
-  doc.setFillColor(...SLATE50);
+  doc.setFillColor(...CREAM);
   doc.rect(MARGIN, y - 5, CONTENT_W, metaBoxH, "F");
-  doc.setDrawColor(...SLATE200);
+  doc.setDrawColor(...LINE);
   doc.setLineWidth(0.35);
   doc.rect(MARGIN, y - 5, CONTENT_W, metaBoxH, "S");
 
@@ -277,19 +297,19 @@ async function buildAndDownloadPdf(
     const mx = MARGIN + 4 + i * metaCol;
     text(m.label.toUpperCase(), mx, y + 2, {
       size: 6.5,
-      color: SLATE500,
+      color: HONEY_DARK,
       bold: true,
     });
-    text(m.value, mx, y + 8, { size: 9, color: SLATE900 });
+    text(m.value, mx, y + 8, { size: 9, color: DARK });
   });
 
   if (showRecorder && sale.recorded_by_name) {
     text("RECORDED BY", MARGIN + 4, y + 16, {
       size: 6.5,
-      color: SLATE500,
+      color: HONEY_DARK,
       bold: true,
     });
-    text(sale.recorded_by_name, MARGIN + 34, y + 16, { size: 9, color: SLATE900 });
+    text(sale.recorded_by_name, MARGIN + 34, y + 16, { size: 9, color: DARK });
   }
 
   y += metaBoxH + 6;
@@ -307,30 +327,30 @@ async function buildAndDownloadPdf(
       fmtMoney(x.lineTotal),
     ]),
     headStyles: {
-      fillColor: SLATE100,
-      textColor: SLATE700,
+      fillColor: HONEY,
+      textColor: DARK,
       fontSize: 7,
       fontStyle: "bold",
       cellPadding: { top: 3.5, bottom: 3.5, left: 3, right: 3 },
-      lineColor: SLATE200,
+      lineColor: LINE,
       lineWidth: 0.2,
     },
     bodyStyles: {
       fontSize: 8.5,
-      textColor: SLATE900,
+      textColor: DARK,
       cellPadding: { top: 3.5, bottom: 3.5, left: 3, right: 3 },
-      lineColor: SLATE200,
+      lineColor: LINE,
     },
-    alternateRowStyles: { fillColor: SLATE50 },
+    alternateRowStyles: { fillColor: CREAM },
     columnStyles: {
       0: { cellWidth: "auto" },
       1: { halign: "center", cellWidth: 11 },
       2: { halign: "right", cellWidth: 26 },
       3: { halign: "right", cellWidth: 22 },
       4: { halign: "right", cellWidth: 24 },
-      5: { halign: "right", cellWidth: 28, fontStyle: "bold", textColor: SLATE900 },
+      5: { halign: "right", cellWidth: 28, fontStyle: "bold", textColor: DARK },
     },
-    tableLineColor: SLATE200,
+    tableLineColor: LINE,
     tableLineWidth: 0.25,
   });
 
@@ -342,44 +362,44 @@ async function buildAndDownloadPdf(
   const totalsTop = y - 4;
   let ty = y;
 
-  doc.setFillColor(...SLATE50);
+  doc.setFillColor(...CREAM);
   doc.rect(totalsX, totalsTop, totalsW, kpis.discount_total > 0 ? 34 : 28, "F");
-  doc.setDrawColor(...SLATE200);
+  doc.setDrawColor(...LINE);
   doc.setLineWidth(0.35);
   doc.rect(totalsX, totalsTop, totalsW, kpis.discount_total > 0 ? 34 : 28, "S");
 
   ty += 6;
-  text("Subtotal", totalsX + 4, ty, { size: 9, color: SLATE600 });
+  text("Subtotal", totalsX + 4, ty, { size: 9, color: BODY });
   text(fmtMoney(kpis.subtotal), totalsX + totalsW - 4, ty, {
     size: 9,
-    color: SLATE900,
+    color: DARK,
     align: "right",
   });
   ty += 7;
 
   if (kpis.discount_total > 0) {
-    text("Discounts", totalsX + 4, ty, { size: 9, color: SLATE600 });
+    text("Discounts", totalsX + 4, ty, { size: 9, color: BODY });
     text(`-${fmtMoney(kpis.discount_total)}`, totalsX + totalsW - 4, ty, {
       size: 9,
-      color: AMBER800,
+      color: AMBER_DARK,
       bold: true,
       align: "right",
     });
     ty += 7;
   }
 
-  doc.setDrawColor(...SLATE200);
+  doc.setDrawColor(...LINE);
   doc.setLineWidth(0.25);
   doc.line(totalsX + 4, ty - 1, totalsX + totalsW - 4, ty - 1);
 
   text("Total due", totalsX + 4, ty + 5, {
     size: 10,
-    color: SLATE900,
+    color: DARK,
     bold: true,
   });
   text(fmtMoney(kpis.total), totalsX + totalsW - 4, ty + 5, {
     size: 12,
-    color: EMERALD700,
+    color: HONEY_DARK,
     bold: true,
     align: "right",
   });
@@ -387,21 +407,21 @@ async function buildAndDownloadPdf(
   y = ty + 18;
 
   if (discountedLines.length > 0) {
-    text("Discount detail", MARGIN, y, { size: 8.5, color: SLATE700, bold: true });
+    text("Discount detail", MARGIN, y, { size: 8.5, color: BODY, bold: true });
     y += 6;
     discountedLines.slice(0, 12).forEach((d) => {
       text(
         `${d.product_name} · saved ${fmtMoney(d.discountPerUnit * d.qty)}`,
         MARGIN,
         y,
-        { size: 7.5, color: SLATE600 }
+        { size: 7.5, color: MUTED }
       );
       y += 4.5;
     });
     if (discountedLines.length > 12) {
       text(`… and ${discountedLines.length - 12} more`, MARGIN, y, {
         size: 7,
-        color: SLATE500,
+        color: MUTED,
       });
       y += 5;
     }
@@ -412,16 +432,16 @@ async function buildAndDownloadPdf(
   for (let p = 1; p <= totalPages; p++) {
     doc.setPage(p);
     const fy = PH - 9;
-    doc.setDrawColor(...SLATE200);
+    doc.setDrawColor(...LINE);
     doc.setLineWidth(0.25);
     doc.line(MARGIN, fy - 4, PW - MARGIN, fy - 4);
-    text("Thank you for your business.", MARGIN, fy, {
-      size: 7.5,
-      color: SLATE500,
+    text("Thank you for your business · " + PDF_COMPANY_NAME, MARGIN, fy, {
+      size: 7,
+      color: MUTED,
     });
     text(`Page ${p} of ${totalPages}`, PW - MARGIN, fy, {
       size: 7,
-      color: SLATE500,
+      color: MUTED,
       align: "right",
     });
   }

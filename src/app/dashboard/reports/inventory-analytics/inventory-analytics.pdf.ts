@@ -5,6 +5,12 @@ import type {
   Totals,
 } from "./inventory-analytics.types";
 import { fmtMoney } from "./inventory-analytics.helpers";
+import {
+  PDF_COMPANY_NAME,
+  PDF_HEX,
+  PDF_LOGO_WORDMARK,
+  pdfAssetUrl,
+} from "@/lib/pdfBrand";
 
 const esc = (v: unknown) =>
   String(v ?? "")
@@ -36,28 +42,105 @@ export function printInventoryPdfReport(params: {
       : "All available inventory records";
 
   const riskPct = ((totals.atRiskVal / (totals.totalVal || 1)) * 100).toFixed(1);
+  const logoUrl = pdfAssetUrl(PDF_LOGO_WORDMARK);
 
   const html = `
   <html>
     <head>
-      <title>Inventory Analytics Report</title>
+      <title>Inventory Analytics Report — ${esc(PDF_COMPANY_NAME)}</title>
       <style>
-        body { font-family: Arial, sans-serif; color: #0f172a; padding: 32px; background: #fff; }
-        .header { border-bottom: 3px solid #f59e0b; padding-bottom: 16px; margin-bottom: 24px; }
-        h1 { margin: 0; font-size: 28px; }
-        h2 { margin-top: 28px; font-size: 18px; border-bottom: 1px solid #e2e8f0; padding-bottom: 8px; }
-        .muted { color: #64748b; font-size: 13px; }
+        body {
+          font-family: Arial, sans-serif;
+          color: ${PDF_HEX.dark};
+          padding: 32px;
+          background: ${PDF_HEX.white};
+        }
+        .header {
+          border-bottom: 4px solid ${PDF_HEX.honey};
+          padding-bottom: 16px;
+          margin-bottom: 24px;
+        }
+        .brand-row {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 16px;
+          margin-bottom: 12px;
+        }
+        .brand-logo { height: 48px; width: auto; object-fit: contain; }
+        .brand-name {
+          color: ${PDF_HEX.honeyDark};
+          font-size: 10px;
+          font-weight: 800;
+          letter-spacing: 2.4px;
+          text-transform: uppercase;
+          text-align: right;
+        }
+        h1 { margin: 0; font-size: 28px; color: ${PDF_HEX.dark}; }
+        h2 {
+          margin-top: 28px;
+          font-size: 18px;
+          border-bottom: 1px solid ${PDF_HEX.line};
+          padding-bottom: 8px;
+          color: ${PDF_HEX.dark};
+        }
+        .muted { color: ${PDF_HEX.muted}; font-size: 13px; }
         .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 20px 0; }
-        .card { border: 1px solid #e2e8f0; border-radius: 14px; padding: 14px; }
-        .label { color: #64748b; font-size: 11px; text-transform: uppercase; font-weight: 700; }
+        .card {
+          border: 1px solid ${PDF_HEX.line};
+          border-radius: 14px;
+          padding: 14px;
+          background: ${PDF_HEX.creamSoft};
+        }
+        .label {
+          color: ${PDF_HEX.honeyDark};
+          font-size: 11px;
+          text-transform: uppercase;
+          font-weight: 700;
+        }
         .value { font-size: 20px; font-weight: 800; margin-top: 6px; }
         table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 12px; }
-        th { background: #f8fafc; text-align: left; color: #475569; padding: 9px; border-bottom: 1px solid #e2e8f0; }
-        td { padding: 9px; border-bottom: 1px solid #e2e8f0; }
+        th {
+          background: ${PDF_HEX.cream2};
+          text-align: left;
+          color: ${PDF_HEX.honeyDark};
+          padding: 9px;
+          border-bottom: 1px solid ${PDF_HEX.line};
+        }
+        td { padding: 9px; border-bottom: 1px solid ${PDF_HEX.softLine}; }
         .right { text-align: right; }
-        .badge { display: inline-block; padding: 4px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; background: #fef3c7; color: #92400e; }
-        .insight { border-left: 4px solid #f59e0b; padding: 10px 12px; margin: 8px 0; background: #fff; }
-        .print-btn { margin-top: 28px; padding: 10px 14px; border: 0; border-radius: 10px; background: #f59e0b; color: #fff; font-weight: 700; cursor: pointer; }
+        .badge {
+          display: inline-block;
+          padding: 4px 8px;
+          border-radius: 999px;
+          font-size: 11px;
+          font-weight: 700;
+          background: ${PDF_HEX.cream2};
+          color: ${PDF_HEX.honeyDark};
+        }
+        .insight {
+          border-left: 4px solid ${PDF_HEX.honey};
+          padding: 10px 12px;
+          margin: 8px 0;
+          background: ${PDF_HEX.creamSoft};
+        }
+        .print-btn {
+          margin-top: 28px;
+          padding: 10px 14px;
+          border: 0;
+          border-radius: 10px;
+          background: ${PDF_HEX.honey};
+          color: ${PDF_HEX.dark};
+          font-weight: 700;
+          cursor: pointer;
+        }
+        .footer {
+          margin-top: 28px;
+          padding-top: 12px;
+          border-top: 1px solid ${PDF_HEX.line};
+          color: ${PDF_HEX.lightMuted};
+          font-size: 11px;
+        }
         @media print {
           body { padding: 20px; }
           .no-print { display: none; }
@@ -68,6 +151,10 @@ export function printInventoryPdfReport(params: {
 
     <body>
       <div class="header">
+        <div class="brand-row">
+          <img class="brand-logo" src="${esc(logoUrl)}" alt="${esc(PDF_COMPANY_NAME)}" />
+          <div class="brand-name">${esc(PDF_COMPANY_NAME)}</div>
+        </div>
         <h1>Inventory Analytics Report</h1>
         <div class="muted">Generated on ${today}</div>
         <div class="muted">Period: ${esc(period)}</div>
@@ -171,6 +258,7 @@ export function printInventoryPdfReport(params: {
         </tbody>
       </table>
 
+      <div class="footer">Generated from the ${esc(PDF_COMPANY_NAME)} dashboard.</div>
       <button class="print-btn no-print" onclick="window.print()">Print / Save PDF</button>
     </body>
   </html>

@@ -14,10 +14,30 @@ export type DailyStat = {
   total: number;
 };
 
+export type WeekdayStat = {
+  weekday: number;
+  label: string;
+  shortLabel: string;
+  sales_count: number;
+  revenue: number;
+  avgBasket: number;
+};
+
 export type PaymentStat = {
   method: string;
   count: number;
   revenue: number;
+};
+
+export type DeadStockItem = {
+  product_id: string;
+  name: string;
+  qty_on_hand: number;
+  cost_value: number;
+  retail_value: number;
+  last_sold_at: string | null;
+  days_since_sale: number | null;
+  never_sold: boolean;
 };
 
 export type PeriodSummary = {
@@ -25,6 +45,8 @@ export type PeriodSummary = {
   from: string;
   to: string;
   sales: number;
+  cancelledSales?: number;
+  cancelledValue?: number;
   gross: number;
   discounts: number;
   revenue: number;
@@ -33,8 +55,7 @@ export type PeriodSummary = {
   products: ProductStat[];
   payments: PaymentStat[];
   daily: DailyStat[];
-  cancelledSales?: number;
-cancelledValue?: number;
+  weekdays: WeekdayStat[];
 };
 
 export type CompareMetric = {
@@ -46,6 +67,6 @@ export type CompareMetric = {
   money?: boolean;
 };
 
-export type NavTab = "overview" | "products" | "compare" | "insights";
+export type NavTab = "overview" | "products" | "stock" | "compare" | "insights";
 
 export type SortBy = "revenue" | "qty";

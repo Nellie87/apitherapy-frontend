@@ -9,24 +9,29 @@ export type DateRange = { from: string; to: string };
 /* ─────────────────────────────────────────────
    Shared Helpers (unique names)
 ───────────────────────────────────────────── */
+/** Local calendar start of day → ISO (avoids UTC midnight shifting Kenya dates). */
 function isoStartDay(dayYYYYMMDD: string) {
-  return `${dayYYYYMMDD}T00:00:00.000Z`;
+  const [y, m, d] = dayYYYYMMDD.split("-").map(Number);
+  return new Date(y, m - 1, d, 0, 0, 0, 0).toISOString();
 }
 
-// End-exclusive (next day start). Use with `.lt(...)`.
+/** Local calendar next-day start → ISO. Use with `.lt(...)`. */
 function isoEndExclusiveDay(dayYYYYMMDD: string) {
-  const d = new Date(`${dayYYYYMMDD}T00:00:00.000Z`);
-  d.setUTCDate(d.getUTCDate() + 1);
-  return d.toISOString();
+  const [y, m, d] = dayYYYYMMDD.split("-").map(Number);
+  return new Date(y, m - 1, d + 1, 0, 0, 0, 0).toISOString();
 }
 
-function periodKeyUTC(d: Date, g: Granularity) {
-  if (g === "month") {
-    return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
-  }
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(
-    d.getUTCDate()
+function ymdLocal(d: Date) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+    d.getDate()
   ).padStart(2, "0")}`;
+}
+
+function periodKeyLocal(d: Date, g: Granularity) {
+  if (g === "month") {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  }
+  return ymdLocal(d);
 }
 
 function numSafe(v: any) {
@@ -80,7 +85,11 @@ export async function getSalesSummary(orgId: string, args: { from: string; to: s
   const map = new Map<string, SalesSummaryRow>();
 
   for (const r of data ?? []) {
-    const day = String((r as any).sold_at).slice(0, 10);
+    const soldAt = (r as any).sold_at;
+    const day =
+      typeof soldAt === "string" && /^\d{4}-\d{2}-\d{2}$/.test(soldAt)
+        ? soldAt
+        : ymdLocal(new Date(soldAt));
     const prev =
       map.get(day) ??
       ({
@@ -403,7 +412,7 @@ async function reportExpensesCore(
 
   for (const r of data ?? []) {
     const d = new Date(`${String((r as any).expense_date)}T00:00:00.000Z`);
-    const k = periodKeyUTC(d, g);
+    const k = periodKeyLocal(d, g);
     trendMap.set(k, (trendMap.get(k) ?? 0) + numSafe((r as any).amount));
 
     const cat = String((r as any).category ?? "Uncategorized");
@@ -561,7 +570,7 @@ itemsQ = itemsQ
   for (const s of sales ?? []) {
     const dtRaw = (s as any).sold_at ?? (s as any).created_at;
     const d = new Date(dtRaw);
-    const k = periodKeyUTC(d, g);
+    const k = periodKeyLocal(d, g);
     const row = ensure(k);
     const saleTotal = numSafe((s as any).total);
     row.product_revenue += saleTotal;
@@ -572,7 +581,7 @@ itemsQ = itemsQ
   // Service payments -> service income (no COGS)
   for (const pay of servicePayments ?? []) {
     const d = new Date(`${String((pay as any).payment_date)}T00:00:00.000Z`);
-    const k = periodKeyUTC(d, g);
+    const k = periodKeyLocal(d, g);
     const row = ensure(k);
     const amt = numSafe((pay as any).amount);
     row.service_income += amt;
@@ -592,7 +601,7 @@ itemsQ = itemsQ
     const t = d.getTime();
     if (t < fromT || t >= toT) continue;
 
-    const k = periodKeyUTC(d, g);
+    const k = periodKeyLocal(d, g);
     const row = ensure(k);
 
     const p = Array.isArray((it as any).products) ? (it as any).products[0] : (it as any).products;
@@ -604,7 +613,7 @@ itemsQ = itemsQ
   // Expenses -> expenses
   for (const e of expenses ?? []) {
     const d = new Date(`${String((e as any).expense_date)}T00:00:00.000Z`);
-    const k = periodKeyUTC(d, g);
+    const k = periodKeyLocal(d, g);
     const row = ensure(k);
     row.expenses += numSafe((e as any).amount);
   }

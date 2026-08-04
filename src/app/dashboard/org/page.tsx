@@ -34,7 +34,7 @@ const HexBg = () => (
         <path
           d="M28 66L0 50L0 16L28 0L56 16L56 50L28 66ZM28 100L0 84L0 50L28 34L56 50L56 84L28 100"
           fill="none"
-          stroke="#1c1917"
+          stroke="#3d321c"
           strokeWidth="1"
         />
       </pattern>
@@ -161,7 +161,14 @@ export default function OrgPage() {
       <div className="org-shell">
         <header className="org-topbar">
           <div className="org-brand">
-          
+            <Image
+              src="/brand-wordmark.png"
+              alt="Pollinator Beekeeping & Apitherapy"
+              width={200}
+              height={48}
+              className="org-brand-logo"
+              priority
+            />
           </div>
 
           <button type="button" className="org-logout" onClick={logout}>
