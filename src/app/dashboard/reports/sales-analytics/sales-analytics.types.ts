@@ -70,3 +70,23 @@ export type CompareMetric = {
 export type NavTab = "overview" | "products" | "stock" | "compare" | "insights";
 
 export type SortBy = "revenue" | "qty";
+
+export type SaleAuditSummary = {
+  cancelledCount: number;
+  cancelledValue: number;
+  editedCount: number;
+  editEvents: number;
+  discountedCount: number;
+};
+
+export type SaleDetailRow = {
+  id: string;
+  sale_no: string;
+  day: string;
+  customer: string;
+  items: string;
+  payment: string;
+  staff: string;
+  discount: number;
+  total: number;
+};

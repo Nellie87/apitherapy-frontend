@@ -1,16 +1,39 @@
 "use client";
 
-import React, { type CSSProperties } from "react";
+import React from "react";
 import type {
   CompareMetric,
+  DailyStat,
   NavTab,
   PeriodSummary,
   ProductStat,
+  SaleAuditSummary,
+  WeekdayStat,
 } from "./sales-analytics.types";
-import { fmtPct, fmtShortDate, fmtValue } from "./sales-analytics.helpers";
-import { fmtMoney } from "../components/report-ui";
+import {
+  bestAndWorstWeekday,
+  fillDailyGaps,
+  fmtLongDate,
+  fmtPct,
+  fmtShortDate,
+  fmtValue,
+  paymentMethodLabel,
+} from "./sales-analytics.helpers";
+import { fmtK, fmtMoney } from "../components/report-ui";
 import { PdfReportHeader } from "../components/PdfReportHeader";
-import { PDF_COMPANY_NAME, PDF_HEX } from "@/lib/pdfBrand";
+import {
+  PdfBar,
+  PdfChartFrame,
+  PdfEmpty,
+  PdfFooter,
+  PdfMetricCard,
+  PdfSection,
+  PdfStory,
+  pdfGrid2,
+  pdfGrid4,
+  pdfPage,
+} from "../components/pdf-ui";
+import { PDF_HEX } from "@/lib/pdfBrand";
 
 type Props = {
   mode: NavTab;
@@ -21,156 +44,620 @@ type Props = {
   compareB: PeriodSummary;
   compareMetrics: CompareMetric[];
   sortedProducts: ProductStat[];
+  audit: SaleAuditSummary;
   generatedAt: string;
 };
 
-const colors = {
-  text: PDF_HEX.dark,
-  muted: PDF_HEX.muted,
-  lightMuted: PDF_HEX.lightMuted,
-  line: PDF_HEX.line,
-  softLine: PDF_HEX.softLine,
-  cream: PDF_HEX.creamSoft,
-  cream2: PDF_HEX.cream2,
-  honey: PDF_HEX.honey,
-  honeyDark: PDF_HEX.honeyDark,
-  dark: PDF_HEX.dark,
-  green: PDF_HEX.green,
-  red: PDF_HEX.red,
-};
+function PdfRevenueChart({
+  daily,
+  from,
+  to,
+}: {
+  daily: DailyStat[];
+  from?: string;
+  to?: string;
+}) {
+  const series = fillDailyGaps(daily, from, to);
+  const W = 710;
+  const H = 210;
+  const P = { t: 14, r: 12, b: 32, l: 48 };
+  const iW = W - P.l - P.r;
+  const iH = H - P.t - P.b;
+  const maxV = Math.max(...series.map((d) => d.total), 1);
+  const x = (i: number) =>
+    P.l + (series.length < 2 ? iW / 2 : (i / (series.length - 1)) * iW);
+  const y = (v: number) => P.t + iH - (v / maxV) * iH;
+  const path = series
+    .map((d, i) => `${i === 0 ? "M" : "L"}${x(i)},${y(d.total)}`)
+    .join(" ");
+  const area = series.length
+    ? `${path} L${x(series.length - 1)},${P.t + iH} L${x(0)},${P.t + iH} Z`
+    : "";
+  const grids = [0, 0.25, 0.5, 0.75, 1].map((f) => maxV * f);
+  const step = Math.max(1, Math.floor(series.length / 6));
+  const labels = series
+    .map((d, i) => ({ d, i }))
+    .filter(({ i }) => i % step === 0 || i === series.length - 1);
 
-const page: CSSProperties = {
-  width: 794,
-  minHeight: 1123,
-  background: "#ffffff",
-  color: colors.text,
-  padding: 38,
-  fontFamily: "Arial, Helvetica, sans-serif",
-  boxSizing: "border-box",
-};
+  if (!series.length) {
+    return <PdfEmpty>No chart data for this range.</PdfEmpty>;
+  }
 
-const grid4: CSSProperties = {
-  marginTop: 24,
-  display: "grid",
-  gridTemplateColumns: "repeat(4, 1fr)",
-  gap: 10,
-};
-
-const grid2: CSSProperties = {
-  marginTop: 24,
-  display: "grid",
-  gridTemplateColumns: "repeat(2, 1fr)",
-  gap: 10,
-};
-
-const card: CSSProperties = {
-  border: `1px solid ${colors.line}`,
-  background: colors.cream,
-  borderRadius: 16,
-  padding: 14,
-  boxSizing: "border-box",
-};
-
-const metricLabel: CSSProperties = {
-  color: colors.honeyDark,
-  fontSize: 9,
-  fontWeight: 900,
-  letterSpacing: 1.4,
-  textTransform: "uppercase",
-};
-
-const metricValue: CSSProperties = {
-  marginTop: 8,
-  color: colors.text,
-  fontSize: 18,
-  fontWeight: 900,
-  lineHeight: 1.15,
-};
-
-const metricSub: CSSProperties = {
-  marginTop: 5,
-  color: colors.muted,
-  fontSize: 10,
-  fontWeight: 700,
-};
-
-const sectionWrap: CSSProperties = {
-  marginTop: 28,
-};
-
-const sectionTitle: CSSProperties = {
-  margin: 0,
-  color: colors.text,
-  fontSize: 15,
-  fontWeight: 900,
-};
-
-const sectionSub: CSSProperties = {
-  margin: "4px 0 0",
-  color: colors.muted,
-  fontSize: 10,
-};
-
-const table: CSSProperties = {
-  width: "100%",
-  borderCollapse: "collapse",
-  marginTop: 10,
-  fontSize: 10.5,
-};
-
-const thBase: CSSProperties = {
-  border: `1px solid ${colors.line}`,
-  background: colors.cream2,
-  color: colors.honeyDark,
-  padding: "8px 9px",
-  fontSize: 9,
-  fontWeight: 900,
-  letterSpacing: 1.1,
-  textTransform: "uppercase",
-};
-
-const tdBase: CSSProperties = {
-  border: `1px solid ${colors.line}`,
-  color: colors.text,
-  padding: "8px 9px",
-  verticalAlign: "top",
-};
-
-const footer: CSSProperties = {
-  marginTop: 34,
-  borderTop: `1px solid ${colors.line}`,
-  paddingTop: 12,
-  color: colors.lightMuted,
-  fontSize: 9,
-  fontWeight: 700,
-};
-
-function MetricCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
-    <div style={card}>
-      <div style={metricLabel}>{label}</div>
-      <div style={metricValue}>{value}</div>
-      {sub ? <div style={metricSub}>{sub}</div> : null}
-    </div>
+    <PdfChartFrame>
+      <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`}>
+        <defs>
+          <linearGradient id="pdfSalesArea" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={PDF_HEX.honey} stopOpacity="0.18" />
+            <stop offset="100%" stopColor={PDF_HEX.honey} stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        {grids.map((v, i) => (
+          <g key={i}>
+            <line
+              x1={P.l}
+              x2={W - P.r}
+              y1={y(v)}
+              y2={y(v)}
+              stroke={PDF_HEX.softLine}
+              strokeWidth="1"
+            />
+            <text
+              x={P.l - 8}
+              y={y(v) + 4}
+              textAnchor="end"
+              fontSize="10"
+              fill={PDF_HEX.muted}
+              fontWeight="500"
+            >
+              {fmtK(v)}
+            </text>
+          </g>
+        ))}
+        <path d={area} fill="url(#pdfSalesArea)" />
+        <path
+          d={path}
+          fill="none"
+          stroke={PDF_HEX.honey}
+          strokeWidth="2.25"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        {labels.map(({ d, i }) => (
+          <text
+            key={d.day}
+            x={x(i)}
+            y={H - 8}
+            textAnchor="middle"
+            fontSize="10"
+            fill={PDF_HEX.muted}
+            fontWeight="500"
+          >
+            {fmtShortDate(d.day)}
+          </text>
+        ))}
+      </svg>
+    </PdfChartFrame>
   );
 }
 
-function Section({ title, sub, children }: { title: string; sub?: string; children: React.ReactNode }) {
+function PdfWeekdayPolls({ weekdays }: { weekdays: WeekdayStat[] }) {
+  const max = Math.max(...weekdays.map((d) => d.revenue), 1);
+  const withSales = weekdays.filter((d) => d.sales_count > 0);
+  const bestId = withSales.length
+    ? [...withSales].sort((a, b) => b.revenue - a.revenue)[0].weekday
+    : null;
+  const worstId =
+    withSales.length > 1
+      ? [...withSales].sort((a, b) => a.revenue - b.revenue)[0].weekday
+      : null;
+
+  if (!withSales.length) {
+    return <PdfEmpty>No weekday pattern in this range.</PdfEmpty>;
+  }
+
   return (
-    <section style={sectionWrap}>
-      <h2 style={sectionTitle}>{title}</h2>
-      {sub ? <p style={sectionSub}>{sub}</p> : null}
-      {children}
-    </section>
+    <PdfChartFrame>
+      <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        <tbody>
+          {weekdays.map((d) => {
+            const pct = (d.revenue / max) * 100;
+            const isBest = d.weekday === bestId;
+            const isWorst = d.weekday === worstId;
+
+            return (
+              <tr key={d.weekday}>
+                <td
+                  style={{
+                    width: 92,
+                    padding: "9px 12px 9px 0",
+                    verticalAlign: "middle",
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: 13,
+                      fontWeight: 700,
+                      color: PDF_HEX.dark,
+                    }}
+                  >
+                    {d.label}
+                  </div>
+                  <div
+                    style={{
+                      marginTop: 2,
+                      fontSize: 11,
+                      fontWeight: 500,
+                      color: PDF_HEX.muted,
+                    }}
+                  >
+                    {d.sales_count} sale{d.sales_count !== 1 ? "s" : ""}
+                    {d.sales_count ? ` · ${fmtMoney(d.avgBasket)} avg` : ""}
+                  </div>
+                </td>
+                <td style={{ padding: "9px 12px", verticalAlign: "middle" }}>
+                  <PdfBar
+                    pct={Math.max(d.sales_count ? 4 : 0, pct)}
+                    color={PDF_HEX.honey}
+                  />
+                </td>
+                <td
+                  style={{
+                    width: 150,
+                    padding: "9px 0 9px 8px",
+                    textAlign: "right",
+                    verticalAlign: "middle",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: 13,
+                      fontWeight: 700,
+                      color: PDF_HEX.dark,
+                    }}
+                  >
+                    {fmtMoney(d.revenue)}
+                  </div>
+                  {isBest || isWorst ? (
+                    <div
+                      style={{
+                        marginTop: 2,
+                        fontSize: 10,
+                        fontWeight: 700,
+                        letterSpacing: "0.06em",
+                        textTransform: "uppercase",
+                        color: isBest ? PDF_HEX.green : PDF_HEX.red,
+                      }}
+                    >
+                      {isBest ? "Best" : "Slowest"}
+                    </div>
+                  ) : null}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </PdfChartFrame>
   );
 }
 
-function Th({ children, right = false }: { children: React.ReactNode; right?: boolean }) {
-  return <th style={{ ...thBase, textAlign: right ? "right" : "left" }}>{children}</th>;
+function PdfTopSellers({
+  products,
+  revenue,
+}: {
+  products: ProductStat[];
+  revenue: number;
+}) {
+  const top5 = products.slice(0, 5);
+  const max = Math.max(...top5.map((p) => p.revenue), 1);
+
+  if (!top5.length) {
+    return <PdfEmpty>No product sales in this range.</PdfEmpty>;
+  }
+
+  return (
+    <PdfChartFrame>
+      <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        <tbody>
+          {top5.map((p, i) => {
+            const pct = (p.revenue / max) * 100;
+            const share = revenue ? ((p.revenue / revenue) * 100).toFixed(1) : "0.0";
+
+            return (
+              <tr key={p.product_id}>
+                <td
+                  style={{
+                    width: 28,
+                    padding: "10px 8px 10px 0",
+                    fontSize: 12,
+                    fontWeight: 700,
+                    color: PDF_HEX.lightMuted,
+                    verticalAlign: "middle",
+                  }}
+                >
+                  {String(i + 1).padStart(2, "0")}
+                </td>
+                <td style={{ padding: "10px 12px 10px 0", verticalAlign: "middle" }}>
+                  <div
+                    style={{
+                      fontSize: 13,
+                      fontWeight: 700,
+                      color: PDF_HEX.dark,
+                    }}
+                  >
+                    {p.name}
+                  </div>
+                  <div
+                    style={{
+                      marginTop: 3,
+                    }}
+                  >
+                    <PdfBar pct={Math.max(4, pct)} color={PDF_HEX.honey} />
+                  </div>
+                  <div
+                    style={{
+                      marginTop: 4,
+                      fontSize: 11,
+                      fontWeight: 500,
+                      color: PDF_HEX.muted,
+                    }}
+                  >
+                    {p.qty.toLocaleString("en-KE")} unit{p.qty === 1 ? "" : "s"} ·{" "}
+                    {share}% of revenue
+                  </div>
+                </td>
+                <td
+                  style={{
+                    width: 120,
+                    padding: "10px 0 10px 8px",
+                    fontSize: 13,
+                    fontWeight: 700,
+                    color: PDF_HEX.dark,
+                    textAlign: "right",
+                    verticalAlign: "middle",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {fmtMoney(p.revenue)}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </PdfChartFrame>
+  );
 }
 
-function Td({ children, right = false }: { children: React.ReactNode; right?: boolean }) {
-  return <td style={{ ...tdBase, textAlign: right ? "right" : "left" }}>{children}</td>;
+function PdfPaymentPolls({
+  payments,
+  revenue,
+}: {
+  payments: PeriodSummary["payments"];
+  revenue: number;
+}) {
+  const max = Math.max(...payments.map((p) => p.revenue), 1);
+
+  if (!payments.length) return null;
+
+  return (
+    <PdfChartFrame>
+      <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        <tbody>
+          {payments.map((p) => {
+            const pct = (p.revenue / max) * 100;
+            const share = revenue ? ((p.revenue / revenue) * 100).toFixed(1) : "0.0";
+
+            return (
+              <tr key={p.method}>
+                <td
+                  style={{
+                    width: 130,
+                    padding: "9px 12px 9px 0",
+                    verticalAlign: "middle",
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: 13,
+                      fontWeight: 700,
+                      color: PDF_HEX.dark,
+                    }}
+                  >
+                    {paymentMethodLabel(p.method)}
+                  </div>
+                  <div
+                    style={{
+                      marginTop: 2,
+                      fontSize: 11,
+                      fontWeight: 500,
+                      color: PDF_HEX.muted,
+                    }}
+                  >
+                    {p.count} transaction{p.count !== 1 ? "s" : ""}
+                  </div>
+                </td>
+                <td style={{ padding: "9px 12px", verticalAlign: "middle" }}>
+                  <PdfBar pct={Math.max(4, pct)} color={PDF_HEX.honey} />
+                </td>
+                <td
+                  style={{
+                    width: 150,
+                    padding: "9px 0 9px 8px",
+                    textAlign: "right",
+                    verticalAlign: "middle",
+                    whiteSpace: "nowrap",
+                    fontSize: 13,
+                    fontWeight: 700,
+                    color: PDF_HEX.dark,
+                  }}
+                >
+                  {fmtMoney(p.revenue)}
+                  <span
+                    style={{
+                      marginLeft: 6,
+                      fontSize: 11,
+                      fontWeight: 500,
+                      color: PDF_HEX.muted,
+                    }}
+                  >
+                    {share}%
+                  </span>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </PdfChartFrame>
+  );
+}
+
+function PdfComparePolls({ metrics }: { metrics: CompareMetric[] }) {
+  return (
+    <PdfChartFrame>
+      <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        <tbody>
+          {metrics.map((m) => {
+            const max = Math.max(Math.abs(m.a), Math.abs(m.b), 1);
+            const aPct = (Math.abs(m.a) / max) * 100;
+            const bPct = (Math.abs(m.b) / max) * 100;
+            const up = (m.diff ?? 0) >= 0;
+
+            return (
+              <tr key={m.label}>
+                <td
+                  style={{
+                    padding: "14px 16px 14px 0",
+                    verticalAlign: "top",
+                    width: "38%",
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: 13,
+                      fontWeight: 700,
+                      color: PDF_HEX.dark,
+                    }}
+                  >
+                    {m.label}
+                  </div>
+                  <div
+                    style={{
+                      marginTop: 4,
+                      fontSize: 11,
+                      fontWeight: 500,
+                      color: PDF_HEX.muted,
+                    }}
+                  >
+                    {fmtValue(m.a, m.money)} → {fmtValue(m.b, m.money)}
+                  </div>
+                  <div
+                    style={{
+                      marginTop: 8,
+                      display: "inline-block",
+                      fontSize: 10,
+                      fontWeight: 700,
+                      letterSpacing: "0.06em",
+                      textTransform: "uppercase",
+                      color: up ? PDF_HEX.green : PDF_HEX.red,
+                    }}
+                  >
+                    {up ? "Up" : "Down"} {fmtPct(m.pct)}
+                  </div>
+                </td>
+                <td style={{ padding: "14px 0", verticalAlign: "middle" }}>
+                  <div
+                    style={{
+                      marginBottom: 4,
+                      fontSize: 10,
+                      fontWeight: 600,
+                      color: PDF_HEX.muted,
+                    }}
+                  >
+                    Reference
+                  </div>
+                  <PdfBar pct={Math.max(4, aPct)} color={PDF_HEX.dark} />
+                  <div
+                    style={{
+                      margin: "10px 0 4px",
+                      fontSize: 10,
+                      fontWeight: 600,
+                      color: PDF_HEX.muted,
+                    }}
+                  >
+                    Comparison
+                  </div>
+                  <PdfBar pct={Math.max(4, bPct)} color={PDF_HEX.honey} />
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </PdfChartFrame>
+  );
+}
+
+function buildPeriodStory(
+  summary: PeriodSummary,
+  audit: SaleAuditSummary,
+  products: ProductStat[],
+) {
+  const { best, worst } = bestAndWorstWeekday(summary.weekdays);
+  const top = products[0];
+  const topShare = top && summary.revenue ? (top.revenue / summary.revenue) * 100 : 0;
+  const parts: string[] = [];
+
+  parts.push(
+    `From ${fmtLongDate(summary.from)} to ${fmtLongDate(summary.to)}, the shop recorded ${summary.sales} completed sale${summary.sales !== 1 ? "s" : ""} worth ${fmtMoney(summary.revenue)}. The typical basket was ${fmtMoney(summary.avgBasket)}.`,
+  );
+
+  if (best && worst && best.weekday !== worst.weekday) {
+    parts.push(
+      `${best.label} was the strongest weekday (${fmtMoney(best.revenue)} from ${best.sales_count} sale${best.sales_count !== 1 ? "s" : ""}). ${worst.label} was the quietest.`,
+    );
+  }
+
+  if (top) {
+    parts.push(
+      `${top.name} was the top seller at ${fmtMoney(top.revenue)} (${topShare.toFixed(1)}% of revenue).`,
+    );
+  }
+
+  if (audit.cancelledCount > 0) {
+    parts.push(
+      `${audit.cancelledCount} cancelled sale${audit.cancelledCount !== 1 ? "s" : ""} worth ${fmtMoney(audit.cancelledValue)} are not included in revenue.`,
+    );
+  }
+
+  return parts.join(" ");
+}
+
+function buildOverviewRecommendations(
+  summary: PeriodSummary,
+  products: ProductStat[],
+  audit: SaleAuditSummary,
+) {
+  const { best, worst } = bestAndWorstWeekday(summary.weekdays);
+  const top = products[0];
+  const discountRate = summary.gross ? (summary.discounts / summary.gross) * 100 : 0;
+  const recs: { title: string; detail: string }[] = [];
+
+  if (best && worst && best.weekday !== worst.weekday) {
+    recs.push({
+      title: "Staff and stock for busy days",
+      detail: `${best.label} was strongest at ${fmtMoney(best.revenue)} from ${best.sales_count} sale${best.sales_count !== 1 ? "s" : ""}. ${worst.label} was quietest — use promotions or lighter staffing that day.`,
+    });
+  } else if (best) {
+    recs.push({
+      title: "Protect your strongest weekday",
+      detail: `${best.label} brought in the most money. Keep that day well stocked and staffed.`,
+    });
+  }
+
+  if (top && summary.revenue) {
+    const share = ((top.revenue / summary.revenue) * 100).toFixed(1);
+    recs.push({
+      title: "Keep top sellers in stock",
+      detail: `${top.name} is the top seller at ${fmtMoney(top.revenue)} (${share}% of revenue). Restock it first.`,
+    });
+  }
+
+  recs.push({
+    title: "Watch discounting",
+    detail:
+      discountRate > 10
+        ? `Discounts took ${discountRate.toFixed(1)}% of the pre-discount total across ${audit.discountedCount} sale${audit.discountedCount !== 1 ? "s" : ""}. Check whether they are bringing enough extra volume.`
+        : `Discount rate is ${discountRate.toFixed(1)}% of the pre-discount total, which looks controlled.`,
+  });
+
+  const topPay = summary.payments[0];
+  if (topPay) {
+    recs.push({
+      title: "Know where the money landed",
+      detail: `Most revenue came through ${paymentMethodLabel(topPay.method)}. Cash stays in the till; M-Pesa sits in the phone or business account.`,
+    });
+  }
+
+  return recs;
+}
+
+function buildCompareRecommendations(a: PeriodSummary, b: PeriodSummary) {
+  const recs: { title: string; detail: string }[] = [];
+  const up = b.revenue >= a.revenue;
+
+  recs.push({
+    title: up ? "Comparison period was stronger" : "Comparison period was weaker",
+    detail: `Revenue went from ${fmtMoney(a.revenue)} to ${fmtMoney(b.revenue)}. Look at which metrics moved the most in the bars above.`,
+  });
+
+  if (b.avgBasket !== a.avgBasket) {
+    recs.push({
+      title:
+        b.avgBasket >= a.avgBasket
+          ? "Baskets were larger in the comparison window"
+          : "Baskets were smaller in the comparison window",
+      detail: `Average basket moved from ${fmtMoney(a.avgBasket)} to ${fmtMoney(b.avgBasket)}. Bigger baskets usually mean more items or higher-priced products per sale.`,
+    });
+  }
+
+  return recs;
+}
+
+function PdfRecommendations({ items }: { items: { title: string; detail: string }[] }) {
+  if (!items.length) return null;
+
+  return (
+    <PdfSection title="Recommendations" caption="Practical next steps from this period.">
+      <PdfChartFrame>
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <tbody>
+            {items.map((item, i) => (
+              <tr key={item.title}>
+                <td
+                  style={{
+                    width: 36,
+                    padding: "12px 10px 12px 0",
+                    fontSize: 12,
+                    fontWeight: 700,
+                    color: PDF_HEX.honeyDark,
+                    verticalAlign: "top",
+                  }}
+                >
+                  {String(i + 1).padStart(2, "0")}
+                </td>
+                <td style={{ padding: "12px 0", verticalAlign: "top" }}>
+                  <div
+                    style={{
+                      fontSize: 14,
+                      fontWeight: 700,
+                      color: PDF_HEX.dark,
+                    }}
+                  >
+                    {item.title}
+                  </div>
+                  <div
+                    style={{
+                      marginTop: 4,
+                      fontSize: 12,
+                      fontWeight: 500,
+                      lineHeight: 1.5,
+                      color: PDF_HEX.muted,
+                    }}
+                  >
+                    {item.detail}
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </PdfChartFrame>
+    </PdfSection>
+  );
 }
 
 export function SalesAnalyticsPdfTemplate({
@@ -182,194 +669,134 @@ export function SalesAnalyticsPdfTemplate({
   compareB,
   compareMetrics,
   sortedProducts,
+  audit,
   generatedAt,
 }: Props) {
   const isCompare = mode === "compare";
   const discountRate = currentSummary.gross
     ? (currentSummary.discounts / currentSummary.gross) * 100
     : 0;
+  const { best, worst } = bestAndWorstWeekday(currentSummary.weekdays);
+  const top5 = sortedProducts.slice(0, 5);
 
   return (
-    <div id="sales-analytics-pdf-template" style={page}>
+    <div id="sales-analytics-pdf-template" style={pdfPage}>
       <PdfReportHeader
-        title={isCompare ? "Sales Comparison Report" : "Sales Analytics Report"}
+        title={isCompare ? "Sales comparison" : "Sales report"}
+        subtitle={
+          isCompare
+            ? "How two periods compare"
+            : "Revenue, weekday mix, and top sellers"
+        }
         metaLeft={
           isCompare
-            ? `${compareA.from} to ${compareA.to} compared with ${compareB.from} to ${compareB.to}`
-            : `${fromDate} to ${toDate}`
+            ? `${fmtLongDate(compareA.from)} – ${fmtLongDate(compareA.to)} vs ${fmtLongDate(compareB.from)} – ${fmtLongDate(compareB.to)}`
+            : `${fmtLongDate(fromDate)} – ${fmtLongDate(toDate)}`
         }
         metaRight={`Generated ${generatedAt}`}
       />
 
       {isCompare ? (
         <>
-          <section style={grid2}>
-            <MetricCard
-              label="Reference Period"
+          <section style={pdfGrid2}>
+            <PdfMetricCard
+              label="Reference period"
               value={fmtMoney(compareA.revenue)}
-              sub={`${compareA.sales} sale${compareA.sales !== 1 ? "s" : ""}`}
+              hint={`${compareA.sales} sale${compareA.sales !== 1 ? "s" : ""} · ${fmtLongDate(compareA.from)} – ${fmtLongDate(compareA.to)}`}
             />
-            <MetricCard
-              label="Comparison Period"
+            <PdfMetricCard
+              label="Comparison period"
               value={fmtMoney(compareB.revenue)}
-              sub={`${compareB.sales} sale${compareB.sales !== 1 ? "s" : ""}`}
+              hint={`${compareB.sales} sale${compareB.sales !== 1 ? "s" : ""} · ${fmtLongDate(compareB.from)} – ${fmtLongDate(compareB.to)}`}
             />
           </section>
-
-          <Section title="Comparison Metrics" sub="Comparison period measured against the reference period.">
-            <table style={table}>
-              <thead>
-                <tr>
-                  <Th>Metric</Th>
-                  <Th right>Reference</Th>
-                  <Th right>Comparison</Th>
-                  <Th right>Difference</Th>
-                  <Th right>Change</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {compareMetrics.map((m) => (
-                  <tr key={m.label}>
-                    <Td>{m.label}</Td>
-                    <Td right>{fmtValue(m.a, m.money)}</Td>
-                    <Td right>{fmtValue(m.b, m.money)}</Td>
-                    <Td right>{fmtValue(m.diff, m.money)}</Td>
-                    <Td right>{fmtPct(m.pct)}</Td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </Section>
+          <PdfSection
+            title="Performance comparison"
+            caption="Dark bars are the reference window. Honey bars are the comparison window."
+          >
+            <PdfComparePolls metrics={compareMetrics} />
+          </PdfSection>
+          <PdfRecommendations items={buildCompareRecommendations(compareA, compareB)} />
         </>
       ) : (
         <>
-          <section style={grid4}>
-            <MetricCard
+          <section style={pdfGrid4}>
+            <PdfMetricCard
               label="Revenue"
               value={fmtMoney(currentSummary.revenue)}
-              sub={`${fmtMoney(currentSummary.avgDaily)}/day`}
+              hint={`${fmtMoney(currentSummary.avgDaily)} typical selling day`}
             />
-            <MetricCard
-              label="Sales"
+            <PdfMetricCard
+              label="Completed sales"
               value={String(currentSummary.sales)}
-              sub={`${currentSummary.daily.length} active day${currentSummary.daily.length !== 1 ? "s" : ""}`}
+              hint={`${currentSummary.daily.length} day${currentSummary.daily.length !== 1 ? "s" : ""} with sales`}
             />
-            <MetricCard
-              label="Average Basket"
+            <PdfMetricCard
+              label="Average basket"
               value={fmtMoney(currentSummary.avgBasket)}
-              sub="Per transaction"
+              hint="Typical spend per checkout"
             />
-            <MetricCard
+            <PdfMetricCard
               label="Discounts"
               value={fmtMoney(currentSummary.discounts)}
-              sub={`${discountRate.toFixed(1)}% of gross`}
+              hint={`${audit.discountedCount} sale${audit.discountedCount !== 1 ? "s" : ""} · ${discountRate.toFixed(1)}% of gross`}
             />
           </section>
 
-          <Section title="Daily Summary" sub="Revenue and transaction totals by day.">
-            <table style={table}>
-              <thead>
-                <tr>
-                  <Th>Date</Th>
-                  <Th right>Sales</Th>
-                  <Th right>Gross</Th>
-                  <Th right>Discounts</Th>
-                  <Th right>Net</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {currentSummary.daily.length ? (
-                  [...currentSummary.daily].reverse().slice(0, 22).map((r) => (
-                    <tr key={r.day}>
-                      <Td>{fmtShortDate(r.day)}</Td>
-                      <Td right>{r.sales_count}</Td>
-                      <Td right>{fmtMoney(r.subtotal)}</Td>
-                      <Td right>{fmtMoney(r.discount_total)}</Td>
-                      <Td right>{fmtMoney(r.total)}</Td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <Td>No daily sales data for this range.</Td>
-                    <Td right>—</Td>
-                    <Td right>—</Td>
-                    <Td right>—</Td>
-                    <Td right>—</Td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </Section>
+          <PdfStory>
+            {currentSummary.sales
+              ? buildPeriodStory(currentSummary, audit, top5)
+              : `No completed sales were recorded from ${fmtLongDate(fromDate)} to ${fmtLongDate(toDate)}.`}
+          </PdfStory>
 
-          <Section title="Top Products" sub="Highest product contribution in the selected range.">
-            <table style={table}>
-              <thead>
-                <tr>
-                  <Th>Rank</Th>
-                  <Th>Product</Th>
-                  <Th right>Revenue</Th>
-                  <Th right>Units</Th>
-                  <Th right>Sales In</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {sortedProducts.length ? (
-                  sortedProducts.slice(0, 12).map((p, i) => (
-                    <tr key={p.product_id}>
-                      <Td>#{i + 1}</Td>
-                      <Td>{p.name}</Td>
-                      <Td right>{fmtMoney(p.revenue)}</Td>
-                      <Td right>{p.qty.toLocaleString("en-KE")}</Td>
-                      <Td right>{p.appearances}</Td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <Td>No product data for this range.</Td>
-                    <Td>—</Td>
-                    <Td right>—</Td>
-                    <Td right>—</Td>
-                    <Td right>—</Td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </Section>
+          <PdfSection
+            title="Revenue trend"
+            caption="Daily totals across the selected range, including quiet days."
+          >
+            <PdfRevenueChart
+              daily={currentSummary.daily}
+              from={fromDate}
+              to={toDate}
+            />
+          </PdfSection>
 
-          <Section title="Payment Methods" sub="Revenue split by payment method.">
-            <table style={table}>
-              <thead>
-                <tr>
-                  <Th>Method</Th>
-                  <Th right>Transactions</Th>
-                  <Th right>Revenue</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {currentSummary.payments.length ? (
-                  currentSummary.payments.map((p) => (
-                    <tr key={p.method}>
-                      <Td>{p.method}</Td>
-                      <Td right>{p.count}</Td>
-                      <Td right>{fmtMoney(p.revenue)}</Td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <Td>No payment data for this range.</Td>
-                    <Td right>—</Td>
-                    <Td right>—</Td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </Section>
+          <PdfSection
+            title="Sales by weekday"
+            caption={
+              best && worst
+                ? `${best.label} was strongest; ${worst.label} was quietest.`
+                : "Revenue grouped by day of week."
+            }
+          >
+            <PdfWeekdayPolls weekdays={currentSummary.weekdays} />
+          </PdfSection>
+
+          {currentSummary.payments.length > 0 ? (
+            <PdfSection
+              title="How customers paid"
+              caption="Where the money landed for completed sales."
+            >
+              <PdfPaymentPolls
+                payments={currentSummary.payments}
+                revenue={currentSummary.revenue}
+              />
+            </PdfSection>
+          ) : null}
+
+          <PdfSection
+            title="Top 5 sellers"
+            caption="Products that brought in the most money this period."
+          >
+            <PdfTopSellers products={sortedProducts} revenue={currentSummary.revenue} />
+          </PdfSection>
+
+          <PdfRecommendations
+            items={buildOverviewRecommendations(currentSummary, top5, audit)}
+          />
         </>
       )}
 
-      <footer style={footer}>
-        Generated from the {PDF_COMPANY_NAME} dashboard. Values are based on sales records available at export time.
-      </footer>
+      <PdfFooter extra={`cancelled sales excluded · generated ${generatedAt}`} />
     </div>
   );
 }

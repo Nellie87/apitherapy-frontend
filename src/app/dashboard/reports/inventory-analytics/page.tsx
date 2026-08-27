@@ -348,8 +348,8 @@ export default function InventoryAnalyticsPage() {
     <div className="flex flex-col gap-5">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-            Inventory Analytics
+          <h1 className="font-display text-[2rem] leading-tight tracking-tight text-[#1f1b14]">
+            Inventory analytics
           </h1>
           <p className="mt-1 text-sm text-slate-500">
             {filteredBaseRows.length} products · {fmtMoney(totals.totalVal)} stock value

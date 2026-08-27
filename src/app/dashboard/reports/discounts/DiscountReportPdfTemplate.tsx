@@ -1,6 +1,14 @@
 import type { DiscountReportRow } from "@/lib/api/reports";
 import { PdfReportHeader } from "../components/PdfReportHeader";
-import { PDF_COMPANY_NAME, PDF_HEX } from "@/lib/pdfBrand";
+import {
+  PdfFooter,
+  PdfMetricCard,
+  PdfSection,
+  PdfStory,
+  pdfGrid4,
+  pdfPage,
+} from "../components/pdf-ui";
+import { PDF_HEX } from "@/lib/pdfBrand";
 
 type CategoryStat = {
   category: string;
@@ -28,38 +36,22 @@ type Totals = {
   discountRate: number;
 };
 
-const page = {
-  width: "794px",
-  minHeight: "1123px",
-  background: PDF_HEX.white,
-  color: PDF_HEX.dark,
-  fontFamily: "Arial, Helvetica, sans-serif",
-  padding: "34px",
-  boxSizing: "border-box" as const,
-};
-
-const card = {
-  border: `1px solid ${PDF_HEX.line}`,
-  borderRadius: "18px",
-  padding: "14px",
-  background: PDF_HEX.creamSoft,
-};
-
 const th = {
   padding: "9px 8px",
   borderBottom: `1px solid ${PDF_HEX.line}`,
-  color: PDF_HEX.honeyDark,
+  color: PDF_HEX.muted,
   fontSize: "10px",
-  textTransform: "uppercase" as const,
+  fontWeight: 700,
   letterSpacing: "0.08em",
+  textTransform: "uppercase" as const,
   textAlign: "left" as const,
 };
 
 const td = {
-  padding: "9px 8px",
+  padding: "10px 8px",
   borderBottom: `1px solid ${PDF_HEX.softLine}`,
-  fontSize: "11px",
-  color: PDF_HEX.body,
+  fontSize: "12px",
+  color: PDF_HEX.dark,
   verticalAlign: "top" as const,
 };
 
@@ -107,66 +99,22 @@ export function DiscountReportPdfTemplate({
   const topCategories = categoryStats.slice(0, 8);
 
   return (
-    <div id="discount-report-pdf" style={page}>
+    <div id="discount-report-pdf" style={pdfPage}>
       <PdfReportHeader
-        title="Discount Report"
+        title="Discount report"
         subtitle={`${from} to ${to} · ${category === "all" ? "All categories" : category}`}
       />
 
-      <section
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(4, 1fr)",
-          gap: "10px",
-          marginBottom: "18px",
-        }}
-      >
-        <div style={card}>
-          <div style={{ fontSize: "9px", color: PDF_HEX.honeyDark, fontWeight: 700 }}>
-            TOTAL DISCOUNTS
-          </div>
-          <div style={{ marginTop: "7px", fontSize: "18px", fontWeight: 800 }}>
-            {fmtMoney(totals.totalSaved)}
-          </div>
-        </div>
-
-        <div style={card}>
-          <div style={{ fontSize: "9px", color: PDF_HEX.honeyDark, fontWeight: 700 }}>
-            AFFECTED SALES
-          </div>
-          <div style={{ marginTop: "7px", fontSize: "18px", fontWeight: 800 }}>
-            {fmtNumber(totals.affectedSales)}
-          </div>
-        </div>
-
-        <div style={card}>
-          <div style={{ fontSize: "9px", color: PDF_HEX.honeyDark, fontWeight: 700 }}>
-            DISCOUNTED QTY
-          </div>
-          <div style={{ marginTop: "7px", fontSize: "18px", fontWeight: 800 }}>
-            {fmtNumber(totals.discountedQty)}
-          </div>
-        </div>
-
-        <div style={card}>
-          <div style={{ fontSize: "9px", color: PDF_HEX.honeyDark, fontWeight: 700 }}>
-            DISCOUNT RATE
-          </div>
-          <div style={{ marginTop: "7px", fontSize: "18px", fontWeight: 800 }}>
-            {fmtPct(totals.discountRate)}
-          </div>
-        </div>
+      <section style={{ ...pdfGrid4, marginBottom: 8 }}>
+        <PdfMetricCard label="Total discounts" value={fmtMoney(totals.totalSaved)} />
+        <PdfMetricCard label="Affected sales" value={fmtNumber(totals.affectedSales)} />
+        <PdfMetricCard label="Discounted qty" value={fmtNumber(totals.discountedQty)} />
+        <PdfMetricCard label="Discount rate" value={fmtPct(totals.discountRate)} />
       </section>
 
-      <section style={{ ...card, marginBottom: "18px", background: "#ffffff" }}>
-        <h2 style={{ margin: "0 0 8px", fontSize: "15px" }}>
-          Discount vs Sales Influence
-        </h2>
+      <PdfStory>{discountInfluence.conclusion}</PdfStory>
 
-        <p style={{ margin: "0 0 12px", color: PDF_HEX.muted, fontSize: "11px" }}>
-          {discountInfluence.conclusion}
-        </p>
-
+      <PdfSection title="Discount vs sales influence">
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
             <tr>
@@ -182,24 +130,16 @@ export function DiscountReportPdfTemplate({
               <tr key={row.label}>
                 <td style={td}>{row.label}</td>
                 <td style={{ ...td, textAlign: "right" }}>{fmtNumber(row.sales)}</td>
-                <td style={{ ...td, textAlign: "right" }}>
-                  {fmtMoney(row.revenue)}
-                </td>
-                <td style={{ ...td, textAlign: "right" }}>
-                  {fmtMoney(row.avgBasket)}
-                </td>
+                <td style={{ ...td, textAlign: "right" }}>{fmtMoney(row.revenue)}</td>
+                <td style={{ ...td, textAlign: "right" }}>{fmtMoney(row.avgBasket)}</td>
                 <td style={{ ...td, textAlign: "right" }}>{fmtPct(row.share)}</td>
               </tr>
             ))}
           </tbody>
         </table>
-      </section>
+      </PdfSection>
 
-      <section style={{ marginBottom: "18px" }}>
-        <h2 style={{ margin: "0 0 8px", fontSize: "15px" }}>
-          Category Breakdown
-        </h2>
-
+      <PdfSection title="Category breakdown">
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
             <tr>
@@ -216,23 +156,15 @@ export function DiscountReportPdfTemplate({
                 <td style={td}>{row.category}</td>
                 <td style={{ ...td, textAlign: "right" }}>{fmtMoney(row.saved)}</td>
                 <td style={{ ...td, textAlign: "right" }}>{fmtNumber(row.qty)}</td>
-                <td style={{ ...td, textAlign: "right" }}>
-                  {fmtNumber(row.lines)}
-                </td>
-                <td style={{ ...td, textAlign: "right" }}>
-                  {fmtNumber(row.sales)}
-                </td>
+                <td style={{ ...td, textAlign: "right" }}>{fmtNumber(row.lines)}</td>
+                <td style={{ ...td, textAlign: "right" }}>{fmtNumber(row.sales)}</td>
               </tr>
             ))}
           </tbody>
         </table>
-      </section>
+      </PdfSection>
 
-      <section>
-        <h2 style={{ margin: "0 0 8px", fontSize: "15px" }}>
-          Discounted Line Items
-        </h2>
-
+      <PdfSection title="Discounted line items">
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
             <tr>
@@ -251,29 +183,15 @@ export function DiscountReportPdfTemplate({
                 <td style={td}>{row.name}</td>
                 <td style={td}>{row.category || "Uncategorized"}</td>
                 <td style={{ ...td, textAlign: "right" }}>{fmtNumber(row.qty)}</td>
-                <td style={{ ...td, textAlign: "right" }}>
-                  {fmtMoney(row.saved_total)}
-                </td>
-                <td style={{ ...td, textAlign: "right" }}>
-                  {fmtMoney(row.final_price)}
-                </td>
+                <td style={{ ...td, textAlign: "right" }}>{fmtMoney(row.saved_total)}</td>
+                <td style={{ ...td, textAlign: "right" }}>{fmtMoney(row.final_price)}</td>
               </tr>
             ))}
           </tbody>
         </table>
-      </section>
+      </PdfSection>
 
-      <footer
-        style={{
-          marginTop: "24px",
-          paddingTop: "12px",
-          borderTop: `1px solid ${PDF_HEX.line}`,
-          color: PDF_HEX.lightMuted,
-          fontSize: "10px",
-        }}
-      >
-        Generated from the {PDF_COMPANY_NAME} dashboard.
-      </footer>
+      <PdfFooter extra="generated from the dashboard" />
     </div>
   );
 }

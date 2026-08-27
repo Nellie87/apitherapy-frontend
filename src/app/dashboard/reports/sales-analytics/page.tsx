@@ -7,6 +7,7 @@ import React, {
   useRef,
   useState,
 } from "react";
+import { createPortal } from "react-dom";
 import { DayPicker, type DateRange } from "react-day-picker";
 import "react-day-picker/dist/style.css";
 import { exportElementToPdf } from "@/lib/exportPdf";
@@ -18,7 +19,10 @@ import * as S from "../page.styles";
 
 import {
   Card,
+  EmptyState,
   ErrorBanner,
+  InsightCard,
+  KpiCard,
   ReportHeader,
   SegControl,
   Spinner,
@@ -33,6 +37,7 @@ import {
   buildPeriodSummary,
   fmtShortDate,
   getDeadStock,
+  paymentMethodLabel,
   previousEqualRange,
   saleDateYMD,
 } from "./sales-analytics.helpers";
@@ -294,152 +299,6 @@ function buildInsights(
   }
 
   return insights;
-}
-
-function CleanPanel({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="relative overflow-visible rounded-[28px] border border-[#EADFC2] bg-white p-4 shadow-[0_12px_36px_rgba(92,64,16,0.06)] sm:p-6">
-      <div className="pointer-events-none absolute right-0 top-0 h-56 w-56 rounded-full bg-amber-100/30 blur-3xl" />
-      <div className="pointer-events-none absolute bottom-0 left-0 h-48 w-48 rounded-full bg-[#FFF8E6] blur-3xl" />
-      <div className="relative">{children}</div>
-    </div>
-  );
-}
-
-function MiniMetric({
-  label,
-  value,
-  sub,
-  tone = "neutral",
-}: {
-  label: string;
-  value: string;
-  sub: string;
-  tone?: "neutral" | "success" | "warning" | "danger";
-}) {
-  const toneClass = {
-    neutral: "border-[#EADFC2] bg-white text-slate-950",
-    success: "border-green-200 bg-green-50/70 text-green-800",
-    warning: "border-amber-200 bg-amber-50/80 text-amber-800",
-    danger: "border-red-200 bg-red-50/70 text-red-800",
-  }[tone];
-
-  return (
-    <div className={`rounded-[24px] border p-5 shadow-sm ${toneClass}`}>
-      <div className="text-xs font-black uppercase tracking-[0.18em] text-[#8A6A00]">
-        {label}
-      </div>
-      <div className="mt-3 text-2xl font-black tracking-tight">{value}</div>
-      <div className="mt-1 text-xs font-semibold text-slate-500">{sub}</div>
-    </div>
-  );
-}
-
-function CleanKpi({
-  label,
-  value,
-  sub,
-  tone = "neutral",
-}: {
-  label: string;
-  value: string;
-  sub: string;
-  tone?: "neutral" | "success" | "warning" | "danger";
-}) {
-  const cfg = {
-    neutral: {
-      border: "border-[#EADFC2]",
-      bg: "bg-white",
-      value: "text-slate-950",
-      label: "text-[#8A6A00]",
-    },
-    success: {
-      border: "border-green-200",
-      bg: "bg-green-50/70",
-      value: "text-green-800",
-      label: "text-green-700",
-    },
-    warning: {
-      border: "border-amber-200",
-      bg: "bg-amber-50/80",
-      value: "text-amber-800",
-      label: "text-amber-700",
-    },
-    danger: {
-      border: "border-red-200",
-      bg: "bg-red-50/70",
-      value: "text-red-800",
-      label: "text-red-700",
-    },
-  }[tone];
-
-  return (
-    <div
-      className={`rounded-[24px] border p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${cfg.border} ${cfg.bg}`}
-    >
-      <div
-        className={`text-xs font-black uppercase tracking-[0.18em] ${cfg.label}`}
-      >
-        {label}
-      </div>
-      <div className={`mt-3 text-2xl font-black tracking-tight ${cfg.value}`}>
-        {value}
-      </div>
-      <div className="mt-1 text-xs font-semibold text-slate-500">{sub}</div>
-    </div>
-  );
-}
-
-function CleanInsight({
-  title,
-  detail,
-  type,
-}: {
-  title: string;
-  detail: string;
-  type: string;
-}) {
-  const tone =
-    type === "positive"
-      ? "border-green-200 bg-green-50/60"
-      : type === "negative"
-        ? "border-red-200 bg-red-50/60"
-        : type === "warning"
-          ? "border-amber-200 bg-amber-50/70"
-          : "border-[#EADFC2] bg-white";
-
-  return (
-    <div className={`rounded-[24px] border p-5 shadow-sm ${tone}`}>
-      <div className="text-sm font-black text-slate-950">{title}</div>
-      <p className="mt-2 text-sm leading-relaxed text-slate-600">{detail}</p>
-    </div>
-  );
-}
-
-function CleanEmpty({ title, detail }: { title: string; detail: string }) {
-  return (
-    <div className="rounded-[28px] border border-[#EADFC2] bg-white px-6 py-16 text-center shadow-sm">
-      <div className="text-base font-black text-slate-900">{title}</div>
-      <p className="mt-2 text-sm text-slate-500">{detail}</p>
-    </div>
-  );
-}
-
-function DateInput({
-  value,
-  onChange,
-}: {
-  value: string;
-  onChange: (value: string) => void;
-}) {
-  return (
-    <input
-      type="date"
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className="w-full rounded-2xl border border-[#EADFC2] bg-white px-3 py-2 text-sm font-semibold text-slate-900 outline-none transition focus:border-amber-400 focus:ring-2 focus:ring-amber-100"
-    />
-  );
 }
 
 function SalesDateRangePicker({
@@ -843,245 +702,215 @@ export default function SalesAnalyticsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="fixed left-[-10000px] top-0 z-[-1] w-[794px] bg-white" aria-hidden="true">
-        <SalesAnalyticsPdfTemplate
-          mode={tab}
-          fromDate={fromDate}
-          toDate={toDate}
-          currentSummary={currentSummary}
-          compareA={compareA}
-          compareB={compareB}
-          compareMetrics={compareMetrics}
-          sortedProducts={sortedProducts}
-          generatedAt={new Date().toLocaleString("en-GB", {
-            day: "numeric",
-            month: "short",
-            year: "numeric",
-            hour: "2-digit",
-            minute: "2-digit",
-          })}
+      {typeof document !== "undefined"
+        ? createPortal(
+            <div
+              aria-hidden="true"
+              style={{
+                position: "fixed",
+                left: 0,
+                top: 0,
+                width: 794,
+                zIndex: -1,
+                pointerEvents: "none",
+                overflow: "visible",
+              }}
+            >
+              <SalesAnalyticsPdfTemplate
+                mode={tab}
+                fromDate={fromDate}
+                toDate={toDate}
+                currentSummary={currentSummary}
+                compareA={compareA}
+                compareB={compareB}
+                compareMetrics={compareMetrics}
+                sortedProducts={sortedProducts}
+                audit={currentAudit}
+                generatedAt={new Date().toLocaleString("en-GB", {
+                  day: "numeric",
+                  month: "short",
+                  year: "numeric",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+              />
+            </div>,
+            document.body,
+          )
+        : null}
+      <div className="flex flex-col gap-4">
+        <ReportHeader
+          title="Sales report"
+          subtitle={
+            tab === "compare"
+              ? `Reference ${compareAFrom} → ${compareATo} vs ${compareBFrom} → ${compareBTo}`
+              : `${fromDate} → ${toDate} · ${currentSummary.sales} sale${
+                  currentSummary.sales !== 1 ? "s" : ""
+                }`
+          }
+          actions={
+            <button
+              className={S.btnGhost}
+              disabled={loading || exportingPdf}
+              onClick={handlePDF}
+            >
+              {exportingPdf ? "Exporting PDF…" : "Download PDF"}
+            </button>
+          }
         />
+
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <SegControl
+            value={tab}
+            onChange={(v: NavTab) => setTab(v)}
+            options={[
+              { value: "overview", label: "Overview" },
+              { value: "products", label: "Products" },
+              { value: "stock", label: "Dead stock" },
+              { value: "compare", label: "Compare" },
+              { value: "insights", label: "Insights" },
+            ]}
+          />
+
+          {tab !== "compare" && (
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowDatePicker((value) => !value)}
+                className="flex min-w-[240px] items-center justify-between gap-3 rounded-xl border border-[rgba(80,61,25,0.12)] bg-white px-4 py-2.5 text-left"
+              >
+                <span className="text-sm font-semibold text-slate-800">
+                  {fromDate} → {toDate}
+                </span>
+                <span className="text-xs font-bold text-[#8A6A00]">Change</span>
+              </button>
+
+              {showDatePicker && (
+                <SalesDateRangePicker
+                  valuePreset={rangePreset}
+                  valueFrom={fromDate}
+                  valueTo={toDate}
+                  onApply={(preset, from, to) => {
+                    applyMainRange(preset, from, to);
+                  }}
+                  onClose={() => setShowDatePicker(false)}
+                />
+              )}
+            </div>
+          )}
+        </div>
+
+        {tab === "compare" && (
+          <div className="grid w-full gap-3 lg:grid-cols-2">
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCompareAPicker((v) => !v);
+                  setShowCompareBPicker(false);
+                }}
+                className="flex w-full items-center justify-between gap-3 rounded-2xl border border-[#EADFC2] bg-white px-4 py-3 text-left"
+              >
+                <div>
+                  <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
+                    Baseline
+                  </div>
+                  <div className="mt-0.5 text-sm font-semibold text-slate-900">
+                    {compareAFrom} → {compareATo}
+                  </div>
+                </div>
+                <span className="text-xs font-bold text-[#8A6A00]">Change</span>
+              </button>
+              {showCompareAPicker && (
+                <SalesDateRangePicker
+                  valuePreset="custom"
+                  valueFrom={compareAFrom}
+                  valueTo={compareATo}
+                  onApply={(_, from, to) => {
+                    setCompareSynced(false);
+                    setCompareAFrom(from);
+                    setCompareATo(to);
+                  }}
+                  onClose={() => setShowCompareAPicker(false)}
+                />
+              )}
+            </div>
+
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCompareBPicker((v) => !v);
+                  setShowCompareAPicker(false);
+                }}
+                className="flex w-full items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50/40 px-4 py-3 text-left"
+              >
+                <div>
+                  <div className="text-[10px] font-bold uppercase tracking-wide text-amber-700">
+                    Comparison
+                  </div>
+                  <div className="mt-0.5 text-sm font-semibold text-slate-900">
+                    {compareBFrom} → {compareBTo}
+                  </div>
+                </div>
+                <span className="text-xs font-bold text-[#8A6A00]">Change</span>
+              </button>
+              {showCompareBPicker && (
+                <SalesDateRangePicker
+                  valuePreset="custom"
+                  valueFrom={compareBFrom}
+                  valueTo={compareBTo}
+                  onApply={(_, from, to) => {
+                    setCompareSynced(false);
+                    setCompareBFrom(from);
+                    setCompareBTo(to);
+                  }}
+                  onClose={() => setShowCompareBPicker(false)}
+                />
+              )}
+            </div>
+          </div>
+        )}
       </div>
-      <ReportHeader
-        title="Sales Analytics"
-        subtitle={
-          tab === "compare"
-            ? `Reference: ${compareAFrom} → ${compareATo} · Comparison: ${compareBFrom} → ${compareBTo}`
-            : `${fromDate} → ${toDate} · ${currentSummary.sales} transaction${
-                currentSummary.sales !== 1 ? "s" : ""
-              }`
-        }
-       actions={
-  <button
-    className={S.btnGhost}
-    disabled={loading || exportingPdf}
-    onClick={handlePDF}
-  >
-    {exportingPdf ? "Exporting PDF…" : "Download PDF"}
-  </button>
-}
-      />
-
-      <CleanPanel>
-        <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-         
-
-          <div className="rounded-3xl border border-[#EADFC2] bg-white p-3 shadow-sm">
-            <SegControl
-              value={tab}
-              onChange={(v: NavTab) => setTab(v)}
-              options={[
-                { value: "overview", label: "Overview" },
-                { value: "products", label: "Products" },
-                { value: "stock", label: "Dead stock" },
-                { value: "compare", label: "Compare" },
-                { value: "insights", label: "Insights" },
-              ]}
-            />
-          </div>
-        </div>
-
-        <div className="rounded-3xl border border-[#EADFC2] bg-[#FFFDF8] p-4 shadow-sm">
-          <div className="flex flex-wrap items-center gap-3">
-            {tab !== "compare" && (
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setShowDatePicker((value) => !value)}
-                  className="flex min-w-[260px] items-center justify-between gap-4 rounded-3xl border border-[#EADFC2] bg-white px-4 py-3 text-left shadow-sm transition hover:bg-[#FFF8E6]"
-                >
-                  <div>
-                    <div className="text-[10px] font-black uppercase tracking-[0.18em] text-[#8A6A00]">
-                      Date range
-                    </div>
-                    <div className="mt-1 text-sm font-black text-slate-950">
-                      {fromDate} → {toDate}
-                    </div>
-                  </div>
-
-                  <span className="rounded-full bg-[#2F2718] px-3 py-1 text-xs font-bold text-white">
-                    Change
-                  </span>
-                </button>
-
-                {showDatePicker && (
-                  <SalesDateRangePicker
-                    valuePreset={rangePreset}
-                    valueFrom={fromDate}
-                    valueTo={toDate}
-                    onApply={(preset, from, to) => {
-                      applyMainRange(preset, from, to);
-                    }}
-                    onClose={() => setShowDatePicker(false)}
-                  />
-                )}
-              </div>
-            )}
-
-            {tab === "compare" && (
-              <div className="grid w-full gap-4 lg:grid-cols-2">
-                <div className="relative rounded-3xl border border-[#EADFC2] bg-white p-4 shadow-sm">
-                  <div className="mb-3">
-                    <div className="text-sm font-black text-slate-950">
-                      Reference period
-                    </div>
-                    <p className="mt-1 text-xs font-medium text-slate-500">
-                      This is the baseline range you are comparing against.
-                    </p>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowCompareAPicker((v) => !v);
-                      setShowCompareBPicker(false);
-                    }}
-                    className="flex w-full items-center justify-between gap-4 rounded-2xl border border-[#EADFC2] bg-[#FFFDF8] px-4 py-3 text-left transition hover:bg-[#FFF8E6]"
-                  >
-                    <span className="text-sm font-black text-slate-950">
-                      {compareAFrom} → {compareATo}
-                    </span>
-                    <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-[#8A6A00] shadow-sm">
-                      Change range
-                    </span>
-                  </button>
-
-                  {showCompareAPicker && (
-                    <SalesDateRangePicker
-                      valuePreset="custom"
-                      valueFrom={compareAFrom}
-                      valueTo={compareATo}
-                      onApply={(_, from, to) => {
-                        setCompareSynced(false);
-                        setCompareAFrom(from);
-                        setCompareATo(to);
-                      }}
-                      onClose={() => setShowCompareAPicker(false)}
-                    />
-                  )}
-                </div>
-
-                <div className="relative rounded-3xl border border-amber-200 bg-amber-50/50 p-4 shadow-sm">
-                  <div className="mb-3">
-                    <div className="text-sm font-black text-slate-950">
-                      Comparison period
-                    </div>
-                    <p className="mt-1 text-xs font-medium text-slate-500">
-                      This is the range being measured against the baseline.
-                    </p>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowCompareBPicker((v) => !v);
-                      setShowCompareAPicker(false);
-                    }}
-                    className="flex w-full items-center justify-between gap-4 rounded-2xl border border-amber-200 bg-white px-4 py-3 text-left transition hover:bg-[#FFF8E6]"
-                  >
-                    <span className="text-sm font-black text-slate-950">
-                      {compareBFrom} → {compareBTo}
-                    </span>
-                    <span className="rounded-full bg-[#2F2718] px-3 py-1 text-xs font-bold text-white shadow-sm">
-                      Change range
-                    </span>
-                  </button>
-
-                  {showCompareBPicker && (
-                    <SalesDateRangePicker
-                      valuePreset="custom"
-                      valueFrom={compareBFrom}
-                      valueTo={compareBTo}
-                      onApply={(_, from, to) => {
-                        setCompareSynced(false);
-                        setCompareBFrom(from);
-                        setCompareBTo(to);
-                      }}
-                      onClose={() => setShowCompareBPicker(false)}
-                    />
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      </CleanPanel>
 
       {err && <ErrorBanner message={err} onClose={() => setErr("")} />}
       {loading && <Spinner h={200} />}
 
       {!loading && !err && tab !== "compare" && tab !== "stock" && (
         <>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-6">
-            <CleanKpi
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <KpiCard
               label="Revenue"
               value={fmtMoney(currentSummary.revenue)}
-              sub={`${fmtMoney(currentSummary.avgDaily)}/day average`}
-              tone="warning"
+              sub="Finished sales after discounts"
             />
 
-            <CleanKpi
+            <KpiCard
               label="Sales"
               value={String(currentSummary.sales)}
-              sub={`${currentSummary.daily.length} active day${
+              sub={`${currentSummary.daily.length} day${
                 currentSummary.daily.length !== 1 ? "s" : ""
-              }`}
+              } with sales`}
             />
 
-            <CleanKpi
-              label="Average Basket"
+            <KpiCard
+              label="Average basket"
               value={fmtMoney(currentSummary.avgBasket)}
-              sub="per transaction"
+              sub="Typical spend per checkout"
             />
 
-            <CleanKpi
+            <KpiCard
               label="Discounts"
               value={fmtMoney(currentSummary.discounts)}
-              sub={`${currentAudit.discountedCount} discounted sale${
+              sub={`${currentAudit.discountedCount} sale${
                 currentAudit.discountedCount !== 1 ? "s" : ""
               } · ${discountRate.toFixed(1)}% of gross`}
               tone={discountRate > 10 ? "danger" : "neutral"}
             />
-
-            <CleanKpi
-              label="Edited Sales"
-              value={String(currentAudit.editedCount)}
-              sub={`${currentAudit.editEvents} edit event${
-                currentAudit.editEvents !== 1 ? "s" : ""
-              } recorded`}
-              tone={currentAudit.editedCount > 0 ? "warning" : "neutral"}
-            />
-
-            <CleanKpi
-              label="Cancelled Sales"
-              value={String(currentAudit.cancelledCount)}
-              sub={`${fmtMoney(currentAudit.cancelledValue)} cancelled value`}
-              tone={currentAudit.cancelledCount > 0 ? "danger" : "neutral"}
-            />
           </div>
 
           {currentSummary.sales === 0 && (
-            <CleanEmpty
+            <EmptyState
               title="No sales found in this range"
               detail="Try expanding the date range or check back later."
             />
@@ -1092,25 +921,25 @@ export default function SalesAnalyticsPage() {
       {!loading && !err && tab === "stock" && (
         <>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <CleanKpi
+            <KpiCard
               label="Dead stock SKUs"
               value={String(deadStock.length)}
               sub={`In stock with 0 sales · ${fromDate} → ${toDate}`}
               tone={deadStock.length > 0 ? "warning" : "neutral"}
             />
-            <CleanKpi
+            <KpiCard
               label="Never sold"
               value={String(neverSoldStock.length)}
               sub="Products with stock and no sales history"
               tone={neverSoldStock.length > 0 ? "danger" : "neutral"}
             />
-            <CleanKpi
+            <KpiCard
               label="Tied-up cost"
               value={fmtMoney(deadStockCost)}
               sub="Inventory cost with no sales in range"
               tone={deadStockCost > 0 ? "warning" : "neutral"}
             />
-            <CleanKpi
+            <KpiCard
               label="Retail at risk"
               value={fmtMoney(
                 deadStock.reduce((sum, d) => sum + d.retail_value, 0),
@@ -1120,7 +949,7 @@ export default function SalesAnalyticsPage() {
           </div>
 
           {deadStock.length === 0 ? (
-            <CleanEmpty
+            <EmptyState
               title="No dead stock in this range"
               detail="Every in-stock product recorded at least one sale in the selected dates."
             />
@@ -1131,7 +960,7 @@ export default function SalesAnalyticsPage() {
               noPad
             >
               <div
-                className={`${S.tableHead} hidden border-b border-[#F1E6C9] bg-[#FFFDF8] px-5 py-3 sm:grid`}
+                className={`${S.tableHead} hidden border-b border-[rgba(80,61,25,0.08)] px-5 py-3 sm:grid`}
                 style={{
                   gridTemplateColumns: "2fr 0.7fr 1fr 1fr 1.2fr",
                 }}
@@ -1147,7 +976,7 @@ export default function SalesAnalyticsPage() {
                 {deadStock.map((row) => (
                   <div
                     key={row.product_id}
-                    className="grid gap-3 px-5 py-4 text-sm transition-colors hover:bg-[#FFFDF8] sm:grid-cols-[2fr_0.7fr_1fr_1fr_1.2fr] sm:items-center"
+                    className="grid gap-3 px-5 py-4 text-sm transition-colors hover:bg-[#fffdf8] sm:grid-cols-[2fr_0.7fr_1fr_1fr_1.2fr] sm:items-center"
                   >
                     <div className="min-w-0">
                       <div className="truncate font-bold text-slate-900">
@@ -1194,160 +1023,55 @@ export default function SalesAnalyticsPage() {
       {!loading && !err && currentSummary.sales > 0 && tab === "overview" && (
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
           <div className="flex flex-col gap-6 xl:col-span-8">
-            <Card title="Revenue Trend" sub={`${fromDate} → ${toDate}`}>
-              <SimpleLineChart daily={currentSummary.daily} />
+            <Card title="Revenue trend" sub="Daily totals, including quiet days">
+              <SimpleLineChart
+                daily={currentSummary.daily}
+                from={fromDate}
+                to={toDate}
+              />
             </Card>
 
             <Card
               title="Sales by weekday"
               sub={
                 weekdayHighlight.best
-                  ? `Best: ${weekdayHighlight.best.label} · Slowest: ${
+                  ? `Best: ${weekdayHighlight.best.label}. Slowest: ${
                       weekdayHighlight.worst?.label ?? "—"
-                    }`
-                  : "Revenue pattern across days of the week"
+                    }.`
+                  : "Revenue grouped by day of week"
               }
             >
               <WeekdayBars weekdays={currentSummary.weekdays} />
             </Card>
 
-            <Card title="Top Products" sub="Highest product contribution">
+            <Card title="Top 5 sellers" sub="Highest revenue in this range">
               <ProductBar
-                data={sortedProducts.slice(0, 6)}
+                data={sortedProducts.slice(0, 5)}
                 valueKey="revenue"
               />
-            </Card>
-
-            <Card
-              title="Daily Summary"
-              sub={`${currentSummary.daily.length} active day${
-                currentSummary.daily.length !== 1 ? "s" : ""
-              }`}
-              noPad
-            >
-              <div
-                className={`${S.tableHead} hidden border-b border-[#F1E6C9] bg-[#FFFDF8] px-5 py-3 sm:grid`}
-                style={{ gridTemplateColumns: "1fr 0.8fr 1fr 1fr 1fr" }}
-              >
-                <div>Date</div>
-                <div className="text-right">Sales</div>
-                <div className="text-right">Gross</div>
-                <div className="text-right">Discounts</div>
-                <div className="text-right">Net</div>
-              </div>
-
-              <div className="max-h-96 divide-y divide-slate-100 overflow-y-auto">
-                {[...currentSummary.daily].reverse().map((r) => (
-                  <div
-                    key={r.day}
-                    className="grid gap-3 px-5 py-4 text-sm transition-colors hover:bg-[#FFFDF8] sm:grid-cols-[1fr_0.8fr_1fr_1fr_1fr] sm:items-center"
-                  >
-                    <div className="font-bold text-slate-900">
-                      {fmtShortDate(r.day)}
-                    </div>
-                    <div className="text-slate-600 sm:text-right sm:tabular-nums">
-                      {r.sales_count}
-                    </div>
-                    <div className="text-slate-600 sm:text-right sm:tabular-nums">
-                      {fmtMoney(r.subtotal)}
-                    </div>
-                    <div className="font-bold text-red-500 sm:text-right sm:tabular-nums">
-                      -{fmtMoney(r.discount_total)}
-                    </div>
-                    <div className="font-black text-slate-950 sm:text-right sm:tabular-nums">
-                      {fmtMoney(r.total)}
-                    </div>
-                  </div>
-                ))}
-              </div>
             </Card>
           </div>
 
           <div className="flex flex-col gap-6 xl:col-span-4">
-            <Card
-              title="Sales Control Summary"
-              sub="Edits, cancellations and discounts in this range"
-            >
+            <Card title="How customers paid">
               <div className="space-y-3">
-                <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3">
-                  <span className="text-sm font-bold text-slate-700">Edited sales</span>
-                  <span className="text-sm font-black text-slate-950">{currentAudit.editedCount}</span>
-                </div>
-                <div className="flex items-center justify-between rounded-2xl bg-amber-50 px-4 py-3">
-                  <span className="text-sm font-bold text-amber-800">Discounted sales</span>
-                  <span className="text-sm font-black text-amber-900">{currentAudit.discountedCount}</span>
-                </div>
-                <div className="flex items-center justify-between rounded-2xl bg-red-50 px-4 py-3">
-                  <span className="text-sm font-bold text-red-700">Cancelled sales</span>
-                  <span className="text-sm font-black text-red-800">{currentAudit.cancelledCount}</span>
-                </div>
-              </div>
-            </Card>
-
-            {deadStock.length > 0 && (
-              <Card
-                title="Dead stock alert"
-                sub={`${deadStock.length} SKU${deadStock.length !== 1 ? "s" : ""} with no sales`}
-              >
-                <div className="space-y-2">
-                  <div className="text-2xl font-black text-slate-950">
-                    {fmtMoney(deadStockCost)}
-                  </div>
-                  <p className="text-xs font-medium text-slate-500">
-                    Cost tied up in stock that did not sell in this range
-                    {neverSoldStock.length
-                      ? ` · ${neverSoldStock.length} never sold`
-                      : ""}
-                    .
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => setTab("stock")}
-                    className="mt-2 rounded-xl bg-[#2F2718] px-3 py-2 text-xs font-bold text-white transition hover:bg-[#1F1A10]"
-                  >
-                    View dead stock
-                  </button>
-                </div>
-              </Card>
-            )}
-
-            <MiniMetric
-              label="Retail Sales"
-              value={fmtMoney(currentSummary.revenue)}
-              sub={`${currentSummary.sales} transaction${
-                currentSummary.sales !== 1 ? "s" : ""
-              }`}
-            />
-
-            <MiniMetric
-              label="Average Basket"
-              value={fmtMoney(currentSummary.avgBasket)}
-              sub="average transaction value"
-            />
-
-            <Card title="Payment Split" sub="Revenue by payment method" noPad>
-              <div className="divide-y divide-slate-100">
                 {currentSummary.payments.length === 0 ? (
-                  <div className="py-10 text-center text-sm text-slate-400">
+                  <div className="py-6 text-center text-sm text-slate-400">
                     No payment data.
                   </div>
                 ) : (
                   currentSummary.payments.map((p) => (
-                    <div
-                      key={p.method}
-                      className="flex items-center justify-between px-5 py-4 hover:bg-[#FFFDF8]"
-                    >
-                      <div>
-                        <div className="text-sm font-black capitalize text-slate-900">
-                          {p.method}
-                        </div>
-                        <div className="text-xs font-semibold text-slate-400">
-                          {p.count} transaction{p.count !== 1 ? "s" : ""}
-                        </div>
+                    <div key={p.method}>
+                      <div className="mb-1 flex items-center justify-between gap-2">
+                        <span className="text-sm font-semibold text-slate-800">
+                          {paymentMethodLabel(p.method)}
+                        </span>
+                        <span className="text-sm font-bold tabular-nums text-slate-950">
+                          {fmtMoney(p.revenue)}
+                        </span>
                       </div>
-
-                      <div className="text-right text-sm font-black text-slate-950">
-                        {fmtMoney(p.revenue)}
+                      <div className="text-xs text-slate-400">
+                        {p.count} sale{p.count !== 1 ? "s" : ""}
                       </div>
                     </div>
                   ))
@@ -1355,35 +1079,35 @@ export default function SalesAnalyticsPage() {
               </div>
             </Card>
 
-            <Card title="Daily Transactions" sub="Sales count by day">
-              <div className="max-h-72 space-y-3 overflow-y-auto pr-1">
-                {[...currentSummary.daily].reverse().map((d) => {
-                  const maxSales = Math.max(
-                    ...currentSummary.daily.map((x) => x.sales_count),
-                    1,
-                  );
-                  const pct = (d.sales_count / maxSales) * 100;
-
-                  return (
-                    <div key={d.day}>
-                      <div className="mb-1 flex justify-between text-xs">
-                        <span className="font-bold text-slate-600">
-                          {fmtShortDate(d.day)}
-                        </span>
-                        <span className="font-black text-slate-900">
-                          {d.sales_count} sale{d.sales_count !== 1 ? "s" : ""}
-                        </span>
-                      </div>
-
-                      <div className="h-2 overflow-hidden rounded-full bg-[#F8F3E7]">
-                        <div
-                          className="h-full rounded-full bg-[#D6A324]"
-                          style={{ width: `${Math.max(3, pct)}%` }}
-                        />
-                      </div>
+            <Card title="Worth a look" sub="Not included in revenue">
+              <div className="space-y-3 text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-600">Cancelled</span>
+                  <span className="font-bold text-slate-900">
+                    {currentAudit.cancelledCount} · {fmtMoney(currentAudit.cancelledValue)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-600">Edited after save</span>
+                  <span className="font-bold text-slate-900">{currentAudit.editedCount}</span>
+                </div>
+                {deadStock.length > 0 ? (
+                  <div className="border-t border-[#F1E6C9] pt-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-600">Stock with no sales</span>
+                      <span className="font-bold text-slate-900">
+                        {deadStock.length} · {fmtMoney(deadStockCost)}
+                      </span>
                     </div>
-                  );
-                })}
+                    <button
+                      type="button"
+                      onClick={() => setTab("stock")}
+                      className="mt-3 text-xs font-bold text-[#8A6A00] hover:underline"
+                    >
+                      Open dead stock
+                    </button>
+                  </div>
+                ) : null}
               </div>
             </Card>
           </div>
@@ -1417,7 +1141,7 @@ export default function SalesAnalyticsPage() {
             noPad
           >
             <div
-              className={`${S.tableHead} hidden border-b border-[#F1E6C9] bg-[#FFFDF8] px-5 py-3 sm:grid`}
+              className={`${S.tableHead} hidden border-b border-[rgba(80,61,25,0.08)] px-5 py-3 sm:grid`}
               style={{ gridTemplateColumns: "0.5fr 2fr 1fr 1fr 0.8fr" }}
             >
               <div>#</div>
@@ -1431,8 +1155,8 @@ export default function SalesAnalyticsPage() {
               {sortedProducts.map((p, i) => (
                 <div
                   key={p.product_id}
-                  className={`grid gap-3 px-5 py-4 text-sm transition-colors hover:bg-[#FFFDF8] sm:grid-cols-[0.5fr_2fr_1fr_1fr_0.8fr] sm:items-center ${
-                    i === 0 ? "bg-amber-50/40" : ""
+                  className={`grid gap-3 px-5 py-4 text-sm transition-colors hover:bg-[#fffdf8] sm:grid-cols-[0.5fr_2fr_1fr_1fr_0.8fr] sm:items-center ${
+                    i === 0 ? "bg-[#fffdf8]" : ""
                   }`}
                 >
                   <div className="font-black text-slate-400">#{i + 1}</div>
@@ -1465,7 +1189,7 @@ export default function SalesAnalyticsPage() {
       {!loading && !err && tab === "compare" && (
         <div className="flex flex-col gap-6">
           <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-            <CleanKpi
+            <KpiCard
               label="Reference Period"
               value={fmtMoney(compareA.revenue)}
               sub={`${compareA.sales} sale${compareA.sales !== 1 ? "s" : ""} · ${
@@ -1473,13 +1197,12 @@ export default function SalesAnalyticsPage() {
               } → ${compareA.to}`}
             />
 
-            <CleanKpi
+            <KpiCard
               label="Comparison Period"
               value={fmtMoney(compareB.revenue)}
               sub={`${compareB.sales} sale${compareB.sales !== 1 ? "s" : ""} · ${
                 compareB.from
               } → ${compareB.to}`}
-              tone="warning"
             />
           </div>
 
@@ -1495,14 +1218,22 @@ export default function SalesAnalyticsPage() {
               title="Reference Period Trend"
               sub={`${compareA.from} → ${compareA.to}`}
             >
-              <SimpleLineChart daily={compareA.daily} />
+              <SimpleLineChart
+                daily={compareA.daily}
+                from={compareAFrom}
+                to={compareATo}
+              />
             </Card>
 
             <Card
               title="Comparison Period Trend"
               sub={`${compareB.from} → ${compareB.to}`}
             >
-              <SimpleLineChart daily={compareB.daily} />
+              <SimpleLineChart
+                daily={compareB.daily}
+                from={compareBFrom}
+                to={compareBTo}
+              />
             </Card>
           </div>
         </div>
@@ -1511,14 +1242,14 @@ export default function SalesAnalyticsPage() {
       {!loading && !err && tab === "insights" && (
         <div className="flex flex-col gap-6">
           {insights.length === 0 ? (
-            <CleanEmpty
+            <EmptyState
               title="Not enough data for insights"
               detail="Try a wider date range once you have more sales."
             />
           ) : (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {insights.map((ins, i) => (
-                <CleanInsight key={i} {...ins} />
+                <InsightCard key={i} {...ins} />
               ))}
             </div>
           )}

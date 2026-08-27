@@ -50,92 +50,111 @@ export function printInventoryPdfReport(params: {
       <title>Inventory Analytics Report — ${esc(PDF_COMPANY_NAME)}</title>
       <style>
         body {
-          font-family: Arial, sans-serif;
+          font-family: "DM Sans", Arial, sans-serif;
           color: ${PDF_HEX.dark};
-          padding: 32px;
+          padding: 40px 42px;
           background: ${PDF_HEX.white};
         }
         .header {
-          border-bottom: 4px solid ${PDF_HEX.honey};
-          padding-bottom: 16px;
-          margin-bottom: 24px;
+          border-bottom: 1px solid ${PDF_HEX.line};
+          padding-bottom: 18px;
+          margin-bottom: 22px;
         }
         .brand-row {
           display: flex;
           align-items: center;
           justify-content: space-between;
           gap: 16px;
-          margin-bottom: 12px;
         }
-        .brand-logo { height: 48px; width: auto; object-fit: contain; }
+        .brand-logo { height: 40px; width: auto; object-fit: contain; }
         .brand-name {
-          color: ${PDF_HEX.honeyDark};
+          color: ${PDF_HEX.muted};
           font-size: 10px;
-          font-weight: 800;
-          letter-spacing: 2.4px;
+          font-weight: 700;
+          letter-spacing: 0.16em;
           text-transform: uppercase;
           text-align: right;
+          max-width: 220px;
+          line-height: 1.45;
         }
-        h1 { margin: 0; font-size: 28px; color: ${PDF_HEX.dark}; }
+        .accent {
+          margin-top: 18px;
+          width: 36px;
+          height: 3px;
+          background: ${PDF_HEX.honey};
+          border-radius: 2px;
+        }
+        h1 {
+          margin: 12px 0 0;
+          font-size: 32px;
+          color: ${PDF_HEX.dark};
+          font-family: "DM Serif Display", Georgia, serif;
+          font-weight: 400;
+          letter-spacing: -0.02em;
+        }
         h2 {
           margin-top: 28px;
-          font-size: 18px;
-          border-bottom: 1px solid ${PDF_HEX.line};
-          padding-bottom: 8px;
+          margin-bottom: 8px;
+          font-size: 16px;
           color: ${PDF_HEX.dark};
+          font-weight: 700;
         }
-        .muted { color: ${PDF_HEX.muted}; font-size: 13px; }
-        .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 20px 0; }
+        .muted { color: ${PDF_HEX.muted}; font-size: 13px; font-weight: 500; }
+        .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 8px 0 20px; }
         .card {
           border: 1px solid ${PDF_HEX.line};
-          border-radius: 14px;
+          border-top: 3px solid ${PDF_HEX.honey};
+          border-radius: 12px;
           padding: 14px;
-          background: ${PDF_HEX.creamSoft};
+          background: ${PDF_HEX.white};
         }
         .label {
-          color: ${PDF_HEX.honeyDark};
-          font-size: 11px;
+          color: ${PDF_HEX.muted};
+          font-size: 10px;
+          letter-spacing: 0.14em;
           text-transform: uppercase;
           font-weight: 700;
         }
-        .value { font-size: 20px; font-weight: 800; margin-top: 6px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 12px; }
+        .value { font-size: 22px; font-weight: 700; margin-top: 8px; letter-spacing: -0.03em; color: ${PDF_HEX.dark}; }
+        table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 12px; }
         th {
-          background: ${PDF_HEX.cream2};
           text-align: left;
-          color: ${PDF_HEX.honeyDark};
-          padding: 9px;
+          color: ${PDF_HEX.muted};
+          padding: 9px 8px;
           border-bottom: 1px solid ${PDF_HEX.line};
+          font-size: 10px;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
         }
-        td { padding: 9px; border-bottom: 1px solid ${PDF_HEX.softLine}; }
+        td { padding: 10px 8px; border-bottom: 1px solid ${PDF_HEX.softLine}; color: ${PDF_HEX.dark}; }
         .right { text-align: right; }
         .badge {
           display: inline-block;
-          padding: 4px 8px;
+          padding: 3px 8px;
           border-radius: 999px;
           font-size: 11px;
           font-weight: 700;
-          background: ${PDF_HEX.cream2};
-          color: ${PDF_HEX.honeyDark};
+          background: ${PDF_HEX.cream};
+          color: ${PDF_HEX.dark};
         }
         .insight {
-          border-left: 4px solid ${PDF_HEX.honey};
-          padding: 10px 12px;
-          margin: 8px 0;
-          background: ${PDF_HEX.creamSoft};
+          border-left: 3px solid ${PDF_HEX.honey};
+          padding: 10px 0 10px 14px;
+          margin: 10px 0;
         }
+        .insight strong { font-size: 14px; color: ${PDF_HEX.dark}; }
         .print-btn {
           margin-top: 28px;
           padding: 10px 14px;
           border: 0;
           border-radius: 10px;
-          background: ${PDF_HEX.honey};
-          color: ${PDF_HEX.dark};
+          background: ${PDF_HEX.dark};
+          color: ${PDF_HEX.white};
           font-weight: 700;
           cursor: pointer;
         }
         .footer {
-          margin-top: 28px;
+          margin-top: 32px;
           padding-top: 12px;
           border-top: 1px solid ${PDF_HEX.line};
           color: ${PDF_HEX.lightMuted};
@@ -155,10 +174,9 @@ export function printInventoryPdfReport(params: {
           <img class="brand-logo" src="${esc(logoUrl)}" alt="${esc(PDF_COMPANY_NAME)}" />
           <div class="brand-name">${esc(PDF_COMPANY_NAME)}</div>
         </div>
-        <h1>Inventory Analytics Report</h1>
-        <div class="muted">Generated on ${today}</div>
-        <div class="muted">Period: ${esc(period)}</div>
-        <div class="muted">${rows.length} products analysed</div>
+        <div class="accent"></div>
+        <h1>Inventory analytics</h1>
+        <div class="muted" style="margin-top:8px">Generated ${today} · ${esc(period)} · ${rows.length} products</div>
       </div>
 
       <div class="grid">
@@ -181,13 +199,13 @@ export function printInventoryPdfReport(params: {
         <strong> ${totals.ok}</strong> healthy.
       </p>
 
-      <h2>Key Insights</h2>
+      <h2>Recommendations</h2>
       ${insights
         .map(
           (ins) => `
           <div class="insight">
             <strong>${esc(ins.title)}</strong>
-            <div class="muted">${esc(ins.detail)}</div>
+            <div class="muted" style="margin-top:6px">${esc(ins.detail)}</div>
           </div>`
         )
         .join("")}

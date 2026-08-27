@@ -6,24 +6,39 @@ import * as S from "./page.styles";
 export default function ReportsHomePage() {
   const cards = [
     {
-      title: "Sales Summary",
-      desc: "Totals by day, date range, downloadable CSV",
+      title: "Sales report",
+      desc: "Revenue trend, weekday mix, products, and dead stock",
       href: "/dashboard/reports/sales-analytics",
-      icon: "🧾",
     },
-    // next ones we’ll add:
-    { title: "Inventory Valuation", desc: "Stock value per product + totals", href: "/dashboard/reports/inventory", icon: "📦" },
-    { title: "Discount Report", desc: "Which products got discounts", href: "/dashboard/reports/discounts", icon: "🏷️" },
-    { title: "Revenue Health", desc: "Sales, services, expenses & profit overview", href: "/dashboard/reports/revenue-health", icon: "📈" },
+    {
+      title: "Inventory",
+      desc: "Stock value, coverage, and reorder priority",
+      href: "/dashboard/reports/inventory",
+    },
+    {
+      title: "Discount report",
+      desc: "What was discounted and how it moved the basket",
+      href: "/dashboard/reports/discounts",
+    },
+    {
+      title: "Revenue health",
+      desc: "Sales, services, expenses, and profit",
+      href: "/dashboard/reports/revenue-health",
+    },
   ];
 
   return (
-    <div className="space-y-6">
-      <div className={`${S.card} p-6`}>
-        <div className="text-3xl font-black text-slate-900">Reports</div>
-        <div className="mt-1 text-sm text-slate-500">
-          Sales · Inventory · Discounts · Revenue Health (downloadable)
+    <div className="space-y-8">
+      <div>
+        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#8a6a00]">
+          Analytics
         </div>
+        <h1 className="mt-2 font-display text-4xl tracking-tight text-[#1f1b14]">
+          Reports
+        </h1>
+        <p className="mt-2 max-w-xl text-sm leading-relaxed text-[#766b59]">
+          Downloadable views of sales, stock, discounts, and profit.
+        </p>
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -31,16 +46,14 @@ export default function ReportsHomePage() {
           <Link
             key={c.title}
             href={c.href}
-            className={`${S.card} p-6 hover:bg-slate-50 transition`}
+            className={`${S.card} group p-6 transition hover:-translate-y-0.5 hover:border-[rgba(215,168,32,0.35)]`}
           >
-            <div className="flex items-start gap-4">
-              <div className="grid h-12 w-12 place-items-center rounded-2xl bg-amber-50 text-xl">
-                {c.icon}
-              </div>
-              <div className="min-w-0">
-                <div className="text-lg font-black text-slate-900">{c.title}</div>
-                <div className="mt-1 text-sm text-slate-500">{c.desc}</div>
-              </div>
+            <div className="h-1 w-8 rounded-full bg-[#d7a820] transition group-hover:w-12" />
+            <div className="mt-4 text-lg font-semibold tracking-tight text-[#1f1b14]">
+              {c.title}
+            </div>
+            <div className="mt-1.5 text-sm leading-relaxed text-[#766b59]">
+              {c.desc}
             </div>
           </Link>
         ))}

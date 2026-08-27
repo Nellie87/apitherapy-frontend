@@ -1,4 +1,7 @@
-import type { SaleRowWithItems } from "@/lib/api/sales";
+import {
+  formatPaymentMethodLabel,
+  type SaleRowWithItems,
+} from "@/lib/api/sales";
 import type {
   CompareMetric,
   DailyStat,
@@ -6,6 +9,7 @@ import type {
   PaymentStat,
   PeriodSummary,
   ProductStat,
+  SaleDetailRow,
   WeekdayStat,
 } from "./sales-analytics.types";
 import { fmtMoney } from "../components/report-ui";
@@ -158,6 +162,42 @@ export function getProductStats(sales: SaleRowWithItems[]): ProductStat[] {
   });
 
   return Object.values(map).sort((a, b) => b.revenue - a.revenue);
+}
+
+export function fillDailyGaps(
+  daily: DailyStat[],
+  from?: string,
+  to?: string,
+): DailyStat[] {
+  if (!from || !to) return daily;
+
+  const byDay = new Map(daily.map((d) => [d.day, d]));
+  const [fy, fm, fd] = from.split("-").map(Number);
+  const [ty, tm, td] = to.split("-").map(Number);
+  if (!fy || !ty) return daily;
+
+  const cursor = new Date(fy, fm - 1, fd);
+  const end = new Date(ty, tm - 1, td);
+  if (Number.isNaN(cursor.getTime()) || Number.isNaN(end.getTime()) || cursor > end) {
+    return daily;
+  }
+
+  const out: DailyStat[] = [];
+  while (cursor <= end) {
+    const key = ymd(cursor);
+    out.push(
+      byDay.get(key) ?? {
+        day: key,
+        sales_count: 0,
+        subtotal: 0,
+        discount_total: 0,
+        total: 0,
+      },
+    );
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  return out;
 }
 
 export function getDailyStats(sales: SaleRowWithItems[]): DailyStat[] {
@@ -390,6 +430,66 @@ export function buildPeriodSummary(
     daily,
     weekdays,
   };
+}
+
+export const fmtLongDate = (date: string) => {
+  try {
+    const [y, m, d] = date.split("-").map(Number);
+    return new Date(y, m - 1, d).toLocaleDateString("en-KE", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+  } catch {
+    return date;
+  }
+};
+
+function productLineLabel(item: NonNullable<SaleRowWithItems["sale_items"]>[number]) {
+  const product = item.products;
+  const sizeLabel =
+    product?.quantity_value && product?.quantity_unit
+      ? `${product.quantity_value}${product.quantity_unit}`
+      : null;
+  const name = [product?.name ?? "Unknown product", sizeLabel]
+    .filter(Boolean)
+    .join(" · ");
+  const qty = Number(item.qty ?? 0);
+  return `${name} × ${qty}`;
+}
+
+export function getSaleDetailRows(sales: SaleRowWithItems[]): SaleDetailRow[] {
+  return [...sales]
+    .filter((sale) => String(sale.status ?? "").toLowerCase() === "completed")
+    .sort((a, b) => {
+      const dayA = saleDateYMD(a);
+      const dayB = saleDateYMD(b);
+      if (dayA !== dayB) return dayA.localeCompare(dayB);
+      return String(a.sale_no ?? "").localeCompare(String(b.sale_no ?? ""));
+    })
+    .map((sale) => ({
+      id: sale.id,
+      sale_no: sale.sale_no || "—",
+      day: saleDateYMD(sale),
+      customer: (sale.customer_name ?? "").trim() || "Walk-in",
+      items:
+        (sale.sale_items ?? []).map(productLineLabel).filter(Boolean).join(", ") ||
+        "—",
+      payment: formatPaymentMethodLabel(sale.payment_method, sale.sale_payments, {
+        detailed: true,
+      }),
+      staff: (sale.recorded_by_name ?? "").trim() || "—",
+      discount: Number(sale.discount_total ?? 0),
+      total: Number(sale.total ?? 0),
+    }));
+}
+
+export function paymentMethodLabel(method: string) {
+  const key = String(method ?? "").toLowerCase();
+  if (key === "mpesa") return "M-Pesa";
+  if (key === "cash+mpesa" || key === "split") return "Cash + M-Pesa";
+  if (!key || key === "unknown") return "Unspecified";
+  return key.charAt(0).toUpperCase() + key.slice(1);
 }
 
 export function buildCompareMetrics(

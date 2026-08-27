@@ -434,17 +434,15 @@ function Panel({
   noPad?: boolean;
 }) {
   return (
-    <section className="overflow-hidden rounded-[28px] border border-[#EADFC2] bg-white shadow-[0_12px_36px_rgba(92,64,16,0.06)]">
-      <div className="flex flex-col gap-3 border-b border-[#F1E6C9] bg-[#FFFDF8] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+    <section className="overflow-hidden rounded-2xl border border-[rgba(80,61,25,0.1)] bg-white">
+      <div className="flex flex-col gap-3 px-5 pt-5 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h2 className="text-base font-black text-slate-950">{title}</h2>
-          {sub && <p className="mt-1 text-xs font-medium text-slate-500">{sub}</p>}
+          <h2 className="font-display text-[1.75rem] leading-tight tracking-tight text-[#1f1b14]">{title}</h2>
+          {sub && <p className="mt-1.5 text-sm text-[#766b59]">{sub}</p>}
         </div>
-
         {action}
       </div>
-
-      <div className={noPad ? "" : "p-5"}>{children}</div>
+      <div className={noPad ? "mt-4" : "p-5"}>{children}</div>
     </section>
   );
 }
@@ -460,20 +458,21 @@ function Kpi({
   sub?: string;
   tone?: "neutral" | "warning" | "danger" | "success";
 }) {
-  const cfg = {
-    neutral: "border-[#EADFC2] bg-white text-slate-950",
-    warning: "border-amber-200 bg-amber-50/70 text-[#8A5A00]",
-    danger: "border-red-200 bg-red-50 text-red-700",
-    success: "border-green-200 bg-green-50 text-green-700",
+  const accent = {
+    neutral: "bg-[#d7a820]",
+    warning: "bg-amber-500",
+    danger: "bg-rose-500",
+    success: "bg-emerald-500",
   }[tone];
 
   return (
-    <div className={`rounded-[24px] border p-4 shadow-sm ${cfg}`}>
-      <div className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-500">
+    <div className="relative overflow-hidden rounded-2xl border border-[rgba(80,61,25,0.1)] bg-white p-5">
+      <div className={`absolute inset-x-0 top-0 h-[3px] ${accent}`} />
+      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#8a7b5e]">
         {label}
       </div>
-      <div className="mt-2 text-2xl font-black tracking-tight">{value}</div>
-      {sub && <div className="mt-1 text-xs font-medium text-slate-500">{sub}</div>}
+      <div className="mt-2.5 text-[1.55rem] font-semibold tracking-tight text-[#1f1b14]">{value}</div>
+      {sub && <div className="mt-2 text-xs text-[#766b59]">{sub}</div>}
     </div>
   );
 }
@@ -488,16 +487,16 @@ function SegControl<T extends string>({
   options: { value: T; label: string }[];
 }) {
   return (
-    <div className="inline-flex flex-wrap items-center gap-1 rounded-2xl border border-[#EADFC2] bg-white p-1 shadow-sm">
+    <div className="inline-flex flex-wrap items-center gap-1 rounded-full border border-[rgba(80,61,25,0.12)] bg-[#fffdf8] p-1">
       {options.map((item) => (
         <button
           key={item.value}
           type="button"
           onClick={() => onChange(item.value)}
-          className={`rounded-xl px-3.5 py-2 text-xs font-black transition ${
+          className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition ${
             value === item.value
-              ? "bg-[#2F2718] text-white"
-              : "text-slate-600 hover:bg-[#FFF8E6]"
+              ? "bg-[#2d2417] text-white"
+              : "text-[#766b59] hover:bg-white hover:text-[#1f1b14]"
           }`}
         >
           {item.label}
@@ -739,8 +738,8 @@ export default function DiscountReportPage() {
   return (
     <div className="flex flex-col gap-6">
       <Panel
-        title="Discount Report"
-        sub="Analyze discount usage, category impact, and how discounts influence sales."
+        title="Discount report"
+        sub="Usage, category impact, and basket influence"
         action={
           <div className="flex flex-col gap-2 sm:flex-row">
             <button
@@ -1093,18 +1092,34 @@ export default function DiscountReportPage() {
         </>
       )}
 
-      <div className="fixed -left-[9999px] top-0">
-        <DiscountReportPdfTemplate
-          from={from}
-          to={to}
-          category={category}
-          totals={totals}
-          rows={filteredRows}
-          categoryStats={categoryStats}
-          influenceRows={influenceRows}
-          discountInfluence={discountInfluence}
-        />
-      </div>
+      {typeof document !== "undefined"
+        ? createPortal(
+            <div
+              aria-hidden="true"
+              style={{
+                position: "fixed",
+                left: 0,
+                top: 0,
+                width: 794,
+                zIndex: -1,
+                pointerEvents: "none",
+                overflow: "visible",
+              }}
+            >
+              <DiscountReportPdfTemplate
+                from={from}
+                to={to}
+                category={category}
+                totals={totals}
+                rows={filteredRows}
+                categoryStats={categoryStats}
+                influenceRows={influenceRows}
+                discountInfluence={discountInfluence}
+              />
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }

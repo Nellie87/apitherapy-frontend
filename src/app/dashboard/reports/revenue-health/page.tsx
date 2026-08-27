@@ -3,7 +3,6 @@
 import React, {
   useCallback, useEffect, useMemo, useRef, useState,
 } from "react";
-import Link from "next/link";
 import { bootstrapOrg } from "@/lib/org/bootstrapOrg";
 import { reportExpenses, reportPnL, type Granularity, type DateRange } from "@/lib/api/reports";
 import * as S from "../page.styles";
@@ -600,15 +599,11 @@ export default function ExpensesPnLReportPage() {
     <div className="flex flex-col gap-6">
 
       {/* Header */}
-      <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
           <div className="min-w-0">
-            <Link href="/dashboard/reports" className="mb-3 inline-flex text-sm font-semibold text-slate-500 hover:text-slate-800">
-              Reports
-            </Link>
-            <h1 className="text-xl font-bold text-slate-900 sm:text-2xl">Revenue Health</h1>
-            <p className="mt-1 text-sm text-slate-500">
-              Sales, service income, expenses, and profit — your full financial picture.
+            <h1 className="font-display text-[2rem] leading-tight tracking-tight text-[#1f1b14]">Revenue health</h1>
+            <p className="mt-1.5 text-sm text-[#766b59]">
+              Sales, services, expenses, and profit.
             </p>
           </div>
 
@@ -649,7 +644,6 @@ export default function ExpensesPnLReportPage() {
               {loading ? "Loading..." : "Refresh"}
             </button>
           </div>
-        </div>
       </div>
 
       {err && (
@@ -682,13 +676,14 @@ export default function ExpensesPnLReportPage() {
             bg: netProfit >= 0 ? "bg-green-50 border-green-200" : "bg-red-50 border-red-200",
             color: netProfit >= 0 ? "text-green-700" : "text-red-700",
           },
-        ].map(({ label, value, sub, bg, color }) => (
-          <div key={label} className={`rounded-2xl border p-5 ${bg}`}>
-            <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">{label}</div>
-            <div className={`text-lg font-bold ${color}`}>
+        ].map(({ label, value, sub, color }) => (
+          <div key={label} className="relative overflow-hidden rounded-2xl border border-[rgba(80,61,25,0.1)] bg-white p-5">
+            <div className="absolute inset-x-0 top-0 h-[3px] bg-[#d7a820]" />
+            <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#8a7b5e]">{label}</div>
+            <div className={`text-lg font-semibold tracking-tight ${color}`}>
               {loading ? <span className="text-slate-300">—</span> : value}
             </div>
-            {sub && !loading && <div className="text-xs text-slate-400 mt-1">{sub}</div>}
+            {sub && !loading && <div className="mt-1 text-xs text-[#766b59]">{sub}</div>}
           </div>
         ))}
       </div>
@@ -879,14 +874,15 @@ export default function ExpensesPnLReportPage() {
                 dot: "bg-slate-400",
                 isCompare: true,
               },
-            ].map(({ label, value, pct, color, bg, dot, isCompare }) => (
-              <div key={label} className={`rounded-2xl border p-5 ${bg}`}>
+            ].map(({ label, value, pct, color, dot, isCompare }) => (
+              <div key={label} className="relative overflow-hidden rounded-2xl border border-[rgba(80,61,25,0.1)] bg-white p-5">
+                <div className="absolute inset-x-0 top-0 h-[3px] bg-[#d7a820]" />
                 <div className="mb-2 flex items-center gap-2">
                   <span className={`h-2.5 w-2.5 rounded-full ${dot}`}/>
-                  <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">{label}</span>
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#8a7b5e]">{label}</span>
                 </div>
-                <div className={`text-2xl font-bold tabular-nums ${color}`}>{loading ? "—" : value}</div>
-                <div className="mt-1 text-xs text-slate-500">
+                <div className={`text-2xl font-semibold tabular-nums tracking-tight ${color}`}>{loading ? "—" : value}</div>
+                <div className="mt-1 text-xs text-[#766b59]">
                   {loading ? "" : isCompare
                     ? (incomeCompare.winner ? `${incomeCompare.leadPct.toFixed(1)}% ahead of the other stream` : incomeCompare.leadLabel)
                     : `${pct.toFixed(1)}% of total revenue`}
@@ -1186,11 +1182,12 @@ export default function ExpensesPnLReportPage() {
               { label: "Gross Margin",  value: `${grossMarginPct.toFixed(1)}%`, sub: `Ksh ${fmtK(Number(totals.gross_profit))} gross profit`, color: grossMarginPct >= 30 ? "text-green-700" : "text-amber-600", bg: grossMarginPct >= 30 ? "bg-green-50 border-green-200" : "bg-amber-50 border-amber-200" },
               { label: "Net Margin",    value: `${netMarginPct.toFixed(1)}%`,   sub: `Ksh ${fmtK(netProfit)} net profit`,                      color: netMarginPct >= 0 ? "text-green-700" : "text-red-700",    bg: netMarginPct >= 0 ? "bg-green-50 border-green-200" : "bg-red-50 border-red-200" },
               { label: "Expense Ratio", value: `${expRatioPct.toFixed(1)}%`,    sub: "Expenses as % of revenue",                                color: expRatioPct <= 40 ? "text-green-700" : "text-red-700",    bg: expRatioPct <= 40 ? "bg-green-50 border-green-200" : "bg-red-50 border-red-200" },
-            ].map(({ label, value, sub, color, bg }) => (
-              <div key={label} className={`rounded-2xl border p-5 ${bg}`}>
-                <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">{label}</div>
-                <div className={`text-2xl font-bold ${color}`}>{loading ? "—" : value}</div>
-                <div className="text-xs text-slate-400 mt-1">{sub}</div>
+            ].map(({ label, value, sub, color }) => (
+              <div key={label} className="relative overflow-hidden rounded-2xl border border-[rgba(80,61,25,0.1)] bg-white p-5">
+                <div className="absolute inset-x-0 top-0 h-[3px] bg-[#d7a820]" />
+                <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#8a7b5e]">{label}</div>
+                <div className={`text-2xl font-semibold tracking-tight ${color}`}>{loading ? "—" : value}</div>
+                <div className="mt-1 text-xs text-[#766b59]">{sub}</div>
               </div>
             ))}
           </div>

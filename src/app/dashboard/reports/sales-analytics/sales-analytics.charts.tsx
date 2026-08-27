@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import { fmtK, fmtMoney } from "../components/report-ui";
 import type {
   CompareMetric,
@@ -9,67 +9,95 @@ import type {
   SortBy,
   WeekdayStat,
 } from "./sales-analytics.types";
-import { fmtPct, fmtShortDate, fmtValue } from "./sales-analytics.helpers";
+import {
+  fillDailyGaps,
+  fmtPct,
+  fmtShortDate,
+  fmtValue,
+} from "./sales-analytics.helpers";
 
-const BAR_PALETTE = [
-  "#D6A324",
-  "#E7B93E",
-  "#B98612",
-  "#7A5A16",
-  "#2F2718",
-  "#F3D37A",
-  "#A16207",
-  "#C27A16",
-];
+export function SimpleLineChart({
+  daily,
+  from,
+  to,
+}: {
+  daily: DailyStat[];
+  from?: string;
+  to?: string;
+}) {
+  const series = useMemo(() => fillDailyGaps(daily, from, to), [daily, from, to]);
+  const [hover, setHover] = useState<number | null>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
+  const gradId = React.useId().replace(/:/g, "");
 
-export function SimpleLineChart({ daily }: { daily: DailyStat[] }) {
   const W = 600;
   const H = 230;
-  const P = { t: 18, r: 18, b: 34, l: 58 };
+  const P = { t: 16, r: 16, b: 32, l: 48 };
   const iW = W - P.l - P.r;
   const iH = H - P.t - P.b;
 
-  const maxV = Math.max(...daily.map((d) => d.total), 1);
+  const maxV = Math.max(...series.map((d) => d.total), 1);
 
   const x = (i: number) =>
-    P.l + (daily.length < 2 ? iW / 2 : (i / (daily.length - 1)) * iW);
+    P.l + (series.length < 2 ? iW / 2 : (i / (series.length - 1)) * iW);
 
   const y = (v: number) => P.t + iH - (v / maxV) * iH;
 
-  const path = daily
+  const path = series
     .map((d, i) => `${i === 0 ? "M" : "L"}${x(i)},${y(d.total)}`)
     .join(" ");
 
-  const area = daily.length
-    ? `${path} L${x(daily.length - 1)},${P.t + iH} L${x(0)},${P.t + iH} Z`
+  const area = series.length
+    ? `${path} L${x(series.length - 1)},${P.t + iH} L${x(0)},${P.t + iH} Z`
     : "";
 
   const grids = [0, 0.25, 0.5, 0.75, 1].map((f) => maxV * f);
 
   const labels = useMemo(() => {
-    if (!daily.length) return [];
-    const step = Math.max(1, Math.floor(daily.length / 6));
+    if (!series.length) return [];
+    const step = Math.max(1, Math.floor(series.length / 6));
 
-    return daily
+    return series
       .map((d, i) => ({ d, i }))
-      .filter(({ i }) => i % step === 0 || i === daily.length - 1);
-  }, [daily]);
+      .filter(({ i }) => i % step === 0 || i === series.length - 1);
+  }, [series]);
 
-  if (!daily.length) {
+  if (!series.length) {
     return (
-      <div className="flex h-56 items-center justify-center rounded-[24px] border border-[#F1E6C9] bg-[#FFFDF8] text-sm font-semibold text-slate-400">
+      <div className="flex h-56 items-center justify-center text-sm text-[#9a9386]">
         No chart data for this range.
       </div>
     );
   }
 
   return (
-    <div className="overflow-hidden rounded-[24px] border border-[#F1E6C9] bg-[#FFFDF8] p-3">
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: H }}>
+    <div className="relative">
+      <svg
+        ref={svgRef}
+        viewBox={`0 0 ${W} ${H}`}
+        className="w-full cursor-crosshair"
+        style={{ height: H }}
+        onMouseMove={(e) => {
+          if (!svgRef.current || series.length < 2) return;
+          const rect = svgRef.current.getBoundingClientRect();
+          const mx = ((e.clientX - rect.left) / rect.width) * W;
+          let best = 0;
+          let bd = Infinity;
+          series.forEach((_, i) => {
+            const d = Math.abs(x(i) - mx);
+            if (d < bd) {
+              bd = d;
+              best = i;
+            }
+          });
+          setHover(best);
+        }}
+        onMouseLeave={() => setHover(null)}
+      >
         <defs>
-          <linearGradient id="salesAreaHoney" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#D6A324" stopOpacity="0.28" />
-            <stop offset="100%" stopColor="#FFF8E6" stopOpacity="0.06" />
+          <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#d7a820" stopOpacity="0.16" />
+            <stop offset="100%" stopColor="#d7a820" stopOpacity="0" />
           </linearGradient>
         </defs>
 
@@ -80,43 +108,53 @@ export function SimpleLineChart({ daily }: { daily: DailyStat[] }) {
               x2={W - P.r}
               y1={y(v)}
               y2={y(v)}
-              stroke="#F1E6C9"
+              stroke="#efe8d8"
               strokeWidth="1"
             />
             <text
               x={P.l - 8}
               y={y(v) + 4}
               textAnchor="end"
-              fontSize="9"
-              fill="#9A8B68"
-              fontWeight="700"
+              fontSize="10"
+              fill="#9a9386"
             >
               {fmtK(v)}
             </text>
           </g>
         ))}
 
-        <path d={area} fill="url(#salesAreaHoney)" />
+        {hover !== null ? (
+          <line
+            x1={x(hover)}
+            x2={x(hover)}
+            y1={P.t}
+            y2={P.t + iH}
+            stroke="#d6c9a8"
+            strokeWidth="1"
+            strokeDasharray="3 3"
+          />
+        ) : null}
+
+        <path d={area} fill={`url(#${gradId})`} />
         <path
           d={path}
           fill="none"
-          stroke="#B98612"
-          strokeWidth="3"
+          stroke="#c9a227"
+          strokeWidth="2.25"
           strokeLinecap="round"
           strokeLinejoin="round"
         />
 
-        {daily.map((d, i) => (
+        {hover !== null ? (
           <circle
-            key={d.day}
-            cx={x(i)}
-            cy={y(d.total)}
-            r="3.5"
-            fill="#FFFFFF"
-            stroke="#B98612"
+            cx={x(hover)}
+            cy={y(series[hover].total)}
+            r="4.5"
+            fill="#ffffff"
+            stroke="#c9a227"
             strokeWidth="2"
           />
-        ))}
+        ) : null}
 
         {labels.map(({ d, i }) => (
           <text
@@ -124,14 +162,33 @@ export function SimpleLineChart({ daily }: { daily: DailyStat[] }) {
             x={x(i)}
             y={H - 8}
             textAnchor="middle"
-            fontSize="9"
-            fill="#9A8B68"
-            fontWeight="700"
+            fontSize="10"
+            fill="#9a9386"
           >
             {fmtShortDate(d.day)}
           </text>
         ))}
       </svg>
+
+      {hover !== null && series[hover] ? (
+        <div className="pointer-events-none absolute left-14 top-2 z-10 w-44 rounded-xl border border-[rgba(80,61,25,0.1)] bg-white/95 p-3 text-xs shadow-lg">
+          <div className="font-semibold text-[#1f1b14]">
+            {fmtShortDate(series[hover].day)}
+          </div>
+          <div className="mt-1 flex justify-between text-[#766b59]">
+            <span>Revenue</span>
+            <span className="font-semibold text-[#1f1b14]">
+              {fmtMoney(series[hover].total)}
+            </span>
+          </div>
+          <div className="mt-0.5 flex justify-between text-[#766b59]">
+            <span>Sales</span>
+            <span className="font-semibold text-[#1f1b14]">
+              {series[hover].sales_count}
+            </span>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -149,60 +206,54 @@ export function WeekdayBars({ weekdays }: { weekdays: WeekdayStat[] }) {
 
   if (!withSales.length) {
     return (
-      <div className="rounded-[24px] border border-[#F1E6C9] bg-[#FFFDF8] py-12 text-center text-sm font-semibold text-slate-400">
+      <div className="py-12 text-center text-sm text-[#9a9386]">
         No weekday pattern in this range.
       </div>
     );
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       {weekdays.map((d) => {
         const pct = (d.revenue / max) * 100;
         const isBest = d.weekday === bestId;
         const isWorst = d.weekday === worstId;
 
         return (
-          <div key={d.weekday} className="flex items-center gap-3">
-            <div className="w-10 shrink-0 text-xs font-black text-slate-600">
+          <div key={d.weekday} className="flex items-center gap-4">
+            <div className="w-10 shrink-0 text-xs font-semibold text-[#766b59]">
               {d.shortLabel}
             </div>
             <div className="min-w-0 flex-1">
-              <div className="mb-1 flex items-center justify-between gap-2">
+              <div className="mb-1.5 flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-slate-700">{d.label}</span>
+                  <span className="text-sm font-semibold text-[#1f1b14]">
+                    {d.label}
+                  </span>
                   {isBest && (
-                    <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
+                    <span className="text-[10px] font-bold uppercase tracking-wide text-emerald-700">
                       Best
                     </span>
                   )}
                   {isWorst && (
-                    <span className="rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-bold text-red-700">
+                    <span className="text-[10px] font-bold uppercase tracking-wide text-rose-700">
                       Slowest
                     </span>
                   )}
                 </div>
-                <span className="text-xs font-black text-slate-950 tabular-nums">
+                <span className="text-sm font-semibold tabular-nums text-[#1f1b14]">
                   {fmtMoney(d.revenue)}
                 </span>
               </div>
-              <div className="h-2 overflow-hidden rounded-full bg-[#F8F3E7]">
+              <div className="h-2 overflow-hidden rounded-full bg-[#f3eee4]">
                 <div
-                  className={`h-full rounded-full ${
-                    isBest
-                      ? "bg-emerald-500"
-                      : isWorst
-                        ? "bg-red-400"
-                        : "bg-[#D6A324]"
-                  }`}
+                  className="h-full rounded-full bg-[#d7a820]"
                   style={{ width: `${Math.max(d.sales_count ? 3 : 0, pct)}%` }}
                 />
               </div>
-              <div className="mt-1 text-[11px] font-semibold text-slate-400">
+              <div className="mt-1 text-[11px] text-[#9a9386]">
                 {d.sales_count} sale{d.sales_count !== 1 ? "s" : ""}
-                {d.sales_count
-                  ? ` · avg basket ${fmtMoney(d.avgBasket)}`
-                  : ""}
+                {d.sales_count ? ` · avg ${fmtMoney(d.avgBasket)}` : ""}
               </div>
             </div>
           </div>
@@ -223,51 +274,40 @@ export function ProductBar({
 
   if (!data.length) {
     return (
-      <div className="rounded-[24px] border border-[#F1E6C9] bg-[#FFFDF8] py-12 text-center text-sm font-semibold text-slate-400">
+      <div className="py-12 text-center text-sm text-[#9a9386]">
         No product data available.
       </div>
     );
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       {data.slice(0, 10).map((p, i) => {
         const value = Number(p[valueKey] ?? 0);
         const pct = (value / max) * 100;
-        const color = BAR_PALETTE[i % BAR_PALETTE.length];
 
         return (
-          <div
-            key={p.product_id}
-            className="rounded-[22px] border border-[#F1E6C9] bg-white p-4 shadow-[0_8px_24px_rgba(92,64,16,0.04)]"
-          >
-            <div className="mb-2 flex items-start justify-between gap-4">
+          <div key={p.product_id}>
+            <div className="mb-1.5 flex items-start justify-between gap-4">
               <div className="min-w-0">
-                <div className="truncate text-sm font-black text-slate-950">
+                <div className="truncate text-sm font-semibold text-[#1f1b14]">
                   {p.name}
                 </div>
-                <div className="mt-0.5 text-xs font-semibold text-slate-400">
-{p.qty.toLocaleString("en-KE")} unit{p.qty === 1 ? "" : "s"} sold ·{" "}
-{p.appearances.toLocaleString("en-KE")} sale appearance
-{p.appearances === 1 ? "" : "s"}
+                <div className="mt-0.5 text-xs text-[#9a9386]">
+                  {p.qty.toLocaleString("en-KE")} unit{p.qty === 1 ? "" : "s"} · #
+                  {i + 1}
                 </div>
               </div>
-
-              <div className="shrink-0 text-right">
-                <div className="text-xs font-black text-slate-950">
-{fmtMoney(p.revenue)}                </div>
-                <div className="mt-0.5 text-[11px] font-semibold text-slate-400">
-                  #{i + 1}
-                </div>
+              <div className="shrink-0 text-sm font-semibold tabular-nums text-[#1f1b14]">
+                {fmtMoney(p.revenue)}
               </div>
             </div>
-
-            <div className="h-2.5 overflow-hidden rounded-full bg-[#FFF8E6]">
+            <div className="h-2 overflow-hidden rounded-full bg-[#f3eee4]">
               <div
-                className="h-full rounded-full"
+                className="h-full rounded-full bg-[#d7a820]"
                 style={{
                   width: `${Math.max(3, pct)}%`,
-                  background: color,
+                  opacity: Math.max(0.35, 1 - i * 0.08),
                 }}
               />
             </div>
@@ -281,23 +321,22 @@ export function ProductBar({
 export function CompareBars({ metrics }: { metrics: CompareMetric[] }) {
   if (!metrics.length) {
     return (
-      <div className="rounded-[24px] border border-[#F1E6C9] bg-[#FFFDF8] py-12 text-center text-sm font-semibold text-slate-400">
+      <div className="py-12 text-center text-sm text-[#9a9386]">
         No comparison data available.
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3 rounded-[22px] border border-[#F1E6C9] bg-[#FFFDF8] px-4 py-3 text-xs font-bold text-slate-500">
-        <span className="rounded-full bg-[#2F2718] px-3 py-1 text-white">
-          Period A
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-center gap-4 text-xs text-[#766b59]">
+        <span className="inline-flex items-center gap-2">
+          <span className="h-2 w-2 rounded-full bg-[#2d2417]" />
+          Reference
         </span>
-        <span className="rounded-full bg-[#D6A324] px-3 py-1 text-[#3B2C08]">
-          Period B
-        </span>
-        <span className="text-slate-400">
-          Bars compare each metric against the stronger period.
+        <span className="inline-flex items-center gap-2">
+          <span className="h-2 w-2 rounded-full bg-[#d7a820]" />
+          Comparison
         </span>
       </div>
 
@@ -308,23 +347,17 @@ export function CompareBars({ metrics }: { metrics: CompareMetric[] }) {
         const positive = m.diff >= 0;
 
         return (
-          <div
-            key={m.label}
-            className="rounded-[24px] border border-[#F1E6C9] bg-white p-5 shadow-[0_8px_24px_rgba(92,64,16,0.04)]"
-          >
-            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div key={m.label} className="border-b border-[#f1e6c9] pb-5 last:border-0 last:pb-0">
+            <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
               <div>
-                <div className="text-sm font-black text-slate-950">{m.label}</div>
-                <div className="mt-1 text-xs font-semibold text-slate-400">
-                  {fmtValue(m.a, m.money)} to {fmtValue(m.b, m.money)}
+                <div className="text-sm font-semibold text-[#1f1b14]">{m.label}</div>
+                <div className="mt-0.5 text-xs text-[#9a9386]">
+                  {fmtValue(m.a, m.money)} → {fmtValue(m.b, m.money)}
                 </div>
               </div>
-
               <div
-                className={`w-fit rounded-full border px-3 py-1 text-xs font-black ${
-                  positive
-                    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                    : "border-red-200 bg-red-50 text-red-700"
+                className={`text-xs font-bold ${
+                  positive ? "text-emerald-700" : "text-rose-700"
                 }`}
               >
                 {positive ? "+" : ""}
@@ -332,32 +365,31 @@ export function CompareBars({ metrics }: { metrics: CompareMetric[] }) {
               </div>
             </div>
 
-            <div className="space-y-3">
+            <div className="space-y-2.5">
               <div>
-                <div className="mb-1 flex justify-between text-xs">
-                  <span className="font-bold text-slate-500">Period A</span>
-                  <span className="font-black text-slate-700">
+                <div className="mb-1 flex justify-between text-xs text-[#766b59]">
+                  <span>Reference</span>
+                  <span className="font-semibold text-[#1f1b14]">
                     {fmtValue(m.a, m.money)}
                   </span>
                 </div>
-                <div className="h-2.5 overflow-hidden rounded-full bg-slate-100">
+                <div className="h-2 overflow-hidden rounded-full bg-[#f3eee4]">
                   <div
-                    className="h-full rounded-full bg-[#2F2718]"
+                    className="h-full rounded-full bg-[#2d2417]"
                     style={{ width: `${Math.max(3, aPct)}%` }}
                   />
                 </div>
               </div>
-
               <div>
-                <div className="mb-1 flex justify-between text-xs">
-                  <span className="font-bold text-[#7A5A16]">Period B</span>
-                  <span className="font-black text-slate-950">
+                <div className="mb-1 flex justify-between text-xs text-[#766b59]">
+                  <span>Comparison</span>
+                  <span className="font-semibold text-[#1f1b14]">
                     {fmtValue(m.b, m.money)}
                   </span>
                 </div>
-                <div className="h-2.5 overflow-hidden rounded-full bg-[#FFF8E6]">
+                <div className="h-2 overflow-hidden rounded-full bg-[#f3eee4]">
                   <div
-                    className="h-full rounded-full bg-[#D6A324]"
+                    className="h-full rounded-full bg-[#d7a820]"
                     style={{ width: `${Math.max(3, bPct)}%` }}
                   />
                 </div>

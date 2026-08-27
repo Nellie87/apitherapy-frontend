@@ -21,7 +21,7 @@ function sanitizeCanvasClone(clonedDocument: Document) {
     const style = win.getComputedStyle(el);
 
     if (hasUnsupportedColor(style.color)) {
-      el.style.color = "#1f1b14";
+      el.style.color = "#000000";
     }
 
     if (hasUnsupportedColor(style.backgroundColor)) {
@@ -49,7 +49,7 @@ function sanitizeCanvasClone(clonedDocument: Document) {
     }
 
     if (hasUnsupportedColor(style.textDecorationColor)) {
-      el.style.textDecorationColor = "#1f1b14";
+      el.style.textDecorationColor = "#000000";
     }
 
     el.style.boxShadow = "none";
@@ -57,51 +57,156 @@ function sanitizeCanvasClone(clonedDocument: Document) {
   }
 }
 
+function waitForImages(root: ParentNode) {
+  const images = Array.from(root.querySelectorAll("img"));
+
+  return Promise.all(
+    images.map((img) => {
+      if (img.complete) return Promise.resolve();
+
+      return new Promise<void>((resolve) => {
+        img.addEventListener("load", () => resolve(), { once: true });
+        img.addEventListener("error", () => resolve(), { once: true });
+      });
+    }),
+  );
+}
+
+function nextPaint() {
+  return new Promise<void>((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+  });
+}
+
+/**
+ * Snapshot a hidden report template to PDF.
+ *
+ * html2canvas crops to the viewport, so an off-screen node (`left: -9999px`)
+ * captures whatever is actually on screen (sales history, dashboard, etc.).
+ * We clone the template onto `document.body` at (0, 0) and hide every other
+ * body child in the capture clone so only the report can be painted.
+ */
 export async function exportElementToPdf(elementId: string, filename: string) {
   if (typeof window === "undefined") return;
 
-  const element = document.getElementById(elementId);
+  const source = document.getElementById(elementId);
 
-  if (!element) {
+  if (!source) {
     throw new Error(`PDF export template "${elementId}" was not found.`);
   }
 
-  const canvas = await html2canvas(element, {
-    scale: 2,
-    useCORS: true,
-    allowTaint: true,
-    backgroundColor: "#ffffff",
-    logging: false,
-    onclone: sanitizeCanvasClone,
-  });
+  const width = Math.max(source.scrollWidth, source.offsetWidth, 794);
+  const height = Math.max(source.scrollHeight, source.offsetHeight, 1);
 
-  const imgData = canvas.toDataURL("image/png");
+  const host = document.createElement("div");
+  host.setAttribute("data-pdf-export-host", "true");
+  host.setAttribute("aria-hidden", "true");
+  host.style.cssText = [
+    "position:fixed",
+    "left:0",
+    "top:0",
+    `width:${width}px`,
+    "margin:0",
+    "padding:0",
+    "background:#ffffff",
+    "z-index:-1",
+    "pointer-events:none",
+    "overflow:visible",
+  ].join(";");
 
-  const pdf = new jsPDF({
-    orientation: "p",
-    unit: "mm",
-    format: "a4",
-    compress: true,
-  });
+  const clone = source.cloneNode(true) as HTMLElement;
+  clone.removeAttribute("id");
+  clone.style.position = "static";
+  clone.style.left = "auto";
+  clone.style.top = "auto";
+  clone.style.right = "auto";
+  clone.style.bottom = "auto";
+  clone.style.transform = "none";
+  clone.style.margin = "0";
+  clone.style.width = `${width}px`;
+  clone.style.minHeight = `${height}px`;
+  clone.style.background = "#ffffff";
 
-  const pageWidth = pdf.internal.pageSize.getWidth();
-  const pageHeight = pdf.internal.pageSize.getHeight();
+  host.appendChild(clone);
+  document.body.appendChild(host);
 
-  const imgWidth = pageWidth;
-  const imgHeight = (canvas.height * imgWidth) / canvas.width;
+  try {
+    await waitForImages(host);
+    await nextPaint();
 
-  let y = 0;
-  let remainingHeight = imgHeight;
+    const paintHeight = Math.max(clone.scrollHeight, height);
 
-  pdf.addImage(imgData, "PNG", 0, y, imgWidth, imgHeight);
-  remainingHeight -= pageHeight;
+    const canvas = await html2canvas(clone, {
+      scale: 2,
+      useCORS: true,
+      allowTaint: true,
+      backgroundColor: "#ffffff",
+      logging: false,
+      width,
+      height: paintHeight,
+      windowWidth: width,
+      windowHeight: paintHeight,
+      scrollX: 0,
+      scrollY: 0,
+      x: 0,
+      y: 0,
+      onclone: (clonedDocument) => {
+        sanitizeCanvasClone(clonedDocument);
 
-  while (remainingHeight > 0) {
-    y -= pageHeight;
-    pdf.addPage();
+        const clonedHost = clonedDocument.querySelector(
+          "[data-pdf-export-host]",
+        ) as HTMLElement | null;
+
+        Array.from(clonedDocument.body.children).forEach((child) => {
+          if (child !== clonedHost) {
+            (child as HTMLElement).style.setProperty(
+              "display",
+              "none",
+              "important",
+            );
+          }
+        });
+
+        if (clonedHost) {
+          clonedHost.style.position = "absolute";
+          clonedHost.style.left = "0px";
+          clonedHost.style.top = "0px";
+          clonedHost.style.opacity = "1";
+          clonedHost.style.zIndex = "1";
+        }
+      },
+    });
+
+    const imgData = canvas.toDataURL("image/png");
+
+    const pdf = new jsPDF({
+      orientation: "p",
+      unit: "mm",
+      format: "a4",
+      compress: true,
+    });
+
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+
+    const imgWidth = pageWidth;
+    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+    let y = 0;
+    let remainingHeight = imgHeight;
+
     pdf.addImage(imgData, "PNG", 0, y, imgWidth, imgHeight);
     remainingHeight -= pageHeight;
-  }
 
-  pdf.save(filename.endsWith(".pdf") ? filename : `${filename}.pdf`);
+    while (remainingHeight > 0) {
+      y -= pageHeight;
+      pdf.addPage();
+      pdf.addImage(imgData, "PNG", 0, y, imgWidth, imgHeight);
+      remainingHeight -= pageHeight;
+    }
+
+    pdf.save(filename.endsWith(".pdf") ? filename : `${filename}.pdf`);
+  } finally {
+    host.remove();
+  }
 }

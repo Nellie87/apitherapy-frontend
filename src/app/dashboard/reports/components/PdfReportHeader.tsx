@@ -7,29 +7,20 @@ import {
   PDF_LOGO_WORDMARK,
   pdfAssetUrl,
 } from "@/lib/pdfBrand";
+import { PDF_DISPLAY, PDF_FONT } from "./pdf-ui";
 
 const brandRow: CSSProperties = {
   display: "flex",
   alignItems: "center",
   justifyContent: "space-between",
   gap: 16,
-  marginBottom: 12,
 };
 
 const logoStyle: CSSProperties = {
-  height: 48,
+  height: 40,
   width: "auto",
   objectFit: "contain",
   display: "block",
-};
-
-const companyLabel: CSSProperties = {
-  color: PDF_HEX.honeyDark,
-  fontSize: 10,
-  fontWeight: 800,
-  letterSpacing: 2.4,
-  textTransform: "uppercase",
-  textAlign: "right",
 };
 
 type Props = {
@@ -44,9 +35,10 @@ export function PdfReportHeader({ title, subtitle, metaLeft, metaRight }: Props)
   return (
     <header
       style={{
-        borderBottom: `4px solid ${PDF_HEX.honey}`,
+        borderBottom: `1px solid ${PDF_HEX.line}`,
         paddingBottom: 18,
-        marginBottom: 20,
+        marginBottom: 22,
+        fontFamily: PDF_FONT,
       }}
     >
       <div style={brandRow}>
@@ -57,24 +49,56 @@ export function PdfReportHeader({ title, subtitle, metaLeft, metaRight }: Props)
           style={logoStyle}
           crossOrigin="anonymous"
         />
-        <div style={companyLabel}>{PDF_COMPANY_NAME}</div>
+        <div
+          style={{
+            color: PDF_HEX.muted,
+            fontSize: 10,
+            fontWeight: 700,
+            letterSpacing: "0.16em",
+            textTransform: "uppercase",
+            textAlign: "right",
+            maxWidth: 220,
+            lineHeight: 1.45,
+          }}
+        >
+          {PDF_COMPANY_NAME}
+        </div>
       </div>
+
+      <div
+        style={{
+          marginTop: 18,
+          width: 36,
+          height: 3,
+          background: PDF_HEX.honey,
+          borderRadius: 2,
+        }}
+      />
 
       <h1
         style={{
-          margin: "4px 0 0",
+          margin: "12px 0 0",
           color: PDF_HEX.dark,
-          fontSize: 28,
-          lineHeight: 1.05,
-          fontWeight: 900,
-          letterSpacing: -1,
+          fontSize: 32,
+          lineHeight: 1.12,
+          fontWeight: 400,
+          fontFamily: PDF_DISPLAY,
+          letterSpacing: "-0.02em",
         }}
       >
         {title}
       </h1>
 
       {subtitle ? (
-        <div style={{ marginTop: 8, fontSize: 12, color: PDF_HEX.muted, fontWeight: 600 }}>
+        <div
+          style={{
+            marginTop: 8,
+            fontSize: 13,
+            color: PDF_HEX.muted,
+            fontWeight: 500,
+            lineHeight: 1.45,
+          }}
+        >
           {subtitle}
         </div>
       ) : null}
@@ -82,13 +106,14 @@ export function PdfReportHeader({ title, subtitle, metaLeft, metaRight }: Props)
       {(metaLeft || metaRight) && (
         <div
           style={{
-            marginTop: 10,
+            marginTop: 14,
             display: "flex",
             justifyContent: "space-between",
             gap: 16,
             color: PDF_HEX.muted,
             fontSize: 11,
-            fontWeight: 700,
+            fontWeight: 600,
+            letterSpacing: "0.02em",
           }}
         >
           <span>{metaLeft}</span>

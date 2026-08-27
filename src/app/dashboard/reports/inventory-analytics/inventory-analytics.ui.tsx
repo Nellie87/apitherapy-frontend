@@ -98,15 +98,15 @@ export function SegControl<T extends string>({
   options: { value: T; label: string }[];
 }) {
   return (
-    <div className="flex w-full gap-1 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-1 shadow-sm sm:w-fit">
+    <div className="inline-flex w-full gap-1 overflow-x-auto rounded-full border border-[rgba(80,61,25,0.12)] bg-[#fffdf8] p-1 sm:w-fit">
       {options.map((o) => (
         <button
           key={o.value}
           onClick={() => onChange(o.value)}
-          className={`whitespace-nowrap rounded-xl px-4 py-2 text-sm font-semibold transition ${
+          className={`whitespace-nowrap rounded-full px-3.5 py-1.5 text-sm font-semibold transition ${
             value === o.value
-              ? "bg-amber-500 text-white shadow-sm"
-              : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
+              ? "bg-[#2d2417] text-white"
+              : "text-[#766b59] hover:bg-white hover:text-[#1f1b14]"
           }`}
         >
           {o.label}
@@ -127,21 +127,24 @@ export function KpiCard({
   sub?: string;
   variant?: "neutral" | "success" | "warning" | "danger" | "info";
 }) {
-  const cfg = {
-    neutral: "border-slate-200 bg-white text-slate-900",
-    success: "border-green-200 bg-green-50 text-green-800",
-    warning: "border-amber-200 bg-amber-50 text-amber-800",
-    danger: "border-red-200 bg-red-50 text-red-800",
-    info: "border-blue-200 bg-blue-50 text-blue-800",
+  const accent = {
+    neutral: "bg-[#d7a820]",
+    success: "bg-emerald-500",
+    warning: "bg-amber-500",
+    danger: "bg-rose-500",
+    info: "bg-[#d7a820]",
   }[variant];
 
   return (
-    <div className={`rounded-2xl border p-5 shadow-sm ${cfg}`}>
-      <div className="text-xs font-semibold uppercase tracking-wide opacity-70">
+    <div className="relative overflow-hidden rounded-2xl border border-[rgba(80,61,25,0.1)] bg-white p-5">
+      <div className={`absolute inset-x-0 top-0 h-[3px] ${accent}`} />
+      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#8a7b5e]">
         {label}
       </div>
-      <div className="mt-2 text-2xl font-bold leading-tight">{value}</div>
-      {sub && <div className="mt-1 text-xs opacity-70">{sub}</div>}
+      <div className="mt-2.5 text-[1.45rem] font-semibold leading-none tracking-tight text-[#1f1b14]">
+        {value}
+      </div>
+      {sub && <div className="mt-2 text-xs leading-relaxed text-[#766b59]">{sub}</div>}
     </div>
   );
 }
@@ -161,14 +164,14 @@ export function Card({
 }) {
   return (
     <div className={`${S.card} overflow-hidden`}>
-      <div className="flex flex-col gap-3 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 px-5 pt-5 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <div className="font-bold text-slate-900">{title}</div>
-          {sub && <div className="mt-0.5 text-xs text-slate-500">{sub}</div>}
+          <div className="text-[15px] font-semibold tracking-tight text-[#1f1b14]">{title}</div>
+          {sub && <div className="mt-0.5 text-xs text-[#766b59]">{sub}</div>}
         </div>
         {action}
       </div>
-      {noPad ? children : <div className="px-5 py-4">{children}</div>}
+      {noPad ? <div className="mt-4">{children}</div> : <div className="p-5">{children}</div>}
     </div>
   );
 }
@@ -182,17 +185,19 @@ export function InsightCard({
   title: string;
   detail: string;
 }) {
-  const cfg: Record<string, string> = {
-    critical: "border-red-200 bg-red-50",
-    warning: "border-amber-200 bg-amber-50",
-    ok: "border-green-200 bg-green-50",
-    neutral: "border-slate-200 bg-white",
-  };
+  const tone =
+    type === "ok"
+      ? "border-l-emerald-500"
+      : type === "critical"
+        ? "border-l-rose-500"
+        : type === "warning"
+          ? "border-l-amber-500"
+          : "border-l-[#d7a820]";
 
   return (
-    <div className={`rounded-2xl border p-4 shadow-sm ${cfg[type] ?? cfg.neutral}`}>
-      <div className="text-sm font-bold text-slate-900">{title}</div>
-      <div className="mt-1 text-xs leading-relaxed text-slate-600">{detail}</div>
+    <div className={`rounded-2xl border border-[rgba(80,61,25,0.1)] border-l-[3px] bg-white p-4 ${tone}`}>
+      <div className="text-sm font-semibold text-[#1f1b14]">{title}</div>
+      <div className="mt-1.5 text-xs leading-relaxed text-[#766b59]">{detail}</div>
     </div>
   );
 }

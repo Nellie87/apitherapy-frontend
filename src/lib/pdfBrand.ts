@@ -31,6 +31,7 @@ export const PDF_HEX = {
   honeyDark: "#8a6a00",
   amber: "#d4830a",
   dark: "#2d2417",
+  ink: "#000000",
   body: "#4a3f2f",
   muted: "#766b59",
   lightMuted: "#9a9386",
