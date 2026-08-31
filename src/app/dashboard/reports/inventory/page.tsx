@@ -1,11 +1,14 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { bootstrapOrg } from "@/lib/org/bootstrapOrg";
 import {
   getInventoryValuation,
   type InventoryValuationRow,
 } from "@/lib/api/reports";
+import { exportElementToPdf } from "@/lib/exportPdf";
+import { InventoryReportPdfTemplate } from "../components/InventoryReportPdfTemplate";
 import * as S from "../page.styles";
 
 type StockHealth = "out" | "critical" | "low" | "ok";
@@ -149,164 +152,6 @@ function downloadCSV(filename: string, rows: Record<string, unknown>[]) {
   a.click();
 
   URL.revokeObjectURL(url);
-}
-
-async function exportInventoryPdf(params: {
-  rows: Enriched[];
-  categoryData: CategoryData[];
-  totals: {
-    out: number;
-    critical: number;
-    low: number;
-    ok: number;
-    totalVal: number;
-    atRiskVal: number;
-    avgCoverage: number;
-  };
-  range: DateRange;
-}) {
-  const { rows, categoryData, totals, range } = params;
-  const { jsPDF } = await import("jspdf");
-  const {
-    PDF_COMPANY_NAME,
-    PDF_RGB,
-    loadPdfLogoMarkDataUrl,
-  } = await import("@/lib/pdfBrand");
-
-  const doc = new jsPDF("p", "mm", "a4");
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const pageHeight = doc.internal.pageSize.getHeight();
-
-  let y = 18;
-
-  const line = (text: string, size = 10, bold = false) => {
-    if (y > pageHeight - 18) {
-      doc.addPage();
-      y = 18;
-    }
-
-    doc.setFont("helvetica", bold ? "bold" : "normal");
-    doc.setFontSize(size);
-    doc.setTextColor(...PDF_RGB.dark);
-    doc.text(text, 14, y);
-    y += size > 12 ? 8 : 6;
-  };
-
-  const right = (text: string, x: number, yy: number, size = 9, bold = false) => {
-    doc.setFont("helvetica", bold ? "bold" : "normal");
-    doc.setFontSize(size);
-    doc.setTextColor(...PDF_RGB.dark);
-    doc.text(text, x, yy, { align: "right" });
-  };
-
-  const period =
-    range.from || range.to
-      ? `${fmtDate(range.from) || "Start"} to ${fmtDate(range.to) || "Today"}`
-      : "All available records";
-
-  doc.setFillColor(...PDF_RGB.honey);
-  doc.rect(0, 0, pageWidth, 5, "F");
-
-  const logoData = await loadPdfLogoMarkDataUrl();
-  if (logoData) {
-    doc.addImage(logoData, "PNG", pageWidth - 28, 10, 14, 14);
-  }
-
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(9);
-  doc.setTextColor(...PDF_RGB.honeyDark);
-  doc.text(PDF_COMPANY_NAME.toUpperCase(), 14, 12);
-
-  line("Inventory Analytics Report", 18, true);
-  line(`Generated: ${fmtDate(new Date())}`, 9);
-  line(`Period: ${period}`, 9);
-  line(`${rows.length} products analysed`, 9);
-
-  y += 4;
-
-  line("Summary", 13, true);
-
-  const riskPct = ((totals.atRiskVal / (totals.totalVal || 1)) * 100).toFixed(1);
-
-  line(`Total stock value: ${fmtMoney(totals.totalVal)}`);
-  line(`At-risk stock value: ${fmtMoney(totals.atRiskVal)} (${riskPct}%)`);
-  line(
-    `Stock health: ${totals.out} out, ${totals.critical} critical, ${totals.low} low, ${totals.ok} healthy`
-  );
-  line(`Average coverage: ${totals.avgCoverage.toFixed(1)}x reorder level`);
-
-  y += 4;
-
-  line("Category Summary", 13, true);
-
-  doc.setFontSize(8);
-  doc.setFont("helvetica", "bold");
-  doc.text("Category", 14, y);
-  right("Products", 80, y, 8, true);
-  right("At Risk", 110, y, 8, true);
-  right("Quantity", 145, y, 8, true);
-  right("Value", 195, y, 8, true);
-  y += 4;
-
-  doc.setDrawColor(...PDF_RGB.line);
-  doc.line(14, y, 196, y);
-  y += 5;
-
-  categoryData.slice(0, 20).forEach((cat) => {
-    if (y > pageHeight - 18) {
-      doc.addPage();
-      y = 18;
-    }
-
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8);
-    doc.text(String(cat.name).slice(0, 32), 14, y);
-    right(String(cat.count), 80, y);
-    right(String(cat.atRisk), 110, y);
-    right(cat.qty.toLocaleString("en-KE"), 145, y);
-    right(fmtMoney(cat.value), 195, y);
-    y += 5;
-  });
-
-  y += 6;
-
-  line("Reorder Priority", 13, true);
-
-  doc.setFontSize(8);
-  doc.setFont("helvetica", "bold");
-  doc.text("Product", 14, y);
-  right("Qty", 90, y, 8, true);
-  right("Reorder", 118, y, 8, true);
-  doc.text("Status", 128, y);
-  right("Coverage", 170, y, 8, true);
-  right("Urgency", 195, y, 8, true);
-  y += 4;
-
-  doc.line(14, y, 196, y);
-  y += 5;
-
-  rows
-    .filter((r) => r.status !== "ok")
-    .sort((a, b) => b.urgency - a.urgency)
-    .slice(0, 45)
-    .forEach((r) => {
-      if (y > pageHeight - 18) {
-        doc.addPage();
-        y = 18;
-      }
-
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(8);
-      doc.text(String(r.name).slice(0, 34), 14, y);
-      right(String(r.qty_on_hand), 90, y);
-      right(String(r.reorder_level), 118, y);
-      doc.text(STATUS_CFG[r.status as StockHealth]?.label ?? r.status, 128, y);
-      right(r.coverage >= 99 ? "Infinity" : `${r.coverage}x`, 170, y);
-      right(String(r.urgency), 195, y);
-      y += 5;
-    });
-
-  doc.save(`inventory_analytics_${new Date().toISOString().slice(0, 10)}.pdf`);
 }
 
 function StatusBadge({ status }: { status: StockHealth }) {
@@ -826,6 +671,7 @@ export default function InventoryAnalyticsPage() {
   const [filterStatus, setFilterStatus] = useState<StockHealth | "all">("all");
   const [sortCol, setSortCol] = useState<SortCol>("urgency");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [exportingPdf, setExportingPdf] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -1008,6 +854,27 @@ export default function InventoryAnalyticsPage() {
     ] as const;
   }, [baseRows, totals]);
 
+  const pdfPeriod =
+    range.from || range.to
+      ? `${fmtDate(range.from) || "Start"} to ${fmtDate(range.to) || "Today"}`
+      : "All available records";
+
+  const handlePDF = useCallback(async () => {
+    if (typeof window === "undefined") return;
+    setExportingPdf(true);
+    setErr("");
+    try {
+      await exportElementToPdf(
+        "inventory-report-pdf",
+        `inventory-report-${new Date().toISOString().slice(0, 10)}.pdf`,
+      );
+    } catch (e: any) {
+      setErr(e?.message ?? "Failed to export PDF. Please try again.");
+    } finally {
+      setExportingPdf(false);
+    }
+  }, []);
+
   const statusDist = useMemo(
     () =>
       [
@@ -1071,6 +938,38 @@ export default function InventoryAnalyticsPage() {
 
   return (
     <div className="flex flex-col gap-5">
+      {typeof document !== "undefined"
+        ? createPortal(
+            <div
+              aria-hidden="true"
+              style={{
+                position: "fixed",
+                left: 0,
+                top: 0,
+                width: 794,
+                zIndex: -1,
+                pointerEvents: "none",
+                overflow: "visible",
+              }}
+            >
+              <InventoryReportPdfTemplate
+                rows={tableRows}
+                totals={totals}
+                categoryData={categoryData}
+                insights={[...insights]}
+                period={pdfPeriod}
+                generatedAt={new Date().toLocaleString("en-GB", {
+                  day: "numeric",
+                  month: "short",
+                  year: "numeric",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+              />
+            </div>,
+            document.body,
+          )
+        : null}
       <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
         <div>
           <h1 className="font-display text-[2rem] leading-tight tracking-tight text-[#1f1b14]">
@@ -1082,21 +981,12 @@ export default function InventoryAnalyticsPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-         
-
           <button
             className={S.btnGhost}
-            disabled={!tableRows.length}
-            onClick={() =>
-              exportInventoryPdf({
-                rows: tableRows,
-                categoryData,
-                totals,
-                range,
-              })
-            }
+            disabled={!tableRows.length || exportingPdf}
+            onClick={handlePDF}
           >
-            Export PDF
+            {exportingPdf ? "Exporting PDF…" : "Download PDF"}
           </button>
 
           <button

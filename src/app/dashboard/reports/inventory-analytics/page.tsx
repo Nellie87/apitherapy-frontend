@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 
 import { bootstrapOrg } from "@/lib/org/bootstrapOrg";
@@ -8,6 +9,8 @@ import {
   getInventoryValuation,
   type InventoryValuationRow,
 } from "@/lib/api/reports";
+import { exportElementToPdf } from "@/lib/exportPdf";
+import { InventoryReportPdfTemplate } from "../components/InventoryReportPdfTemplate";
 
 import * as S from "../page.styles";
 
@@ -28,8 +31,6 @@ import {
   isWithinDateRange,
   urgencyScore,
 } from "./inventory-analytics.helpers";
-
-import { printInventoryPdfReport } from "./inventory-analytics.pdf";
 
 import {
   CategoryValueBars,
@@ -64,6 +65,7 @@ export default function InventoryAnalyticsPage() {
   const [filterStatus, setFilterStatus] = useState<StockHealth | "all">("all");
   const [sortCol, setSortCol] = useState<SortCol>("urgency");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [exportingPdf, setExportingPdf] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -342,10 +344,63 @@ export default function InventoryAnalyticsPage() {
     urgency: r.urgency,
   }));
 
+  const pdfPeriod =
+    from || to
+      ? `${from || "Start"} to ${to || "Today"}`
+      : "All available records";
+
+  const handlePDF = useCallback(async () => {
+    if (typeof window === "undefined") return;
+    setExportingPdf(true);
+    setErr("");
+    try {
+      await exportElementToPdf(
+        "inventory-report-pdf",
+        `inventory-report-${new Date().toISOString().slice(0, 10)}.pdf`,
+      );
+    } catch (e: any) {
+      setErr(e?.message ?? "Failed to export PDF. Please try again.");
+    } finally {
+      setExportingPdf(false);
+    }
+  }, []);
+
   if (!orgId && !err) return <Spinner h={200} />;
 
   return (
     <div className="flex flex-col gap-5">
+      {typeof document !== "undefined"
+        ? createPortal(
+            <div
+              aria-hidden="true"
+              style={{
+                position: "fixed",
+                left: 0,
+                top: 0,
+                width: 794,
+                zIndex: -1,
+                pointerEvents: "none",
+                overflow: "visible",
+              }}
+            >
+              <InventoryReportPdfTemplate
+                rows={tableRows}
+                totals={totals}
+                categoryData={categoryData}
+                insights={insights}
+                period={pdfPeriod}
+                generatedAt={new Date().toLocaleString("en-GB", {
+                  day: "numeric",
+                  month: "short",
+                  year: "numeric",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+              />
+            </div>,
+            document.body,
+          )
+        : null}
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <h1 className="font-display text-[2rem] leading-tight tracking-tight text-[#1f1b14]">
@@ -371,19 +426,10 @@ export default function InventoryAnalyticsPage() {
 
           <button
             className={S.btnGhost}
-            disabled={!tableRows.length}
-            onClick={() =>
-              printInventoryPdfReport({
-                rows: tableRows,
-                totals,
-                categoryData,
-                insights,
-                from,
-                to,
-              })
-            }
+            disabled={!tableRows.length || exportingPdf}
+            onClick={handlePDF}
           >
-            Export PDF
+            {exportingPdf ? "Exporting PDF…" : "Download PDF"}
           </button>
 
           <button
